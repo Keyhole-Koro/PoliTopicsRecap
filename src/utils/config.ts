@@ -20,6 +20,7 @@ export type Config = {
   overallTimeoutMs: number;
   pauseOnRetryAfterSeconds: number;
   circuitBreaker: CircuitBreakerConfig;
+  geminiApiKey: string;
 };
 
 export function resolveConfig(): Config {
@@ -85,6 +86,11 @@ export function resolveConfig(): Config {
     numberFromEnv('PAUSE_ON_RETRY_AFTER_SECONDS', 60),
   );
 
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!geminiApiKey) {
+    throw new Error('GEMINI_API_KEY environment variable is required');
+  }
+
   return {
     queueUrl,
     queueArn,
@@ -105,6 +111,7 @@ export function resolveConfig(): Config {
       cooldownMs: circuitCooldownSeconds * 1_000,
       halfOpenMaxCalls,
     },
+    geminiApiKey,
   };
 }
 

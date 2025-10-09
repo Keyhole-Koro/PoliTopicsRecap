@@ -1,21 +1,16 @@
 import type { SQSRecord } from 'aws-lambda';
 
-import { parseChunkPromptTaskMessage, type ChunkPromptTaskMessage } from '../sqs/chunk';
+import { parseMapPromptTaskMessage, type MapPromptTaskMessage } from '../sqs/map';
 import { parseReducePromptTaskMessage, type ReducePromptTaskMessage } from '../sqs/reduce';
 
-export type PromptTaskMessage = ChunkPromptTaskMessage | ReducePromptTaskMessage;
+export type PromptTaskMessage = MapPromptTaskMessage | ReducePromptTaskMessage;
 
 export function parsePromptTaskMessage(record: SQSRecord): PromptTaskMessage {
-  try {
-    return parseChunkPromptTaskMessage(record.body);
-  } catch (chunkErr) {
-    try {
-      return parseReducePromptTaskMessage(record.body);
-    } catch (reduceErr) {
-      const error = new Error('Unsupported SQS message payload');
-      (error as any).chunkErr = chunkErr;
-      (error as any).reduceErr = reduceErr;
-      throw error;
-    }
+  const body = JSON.parse(record.body);
+  if (body.type == "map") {
+    return parseMapPromptTaskMessage(body);
+  } else if (body.type == "reduce") {
+    return parseReducePromptTaskMessage(body);
   }
+  throw new Error('Invalid prompt task message');
 }

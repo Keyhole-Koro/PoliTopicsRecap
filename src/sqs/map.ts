@@ -1,5 +1,5 @@
-export type ChunkPromptTaskMessage = {
-  type: 'chunk';
+export type MapPromptTaskMessage = {
+  type: 'map';
   url: string; // s3://bucket/key
   result_url?: string; // optional s3://bucket/key for result
   meta?: Record<string, any>;
@@ -9,12 +9,12 @@ export type ChunkPromptTaskMessage = {
   retryAttempts: number;
 };
 
-export function isChunkPromptTaskMessage(value: unknown): value is ChunkPromptTaskMessage {
+export function isMapPromptTaskMessage(value: unknown): value is MapPromptTaskMessage {
   if (!isRecord(value)) {
     return false;
   }
 
-  if (value.type !== 'chunk') {
+  if (value.type !== 'map') {
     return false;
   }
 
@@ -52,33 +52,20 @@ export function isChunkPromptTaskMessage(value: unknown): value is ChunkPromptTa
   return true;
 }
 
-export function parseChunkPromptTaskMessage(body: string | unknown): ChunkPromptTaskMessage {
-  const parsed = typeof body === 'string' ? safeJsonParse(body) : body;
+export function parseMapPromptTaskMessage(body: JSON): MapPromptTaskMessage {
 
-  if (isChunkPromptTaskMessage(parsed)) {
-    return parsed;
-  }
-
-  if (isRecord(parsed) && parsed.type === 'chunk') {
+  if (isRecord(body) && body.type === 'map') {
     const normalized: Record<string, unknown> = {
-      ...parsed,
-      retryAttempts: normalizeRetryAttempts((parsed as Record<string, unknown>).retryAttempts),
+      ...body,
+      retryAttempts: normalizeRetryAttempts((body as Record<string, unknown>).retryAttempts),
     };
 
-    if (isChunkPromptTaskMessage(normalized)) {
+    if (isMapPromptTaskMessage(normalized)) {
       return normalized;
     }
   }
 
-  throw new Error('Invalid chunk prompt task message');
-}
-
-function safeJsonParse(payload: string): unknown {
-  try {
-    return JSON.parse(payload);
-  } catch (err) {
-    throw new Error('Failed to parse SQS body as JSON');
-  }
+  throw new Error('Invalid map prompt task message');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,6 +5,7 @@ import type { SQSRecord } from 'aws-lambda';
 import type { ReducePromptTaskMessage } from '../sqs/reduce';
 import { ensureObjectExists, fetchJsonObject, parseS3Uri } from '../utils/s3';
 import { deleteMessage, pickRequeueDelaySeconds, requeueWithDelay } from './sqsActions';
+import { LlmClient } from '@llm/llmClient';
 
 export interface ProcessReduceRecordArgs {
   message: ReducePromptTaskMessage;
@@ -12,6 +13,8 @@ export interface ProcessReduceRecordArgs {
   queueUrl: string;
   sqsClient: SQSClient;
   s3Client: S3Client;
+  llmClient: LlmClient;
+  
 }
 
 export async function processReduceRecord({
@@ -20,6 +23,7 @@ export async function processReduceRecord({
   queueUrl,
   sqsClient,
   s3Client,
+  llmClient,
 }: ProcessReduceRecordArgs): Promise<void> {
   try {
     const referencedUris = new Set<string>(message.chunk_result_urls);
@@ -56,7 +60,9 @@ export async function processReduceRecord({
       promptLength: combinedPrompt.length,
     });
 
-    // TODO: Invoke LLM with combinedPrompt and persist summary for downstream consumption
+    await llmClient.generate({
+      messages: [{ role: 'user', content: combinedPrompt }],
+    });
 
     await deleteMessage({ sqsClient, queueUrl, receiptHandle: record.receiptHandle });
   } catch (err) {

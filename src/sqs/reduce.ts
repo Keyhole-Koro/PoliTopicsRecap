@@ -73,19 +73,14 @@ export function isReducePromptTaskMessage(value: unknown): value is ReducePrompt
   return true;
 }
 
-export function parseReducePromptTaskMessage(body: string | unknown): ReducePromptTaskMessage {
-  const parsed = typeof body === 'string' ? safeJsonParse(body) : body;
+export function parseReducePromptTaskMessage(body: JSON): ReducePromptTaskMessage {
 
-  if (isReducePromptTaskMessage(parsed)) {
-    return parsed;
-  }
-
-  if (isRecord(parsed) && parsed.type === 'reduce') {
+  if (isRecord(body) && body.type === 'reduce') {
     const normalized: Record<string, unknown> = {
-      ...parsed,
-      retryAttempts: normalizeRetryAttempts((parsed as Record<string, unknown>).retryAttempts),
-      chunk_result_urls: Array.isArray((parsed as Record<string, unknown>).chunk_result_urls)
-        ? ((parsed as Record<string, unknown>).chunk_result_urls as unknown[]).filter(
+      ...body,
+      retryAttempts: normalizeRetryAttempts((body as Record<string, unknown>).retryAttempts),
+      chunk_result_urls: Array.isArray((body as Record<string, unknown>).chunk_result_urls)
+        ? ((body as Record<string, unknown>).chunk_result_urls as unknown[]).filter(
             (url): url is string => typeof url === 'string',
           )
         : [],
@@ -123,14 +118,6 @@ function isMeeting(value: unknown): value is ReducePromptTaskMessage['meeting'] 
   }
 
   return true;
-}
-
-function safeJsonParse(payload: string): unknown {
-  try {
-    return JSON.parse(payload);
-  } catch (err) {
-    throw new Error('Failed to parse SQS body as JSON');
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
