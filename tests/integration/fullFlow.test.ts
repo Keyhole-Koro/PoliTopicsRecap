@@ -15,8 +15,20 @@ import {
   SendMessageCommand,
   SQSClient,
 } from '@aws-sdk/client-sqs';
+import {
+  CreateTableCommand,
+  DeleteTableCommand,
+  DescribeTableCommand,
+  DynamoDBClient,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DynamoDBDocumentClient,
+  GetCommand,
+  QueryCommand,
+} from '@aws-sdk/lib-dynamodb';
 import type { SQSEvent } from 'aws-lambda';
 
+import storeData, { type Article } from '../../src/dynamoDB/storeData';
 import { handler } from '../../src/lambda_handler';
 
 const endpoint = process.env.AWS_ENDPOINT_URL;
@@ -32,6 +44,10 @@ const s3Client = new S3Client({
   forcePathStyle: true,
 });
 const sqsClient = new SQSClient({ region, endpoint });
+const dynamoClient = new DynamoDBClient({ region, endpoint });
+const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
+  marshallOptions: { removeUndefinedValues: true },
+});
 
 interface QueueResource {
   queueUrl: string;
@@ -52,6 +68,7 @@ describe('LocalStack SQS to Lambda to S3 to LLM integration', () => {
   afterAll(async () => {
     s3Client.destroy();
     sqsClient.destroy();
+    dynamoClient.destroy();
   });
 
   beforeEach(() => {
@@ -224,7 +241,79 @@ describe('LocalStack SQS to Lambda to S3 to LLM integration', () => {
       await cleanupBucket(bucketName);
     }
   });
+
+  test('stores article metadata in DynamoDB and exposes query indexes', async () => {
+    const tableName = uniqueName('articles-table');
+    await createArticlesTable(tableName);
+    try {
+      const article = buildArticleFixture();
+
+      const result = await storeData({ doc: dynamoDoc, table_name: tableName }, article);
+      expect(result).toEqual({ ok: true, id: article.id });
+
+      const mainItem = await dynamoDoc.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { PK: `A#${article.id}`, SK: 'META' },
+        }),
+      );
+      expect(mainItem.Item?.title).toBe(article.title);
+      expect(mainItem.Item?.type).toBe('ARTICLE');
+
+      const categoryResults = await dynamoDoc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': `CATEGORY#${article.categories[0]}`,
+          },
+        }),
+      );
+      expect(findArticle(categoryResults.Items, article.id)).toBe(true);
+
+      const keywordRecentResults = await dynamoDoc.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: {
+            ':pk': 'KEYWORD_RECENT',
+          },
+        }),
+      );
+      expect(keywordRecentResults.Items?.some((item) => item.keyword === article.keywords[0]?.keyword)).toBe(true);
+
+      const gsi1Results = await dynamoDoc.send(
+        new QueryCommand({
+          TableName: tableName,
+          IndexName: 'ArticleByDate',
+          KeyConditionExpression: 'GSI1PK = :gsi1pk',
+          ExpressionAttributeValues: {
+            ':gsi1pk': 'ARTICLE',
+          },
+        }),
+      );
+      expect(findArticle(gsi1Results.Items, article.id)).toBe(true);
+
+      const gsi2Results = await dynamoDoc.send(
+        new QueryCommand({
+          TableName: tableName,
+          IndexName: 'MonthDateIndex',
+          KeyConditionExpression: 'GSI2PK = :gsi2pk',
+          ExpressionAttributeValues: {
+            ':gsi2pk': `Y#2024#M#09`,
+          },
+        }),
+      );
+      expect(findArticle(gsi2Results.Items, article.id)).toBe(true);
+    } finally {
+      await deleteArticlesTable(tableName);
+    }
+  });
 });
+
+function findArticle(items: any[] | undefined, id: string): boolean {
+  return Boolean(items?.some((item) => item.articleId === id || item.PK === `A#${id}`));
+}
 
 function uniqueName(prefix: string): string {
   const random = Math.random().toString(16).slice(2, 10);
@@ -348,3 +437,110 @@ async function cleanupBucket(bucket: string): Promise<void> {
   );
 }
 
+async function createArticlesTable(tableName: string): Promise<void> {
+  await dynamoClient.send(
+    new CreateTableCommand({
+      TableName: tableName,
+      BillingMode: 'PAY_PER_REQUEST',
+      AttributeDefinitions: [
+        { AttributeName: 'PK', AttributeType: 'S' },
+        { AttributeName: 'SK', AttributeType: 'S' },
+        { AttributeName: 'GSI1PK', AttributeType: 'S' },
+        { AttributeName: 'GSI1SK', AttributeType: 'S' },
+        { AttributeName: 'GSI2PK', AttributeType: 'S' },
+        { AttributeName: 'GSI2SK', AttributeType: 'S' },
+      ],
+      KeySchema: [
+        { AttributeName: 'PK', KeyType: 'HASH' },
+        { AttributeName: 'SK', KeyType: 'RANGE' },
+      ],
+      GlobalSecondaryIndexes: [
+        {
+          IndexName: 'ArticleByDate',
+          KeySchema: [
+            { AttributeName: 'GSI1PK', KeyType: 'HASH' },
+            { AttributeName: 'GSI1SK', KeyType: 'RANGE' },
+          ],
+          Projection: { ProjectionType: 'ALL' },
+        },
+        {
+          IndexName: 'MonthDateIndex',
+          KeySchema: [
+            { AttributeName: 'GSI2PK', KeyType: 'HASH' },
+            { AttributeName: 'GSI2SK', KeyType: 'RANGE' },
+          ],
+          Projection: { ProjectionType: 'ALL' },
+        },
+      ],
+    }),
+  );
+
+  await waitForTableActive(tableName);
+}
+
+async function deleteArticlesTable(tableName: string): Promise<void> {
+  await dynamoClient.send(
+    new DeleteTableCommand({ TableName: tableName }),
+  );
+
+  await waitForTableDeletion(tableName);
+}
+
+async function waitForTableActive(tableName: string): Promise<void> {
+  for (let i = 0; i < 15; i += 1) {
+    const { Table } = await dynamoClient.send(
+      new DescribeTableCommand({ TableName: tableName }),
+    );
+    if (Table?.TableStatus === 'ACTIVE') {
+      return;
+    }
+    await delay(250);
+  }
+  throw new Error(`Table ${tableName} did not become ACTIVE in time`);
+}
+
+async function waitForTableDeletion(tableName: string): Promise<void> {
+  for (let i = 0; i < 15; i += 1) {
+    try {
+      await dynamoClient.send(
+        new DescribeTableCommand({ TableName: tableName }),
+      );
+    } catch (err: any) {
+      if (err?.name === 'ResourceNotFoundException') {
+        return;
+      }
+    }
+    await delay(250);
+  }
+  throw new Error(`Table ${tableName} was not deleted in time`);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildArticleFixture(): Article {
+  const baseDate = '2024-09-01';
+  return {
+    id: `article-${uniqueName('fixture')}`,
+    title: 'Education committee headline',
+    date: baseDate,
+    month: '2024-09',
+    imageKind: 'IMAGE_PLACEHOLDER' as Article['imageKind'],
+    session: 12,
+    nameOfHouse: 'House of Representatives',
+    nameOfMeeting: 'Special Committee on Education',
+    categories: ['education', 'budget'],
+    description: 'Key updates on education and budget matters.',
+    summary: { text: 'Long-form summary' },
+    soft_summary: { text: 'Soft summary' },
+    middle_summary: [{ section: 'Overview', text: 'Concise review' }],
+    dialogs: [
+      { speaker: 'Chair', text: 'Opening remarks' },
+      { speaker: 'Member A', text: 'Budget questions' },
+    ],
+    participants: [{ name: 'Member A' }, { name: 'Member B' }],
+    keywords: [{ keyword: 'education' }, { keyword: 'budget' }],
+    terms: [{ term: 'curriculum' }, { term: 'funding' }],
+  };
+}

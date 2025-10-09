@@ -12,5 +12,16 @@ services:
     volumes:
       - "localstack_data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin:latest
+    depends_on:
+      - localstack
+    environment:
+      - DYNAMO_ENDPOINT=http://localstack:4566
+      - AWS_REGION=ap-northeast-3
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    ports:
+      - "8001:8001"
 volumes:
   localstack_data:
