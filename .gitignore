@@ -1,2 +1,10 @@
 dist
 node_modules
+
+.pnpm-store
+
+build
+
+**/.terraform/*
+**/.terraform/*/*
+**/.terraform.lock.hcl

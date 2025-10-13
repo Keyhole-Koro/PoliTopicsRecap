@@ -1,0 +1,36 @@
+{
+  "name": "PoliTopics Recap Dev",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "app",
+  "workspaceFolder": "/workspaces/app",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "20", "pnpm": "latest" },
+    "ghcr.io/devcontainers/features/aws-cli:1": {},
+    "ghcr.io/devcontainers/features/terraform:1": { "version": "1.9.5" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "hashicorp.terraform",
+        "bierner.markdown-preview-github-styles",
+        "AmazonWebServices.aws-toolkit-vscode"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "terraform.languageServer": { "external": true }
+      }
+    }
+  },
+
+  "postCreateCommand": "pnpm install && pnpm build",
+
+  "remoteEnv": {
+    "AWS_REGION": "${localEnv:AWS_REGION}",
+    "AWS_ACCESS_KEY_ID": "${localEnv:AWS_ACCESS_KEY_ID}",
+    "AWS_SECRET_ACCESS_KEY": "${localEnv:AWS_SECRET_ACCESS_KEY}",
+    "AWS_ENDPOINT_URL": "${localEnv:AWS_ENDPOINT_URL}"
+  }
+}

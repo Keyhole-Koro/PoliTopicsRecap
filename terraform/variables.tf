@@ -1,7 +1,31 @@
 variable "aws_region" {
   description = "AWS region to deploy the PoliTopicsRecap resources"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-northeast-3"
+}
+
+variable "aws_endpoint_url" {
+  description = "Optional endpoint override (e.g., http://localhost:4566 for LocalStack)"
+  type        = string
+  default     = null
+}
+
+variable "aws_access_key" {
+  description = "Optional override for AWS access key; useful when pointing at LocalStack."
+  type        = string
+  default     = null
+}
+
+variable "aws_secret_key" {
+  description = "Optional override for AWS secret key; useful when pointing at LocalStack."
+  type        = string
+  default     = null
+}
+
+variable "aws_session_token" {
+  description = "Optional override for AWS session token; useful when pointing at LocalStack."
+  type        = string
+  default     = null
 }
 
 variable "lambda_name" {
@@ -10,10 +34,34 @@ variable "lambda_name" {
   default     = "politopics-recap-sqs-processor"
 }
 
+variable "environment" {
+  description = "Deployment environment identifier (e.g., dev, stage, prod)"
+  type        = string
+  default     = "dev"
+}
+
+variable "tags" {
+  description = "Additional resource tags to apply"
+  type        = map(string)
+  default     = {}
+}
+
 variable "lambda_package_path" {
   description = "Relative path to the packaged Lambda artifact (ZIP file)"
   type        = string
   default     = "../dist/lambda_handler.zip"
+}
+
+variable "prompt_bucket_name" {
+  description = "S3 bucket name used for prompt storage"
+  type        = string
+  default     = "politopics-prompts"
+}
+
+variable "politopics_table_name" {
+  description = "Primary DynamoDB table name for PoliTopics records"
+  type        = string
+  default     = "politopics"
 }
 
 variable "sqs_queue_name" {
@@ -145,4 +193,28 @@ variable "idempotency_in_progress_ttl_seconds" {
   description = "TTL (seconds) for in-progress idempotency records"
   type        = number
   default     = 300
+}
+
+variable "enable_sqs_alarm_eventbridge" {
+  description = "Whether to create the EventBridge rule/target reacting to the SQS backlog alarm"
+  type        = bool
+  default     = false
+}
+
+variable "scheduler_target_lambda_arn" {
+  description = "Optional ARN of an external starter Lambda invoked by the SQS backlog alarm"
+  type        = string
+  default     = null
+}
+
+variable "scheduler_use_processor_lambda_as_target" {
+  description = "If true and no external target ARN is provided, connect the backlog alarm rule to the processor Lambda"
+  type        = bool
+  default     = false
+}
+
+variable "create_prompt_queue" {
+  description = "Whether to provision the prompt SQS queue (set true for LocalStack environments)"
+  type        = bool
+  default     = false
 }

@@ -2,10 +2,7 @@ locals {
   lambda_package_hash = try(filebase64sha256(var.lambda_package_path), "")
   lambda_role_name    = "${var.lambda_name}-role"
   log_group_name      = "/aws/lambda/${var.lambda_name}"
-}
-
-data "aws_sqs_queue" "politopics_recap" {
-  name = var.sqs_queue_name
+  prompt_bucket_arn   = "arn:aws:s3:::${var.prompt_bucket_name}"
 }
 
 data "aws_iam_policy_document" "lambda_assume_role" {
@@ -19,25 +16,10 @@ data "aws_iam_policy_document" "lambda_assume_role" {
   }
 }
 
-resource "aws_dynamodb_table" "politopics_recap_idempotency" {
-  name         = var.idempotency_table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "idempotencyKey"
-
-  attribute {
-    name = "idempotencyKey"
-    type = "S"
-  }
-
-  ttl {
-    attribute_name = "expiresAt"
-    enabled        = true
-  }
-}
-
-resource "aws_iam_role" "politopics_recap" {
+resource "aws_iam_role" "this" {
   name               = local.lambda_role_name
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
+  tags               = var.tags
 }
 
 data "aws_iam_policy_document" "lambda_execution" {
@@ -49,8 +31,8 @@ data "aws_iam_policy_document" "lambda_execution" {
       "logs:PutLogEvents"
     ]
     resources = [
-      aws_cloudwatch_log_group.politopics_recap.arn,
-      "${aws_cloudwatch_log_group.politopics_recap.arn}:*"
+      aws_cloudwatch_log_group.this.arn,
+      "${aws_cloudwatch_log_group.this.arn}:*"
     ]
   }
 
@@ -64,38 +46,46 @@ data "aws_iam_policy_document" "lambda_execution" {
       "sqs:ChangeMessageVisibility",
       "sqs:GetQueueUrl"
     ]
-    resources = [data.aws_sqs_queue.politopics_recap.arn]
+    resources = [var.sqs_queue_arn]
   }
 
   statement {
-    sid    = "AllowIdempotencyPersistence"
+    sid    = "AllowPromptBucketAccess"
     effect = "Allow"
     actions = [
-      "dynamodb:DeleteItem",
-      "dynamodb:DescribeTable",
-      "dynamodb:GetItem",
-      "dynamodb:PutItem",
-      "dynamodb:UpdateItem"
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject"
     ]
-    resources = [aws_dynamodb_table.politopics_recap_idempotency.arn]
+    resources = ["${local.prompt_bucket_arn}/*"]
+  }
+
+  statement {
+    sid    = "AllowPromptBucketList"
+    effect = "Allow"
+    actions = [
+      "s3:ListBucket"
+    ]
+    resources = [local.prompt_bucket_arn]
   }
 }
 
-resource "aws_iam_role_policy" "politopics_recap" {
+resource "aws_iam_role_policy" "this" {
   name   = "${var.lambda_name}-inline"
-  role   = aws_iam_role.politopics_recap.id
+  role   = aws_iam_role.this.id
   policy = data.aws_iam_policy_document.lambda_execution.json
 }
 
-resource "aws_cloudwatch_log_group" "politopics_recap" {
+resource "aws_cloudwatch_log_group" "this" {
   name              = local.log_group_name
   retention_in_days = 14
+  tags              = var.tags
 }
 
-resource "aws_lambda_function" "politopics_recap" {
+resource "aws_lambda_function" "this" {
   function_name = var.lambda_name
   description   = "Processes PoliTopicsRecap messages from SQS"
-  role          = aws_iam_role.politopics_recap.arn
+  role          = aws_iam_role.this.arn
   filename      = var.lambda_package_path
 
   source_code_hash = local.lambda_package_hash
@@ -108,10 +98,8 @@ resource "aws_lambda_function" "politopics_recap" {
 
   environment {
     variables = {
-      PROMPT_QUEUE_URL                           = data.aws_sqs_queue.politopics_recap.url
-      IDEMPOTENCY_TABLE_NAME                     = aws_dynamodb_table.politopics_recap_idempotency.name
-      IDEMPOTENCY_TTL_SECONDS                    = tostring(var.idempotency_ttl_seconds)
-      IDEMPOTENCY_IN_PROGRESS_TTL_SECONDS        = tostring(var.idempotency_in_progress_ttl_seconds)
+      PROMPT_QUEUE_URL                           = var.sqs_queue_url
+      PROMPT_BUCKET_NAME                         = var.prompt_bucket_name
       RATE_LIMIT_RPS                             = tostring(var.lambda_rate_limit_rps)
       RATE_LIMIT_BURST                           = tostring(var.lambda_rate_limit_burst)
       BACKOFF_BASE_SECONDS                       = tostring(var.lambda_backoff_base_seconds)
@@ -126,11 +114,13 @@ resource "aws_lambda_function" "politopics_recap" {
       CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS        = tostring(var.lambda_circuit_breaker_half_open_max_calls)
     }
   }
+
+  tags = var.tags
 }
 
-resource "aws_lambda_event_source_mapping" "politopics_recap" {
-  event_source_arn                   = data.aws_sqs_queue.politopics_recap.arn
-  function_name                      = aws_lambda_function.politopics_recap.arn
+resource "aws_lambda_event_source_mapping" "this" {
+  event_source_arn                   = var.sqs_queue_arn
+  function_name                      = aws_lambda_function.this.arn
   batch_size                         = var.sqs_batch_size
   enabled                            = true
   maximum_batching_window_in_seconds = var.lambda_maximum_batching_window_seconds
@@ -141,14 +131,4 @@ resource "aws_lambda_event_source_mapping" "politopics_recap" {
       maximum_concurrency = scaling_config.value
     }
   }
-}
-
-output "politopics_recap_lambda_arn" {
-  description = "ARN of the PoliTopicsRecap SQS processing Lambda function"
-  value       = aws_lambda_function.politopics_recap.arn
-}
-
-output "politopics_recap_event_source_mapping_uuid" {
-  description = "UUID of the SQS -> Lambda event source mapping"
-  value       = aws_lambda_event_source_mapping.politopics_recap.uuid
 }

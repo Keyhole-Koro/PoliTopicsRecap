@@ -11,7 +11,7 @@ const endpoint = process.env.AWS_ENDPOINT_URL ?? process.env.LOCALSTACK_URL ?? '
 process.env.AWS_ENDPOINT_URL = endpoint;
 
 if (!process.env.AWS_REGION) {
-  process.env.AWS_REGION = 'us-east-1';
+  process.env.AWS_REGION = 'ap-northeast-3';
 }
 
 if (!process.env.AWS_ACCESS_KEY_ID) {
