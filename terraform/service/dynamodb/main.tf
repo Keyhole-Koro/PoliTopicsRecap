@@ -53,9 +53,5 @@ resource "aws_dynamodb_table" "politopics" {
     projection_type = "ALL"
   }
 
-  point_in_time_recovery {
-    enabled = true
-  }
-
   tags = local.tags
 }

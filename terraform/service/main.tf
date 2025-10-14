@@ -36,37 +36,38 @@ module "s3" {
 module "dynamodb" {
   source = "./dynamodb"
 
-  table_name                          = var.politopics_table_name
-  tags                                = local.tags
+  table_name = var.politopics_table_name
+  tags       = local.tags
 }
 
 module "lambda" {
   source = "./lambda"
 
-  lambda_name                                    = var.lambda_name
-  lambda_package_path                            = var.lambda_package_path
-  lambda_memory_mb                               = var.lambda_memory_mb
-  lambda_timeout_seconds                         = var.lambda_timeout_seconds
-  lambda_reserved_concurrency                    = var.lambda_reserved_concurrency
-  sqs_batch_size                                 = var.sqs_batch_size
-  lambda_maximum_batching_window_seconds         = var.lambda_maximum_batching_window_seconds
-  lambda_maximum_concurrency                     = var.lambda_maximum_concurrency
-  lambda_rate_limit_rps                          = var.lambda_rate_limit_rps
-  lambda_rate_limit_burst                        = var.lambda_rate_limit_burst
-  lambda_backoff_base_seconds                    = var.lambda_backoff_base_seconds
-  lambda_backoff_cap_seconds                     = var.lambda_backoff_cap_seconds
-  lambda_max_attempts                            = var.lambda_max_attempts
-  lambda_api_timeout_ms                          = var.lambda_api_timeout_ms
-  lambda_overall_timeout_ms                      = var.lambda_overall_timeout_ms
-  lambda_circuit_breaker_failure_threshold       = var.lambda_circuit_breaker_failure_threshold
-  lambda_circuit_breaker_minimum_requests        = var.lambda_circuit_breaker_minimum_requests
-  lambda_circuit_breaker_cooldown_seconds        = var.lambda_circuit_breaker_cooldown_seconds
+  lambda_name                                       = var.lambda_name
+  lambda_package_path                               = var.lambda_package_path
+  lambda_layer_package_path                         = var.lambda_layer_package_path
+  lambda_memory_mb                                  = var.lambda_memory_mb
+  lambda_timeout_seconds                            = var.lambda_timeout_seconds
+  lambda_reserved_concurrency                       = var.lambda_reserved_concurrency
+  sqs_batch_size                                    = var.sqs_batch_size
+  lambda_maximum_batching_window_seconds            = var.lambda_maximum_batching_window_seconds
+  lambda_maximum_concurrency                        = var.lambda_maximum_concurrency
+  lambda_rate_limit_rps                             = var.lambda_rate_limit_rps
+  lambda_rate_limit_burst                           = var.lambda_rate_limit_burst
+  lambda_backoff_base_seconds                       = var.lambda_backoff_base_seconds
+  lambda_backoff_cap_seconds                        = var.lambda_backoff_cap_seconds
+  lambda_max_attempts                               = var.lambda_max_attempts
+  lambda_api_timeout_ms                             = var.lambda_api_timeout_ms
+  lambda_overall_timeout_ms                         = var.lambda_overall_timeout_ms
+  lambda_circuit_breaker_failure_threshold          = var.lambda_circuit_breaker_failure_threshold
+  lambda_circuit_breaker_minimum_requests           = var.lambda_circuit_breaker_minimum_requests
+  lambda_circuit_breaker_cooldown_seconds           = var.lambda_circuit_breaker_cooldown_seconds
   lambda_circuit_breaker_visibility_timeout_seconds = var.lambda_circuit_breaker_visibility_timeout_seconds
-  lambda_circuit_breaker_half_open_max_calls     = var.lambda_circuit_breaker_half_open_max_calls
-  sqs_queue_arn                                  = local.sqs_queue_arn
-  sqs_queue_url                                  = local.sqs_queue_url
-  prompt_bucket_name                             = module.s3.bucket_name
-  tags                                           = local.tags
+  lambda_circuit_breaker_half_open_max_calls        = var.lambda_circuit_breaker_half_open_max_calls
+  sqs_queue_arn                                     = local.sqs_queue_arn
+  sqs_queue_url                                     = local.sqs_queue_url
+  prompt_bucket_name                                = module.s3.bucket_name
+  tags                                              = local.tags
 }
 
 locals {
@@ -136,12 +137,12 @@ resource "aws_cloudwatch_event_rule" "sqs_alarm_state_change" {
   description = "Fires when the SQS backlog alarm transitions into ALARM"
 
   event_pattern = jsonencode({
-    source      = ["aws.cloudwatch"],
+    source        = ["aws.cloudwatch"],
     "detail-type" = ["CloudWatch Alarm State Change"],
     detail = {
-      state = { value = ["ALARM"] },
+      state         = { value = ["ALARM"] },
       previousState = { value = ["OK", "INSUFFICIENT_DATA"] },
-      alarmName = [aws_cloudwatch_metric_alarm.sqs_backlog.alarm_name]
+      alarmName     = [aws_cloudwatch_metric_alarm.sqs_backlog.alarm_name]
     }
   })
 }
@@ -152,7 +153,7 @@ resource "aws_cloudwatch_event_target" "sqs_alarm_target" {
   rule      = aws_cloudwatch_event_rule.sqs_alarm_state_change[0].name
   target_id = "sqs-backlog-trigger"
   arn       = local.scheduler_target_lambda_arn
-  input     = jsonencode({
+  input = jsonencode({
     alarmName   = aws_cloudwatch_metric_alarm.sqs_backlog.alarm_name,
     queueUrl    = local.sqs_queue_url,
     environment = var.environment

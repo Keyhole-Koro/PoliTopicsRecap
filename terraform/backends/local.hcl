@@ -1,0 +1,10 @@
+bucket                  = "tf-state"
+key                     = "local/state.tfstate"
+region                  = "ap-northeast-3"
+endpoint                = "http://localstack:4566"
+force_path_style        = true
+skip_credentials_validation = true
+skip_region_validation      = true
+skip_metadata_api_check     = true
+dynamodb_table          = "tf-lock"
+dynamodb_endpoint       = "http://localstack:4566"

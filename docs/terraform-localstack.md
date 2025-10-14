@@ -1,16 +1,17 @@
 # Terraform + LocalStack Quickstart
 
-1. Build or update the Lambda bundle so the `lambda_package_path` file exists:
+1. Build or update the Lambda function and dependency layer so the `lambda_package_path` and `lambda_layer_package_path` files exist:
    ```bash
    npm run build
    ```
+   This produces `dist/lambda_handler.zip` (function code) and `dist/lambda_layer.zip` (Node.js dependencies).
 2. Switch into the Terraform configuration directory:
    ```bash
    cd terraform
    ```
 3. Initialise Terraform with the LocalStack backend configuration:
    ```bash
-   terraform init -backend-config="backends/stage.hcl"
+   terraform init -backend-config=backends/local.hcl
    ```
 4. Apply the LocalStack variables file (this creates the SQS queue when `create_prompt_queue=true` in `tfvars/localstack.tfvars`):
    ```bash

@@ -8,6 +8,11 @@ variable "lambda_package_path" {
   description = "Absolute path to the Lambda deployment package"
 }
 
+variable "lambda_layer_package_path" {
+  type        = string
+  description = "Absolute path to the Lambda layer package providing dependencies"
+}
+
 variable "lambda_memory_mb" {
   type        = number
   description = "Lambda memory size"

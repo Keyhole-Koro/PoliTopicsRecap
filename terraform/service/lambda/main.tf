@@ -1,5 +1,6 @@
 locals {
   lambda_package_hash = try(filebase64sha256(var.lambda_package_path), "")
+  lambda_layer_package_hash = try(filebase64sha256(var.lambda_layer_package_path), "")
   lambda_role_name    = "${var.lambda_name}-role"
   log_group_name      = "/aws/lambda/${var.lambda_name}"
   prompt_bucket_arn   = "arn:aws:s3:::${var.prompt_bucket_name}"
@@ -82,6 +83,14 @@ resource "aws_cloudwatch_log_group" "this" {
   tags              = var.tags
 }
 
+resource "aws_lambda_layer_version" "dependencies" {
+  layer_name          = "${var.lambda_name}-deps"
+  description         = "Runtime dependencies for ${var.lambda_name}"
+  filename            = var.lambda_layer_package_path
+  source_code_hash    = local.lambda_layer_package_hash
+  compatible_runtimes = ["nodejs20.x"]
+}
+
 resource "aws_lambda_function" "this" {
   function_name = var.lambda_name
   description   = "Processes PoliTopicsRecap messages from SQS"
@@ -95,6 +104,7 @@ resource "aws_lambda_function" "this" {
   memory_size      = var.lambda_memory_mb
 
   reserved_concurrent_executions = var.lambda_reserved_concurrency
+  layers                        = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {

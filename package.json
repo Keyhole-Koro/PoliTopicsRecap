@@ -7,8 +7,7 @@
     "test": "jest --config jest.config.ts",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
     "local:test:e2e": "jest --config jest.config.ts --runTestsByPath tests/integration/fullFlow.test.ts",
-    "build": "tsc && node scripts/copy-node-modules.js",
-    "postbuild": "tsc-alias"
+    "build": "node scripts/build-lambda.js"
   },
   "author": "",
   "devDependencies": {
@@ -21,7 +20,8 @@
     "ts-jest": "^29.3.4",
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.16",
-    "tsconfig-paths": "^4.2.0"
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.2"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.817.0",

@@ -19,6 +19,11 @@ variable "lambda_package_path" {
   description = "Absolute path to the Lambda artifact (ZIP file)"
 }
 
+variable "lambda_layer_package_path" {
+  type        = string
+  description = "Absolute path to the Lambda layer artifact (ZIP file)"
+}
+
 variable "prompt_bucket_name" {
   type        = string
   description = "S3 bucket name used for prompts"

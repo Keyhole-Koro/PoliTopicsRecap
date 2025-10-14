@@ -52,6 +52,12 @@ variable "lambda_package_path" {
   default     = "../dist/lambda_handler.zip"
 }
 
+variable "lambda_layer_package_path" {
+  description = "Relative path to the packaged Lambda layer artifact (ZIP file)"
+  type        = string
+  default     = "../dist/lambda_layer.zip"
+}
+
 variable "prompt_bucket_name" {
   description = "S3 bucket name used for prompt storage"
   type        = string
