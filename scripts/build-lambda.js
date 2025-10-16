@@ -95,10 +95,14 @@ async function createZipArchive(sourceDir, outputPath) {
 
 async function buildLayer(packageManager) {
   console.log("[build-lambda] Preparing Lambda layer");
-  await cleanDirectory(layerNodejsDir);
+
+  await cleanDirectory(layerStagingDir);
+  await fs.ensureDir(layerNodejsDir);
 
   console.log("[build-lambda] Copying package metadata for layer");
   await copyPackageMetadata(layerNodejsDir);
+
+  await fs.writeFile(path.join(layerNodejsDir, ".npmrc"), "node-linker=hoisted\n");
 
   console.log("[build-lambda] Installing dependencies into layer staging");
   await installProdDependencies(layerNodejsDir, packageManager);

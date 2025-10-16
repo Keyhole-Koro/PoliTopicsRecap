@@ -34,7 +34,7 @@ export class GeminiClient implements LlmClient {
 
     this.defaultGenerationConfig = options.defaultGenerationConfig;
     this.model = genAI.getGenerativeModel({
-      model: options.model ?? 'gemini-1.5-pro',
+      model: options.model ?? 'gemini-2.5-pro',
       systemInstruction: options.systemInstruction,
     });
   }

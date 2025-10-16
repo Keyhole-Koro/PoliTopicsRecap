@@ -65,6 +65,7 @@ export async function processReduceRecord({
     });
 
     await deleteMessage({ sqsClient, queueUrl, receiptHandle: record.receiptHandle });
+    // remove s3 objects later
   } catch (err) {
     console.error('Reduce processing failed; rescheduling', {
       messageId: record.messageId,

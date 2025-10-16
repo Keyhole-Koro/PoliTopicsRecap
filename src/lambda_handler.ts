@@ -40,8 +40,9 @@ export async function handler(event: SQSEvent): Promise<void> {
       continue;
     }
 
+    // validate if the corresponding record exists later implementation
     if (message.type === 'map') {
-      await processMapRecord({
+      processMapRecord({
         message,
         record,
         sqsClient,
