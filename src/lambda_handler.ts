@@ -3,12 +3,12 @@ import { SQSClient } from '@aws-sdk/client-sqs';
 import type { SQSEvent } from 'aws-lambda';
 
 import { GeminiClient } from '@llm/geminiClient';
-import { processMapRecord } from './lambda/processMapRecord';
+import { processMapRecord } from 'lambda/processMapRecord';
 import { processReduceRecord } from './lambda/processReduceRecord';
 import { parsePromptTaskMessage, type PromptTaskMessage } from './lambda/parsePromptTaskMessage';
 import { deleteMessage } from './lambda/sqsActions';
-import { resolveConfig } from './utils/config';
-import { getAwsBaseConfig, getS3ClientConfig } from './utils/aws';
+import { resolveConfig } from '@utils/config';
+import { getAwsBaseConfig, getS3ClientConfig } from '@utils/aws';
 
 export async function handler(event: SQSEvent): Promise<void> {
   const config = resolveConfig();
@@ -42,7 +42,7 @@ export async function handler(event: SQSEvent): Promise<void> {
 
     // validate if the corresponding record exists later implementation
     if (message.type === 'map') {
-      processMapRecord({
+      await processMapRecord({
         message,
         record,
         sqsClient,

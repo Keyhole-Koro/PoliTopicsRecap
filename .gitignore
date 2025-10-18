@@ -12,6 +12,10 @@ terraform.tfstate
 terraform.tfstate.backup
 *.tfvars
 *.tfvars.json
+tfplan
 crash.log
 
 *.zip
+
+layer_content
+out.json

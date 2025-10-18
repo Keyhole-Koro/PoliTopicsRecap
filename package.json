@@ -7,6 +7,7 @@
     "test": "jest --config jest.config.ts",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
     "local:test:e2e": "jest --config jest.config.ts --runTestsByPath tests/integration/fullFlow.test.ts",
+    "build:local": "node scripts/build-local-lambda.js",
     "build": "node scripts/build-lambda.js",
     "enqueue-mock": "ts-node -r tsconfig-paths/register scripts/enqueue-mock-prompts.ts"
   },

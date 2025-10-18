@@ -1,9 +1,9 @@
 locals {
-  lambda_package_hash = try(filebase64sha256(var.lambda_package_path), "")
+  lambda_package_hash       = try(filebase64sha256(var.lambda_package_path), "")
   lambda_layer_package_hash = try(filebase64sha256(var.lambda_layer_package_path), "")
-  lambda_role_name    = "${var.lambda_name}-role"
-  log_group_name      = "/aws/lambda/${var.lambda_name}"
-  prompt_bucket_arn   = "arn:aws:s3:::${var.prompt_bucket_name}"
+  lambda_role_name          = "${var.lambda_name}-role"
+  log_group_name            = "/aws/lambda/${var.lambda_name}"
+  prompt_bucket_arn         = "arn:aws:s3:::${var.prompt_bucket_name}"
 }
 
 data "aws_iam_policy_document" "lambda_assume_role" {
@@ -104,11 +104,12 @@ resource "aws_lambda_function" "this" {
   memory_size      = var.lambda_memory_mb
 
   reserved_concurrent_executions = var.lambda_reserved_concurrency
-  layers                        = [aws_lambda_layer_version.dependencies.arn]
+  layers                         = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {
       PROMPT_QUEUE_URL                           = var.sqs_queue_url
+      PROMPT_QUEUE_ARN                           = var.sqs_queue_arn
       PROMPT_BUCKET_NAME                         = var.prompt_bucket_name
       RATE_LIMIT_RPS                             = tostring(var.lambda_rate_limit_rps)
       RATE_LIMIT_BURST                           = tostring(var.lambda_rate_limit_burst)
@@ -122,6 +123,7 @@ resource "aws_lambda_function" "this" {
       CIRCUIT_BREAKER_COOLDOWN_SECONDS           = tostring(var.lambda_circuit_breaker_cooldown_seconds)
       CIRCUIT_BREAKER_VISIBILITY_TIMEOUT_SECONDS = tostring(var.lambda_circuit_breaker_visibility_timeout_seconds)
       CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS        = tostring(var.lambda_circuit_breaker_half_open_max_calls)
+      NODE_PATH                                  = "/opt/nodejs/node_modules"
     }
   }
 

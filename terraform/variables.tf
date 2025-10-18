@@ -183,24 +183,6 @@ variable "lambda_circuit_breaker_half_open_max_calls" {
   default     = 1
 }
 
-variable "idempotency_table_name" {
-  description = "DynamoDB table name used for idempotency tracking"
-  type        = string
-  default     = "politopics-recap-idempotency"
-}
-
-variable "idempotency_ttl_seconds" {
-  description = "TTL (seconds) for completed idempotency records"
-  type        = number
-  default     = 86400
-}
-
-variable "idempotency_in_progress_ttl_seconds" {
-  description = "TTL (seconds) for in-progress idempotency records"
-  type        = number
-  default     = 300
-}
-
 variable "enable_sqs_alarm_eventbridge" {
   description = "Whether to create the EventBridge rule/target reacting to the SQS backlog alarm"
   type        = bool

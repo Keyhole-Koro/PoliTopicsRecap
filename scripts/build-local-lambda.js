@@ -7,9 +7,10 @@ const tsconfigPath = path.join(rootDir, "tsconfig.json");
 const buildDir = path.join(rootDir, "build");
 const distDir = path.join(rootDir, "dist");
 
+const functionStagingDir = path.join(buildDir, "lambda-function");
+
 const layerStagingDir = path.join(buildDir, "lambda-layer");
 const layerNodejsDir = path.join(layerStagingDir, "nodejs");
-const functionStagingDir = path.join(buildDir, "lambda-function");
 
 const functionZipPath = path.join(distDir, "lambda_handler.zip");
 const layerZipPath = path.join(distDir, "lambda_layer.zip");
@@ -46,11 +47,7 @@ async function compileTypescript(packageManager) {
   if (packageManager === "pnpm") {
     runCommand("pnpm", ["exec", "tsc", "--project", tsconfigPath], { cwd: rootDir });
     for (const target of aliasTargets) {
-      runCommand(
-        "pnpm",
-        ["exec", "tsc-alias", "--project", tsconfigPath, "--outDir", target],
-        { cwd: rootDir },
-      );
+      runCommand("pnpm", ["exec", "tsc-alias", "--project", tsconfigPath, "--outDir", target], { cwd: rootDir });
     }
     return;
   }
@@ -77,9 +74,10 @@ async function copyPackageMetadata(destinationDir) {
 }
 
 async function installProdDependencies(destinationDir, packageManager) {
-  console.log("[build-lambda] Installing production dependencies");
+  console.log("[build-lambda] Installing production dependencies into function package");
 
   if (packageManager === "pnpm") {
+    await fs.writeFile(path.join(destinationDir, ".npmrc"), "node-linker=hoisted\n");
     runCommand("pnpm", ["install", "--prod", "--frozen-lockfile", "--ignore-scripts"], { cwd: destinationDir });
     return;
   }
@@ -92,7 +90,6 @@ async function copyFunctionSources() {
   if (!(await fs.pathExists(compiledSrcDir))) {
     throw new Error("Compiled sources not found. Did the TypeScript compilation step complete successfully?");
   }
-
   await fs.copy(compiledSrcDir, functionStagingDir);
 }
 
@@ -102,39 +99,46 @@ async function createZipArchive(sourceDir, outputPath) {
   runCommand("zip", ["-qr", outputPath, "."], { cwd: sourceDir });
 }
 
-async function buildLayer(packageManager) {
-  console.log("[build-lambda] Preparing Lambda layer");
-
-  await cleanDirectory(layerStagingDir);
-  await fs.ensureDir(layerNodejsDir);
-
-  console.log("[build-lambda] Copying package metadata for layer");
-  await copyPackageMetadata(layerNodejsDir);
-
-  await fs.writeFile(path.join(layerNodejsDir, ".npmrc"), "node-linker=hoisted\n");
-
-  console.log("[build-lambda] Installing dependencies into layer staging");
-  await installProdDependencies(layerNodejsDir, packageManager);
-
-  console.log("[build-lambda] Creating Lambda layer archive");
-  await createZipArchive(layerStagingDir, layerZipPath);
-
-  const stats = await fs.stat(layerZipPath);
-  console.log(`[build-lambda] Layer artifact: ${layerZipPath} (${stats.size} bytes)`);
-}
-
-async function buildFunctionArchive() {
-  console.log("[build-lambda] Preparing Lambda function package");
+async function buildFunctionArchive(packageManager) {
+  console.log("[build-lambda] Preparing Lambda function package (with node_modules)");
   await cleanDirectory(functionStagingDir);
 
   console.log("[build-lambda] Copying compiled sources into function staging");
   await copyFunctionSources();
+
+  console.log("[build-lambda] Copying package metadata");
+  await copyPackageMetadata(functionStagingDir);
+
+  console.log("[build-lambda] Installing production dependencies into function staging");
+  await installProdDependencies(functionStagingDir, packageManager);
 
   console.log("[build-lambda] Creating Lambda function archive");
   await createZipArchive(functionStagingDir, functionZipPath);
 
   const stats = await fs.stat(functionZipPath);
   console.log(`[build-lambda] Function artifact: ${functionZipPath} (${stats.size} bytes)`);
+}
+
+// Create a dummy Lambda layer ZIP for Terraform reference (LocalStack placeholder)
+async function buildDummyLayerArchive() {
+  console.log("[build-lambda] Preparing dummy Lambda layer (LocalStack free placeholder)");
+  await cleanDirectory(layerStagingDir);
+  await fs.ensureDir(layerNodejsDir);
+
+  await fs.writeFile(
+    path.join(layerNodejsDir, "README.txt"),
+    [
+      "This is a dummy lambda layer for LocalStack (free tier).",
+      "Real environments build a proper layer with production dependencies.",
+      "Structure kept as: nodejs/ (maps to /opt/nodejs at runtime).",
+    ].join("\n")
+  );
+
+  console.log("[build-lambda] Creating dummy layer archive");
+  await createZipArchive(layerStagingDir, layerZipPath);
+
+  const stats = await fs.stat(layerZipPath);
+  console.log(`[build-lambda] Dummy layer artifact: ${layerZipPath} (${stats.size} bytes)`);
 }
 
 async function main() {
@@ -145,8 +149,9 @@ async function main() {
   const packageManager = await detectPackageManager();
 
   await compileTypescript(packageManager);
-  await buildLayer(packageManager);
-  await buildFunctionArchive();
+  await buildFunctionArchive(packageManager);
+  await buildDummyLayerArchive();
+  console.log("[build-lambda] Done (LocalStack free compatible package + dummy layer).");
 }
 
 main().catch((error) => {

@@ -8,9 +8,6 @@ export type CircuitBreakerConfig = {
 export type Config = {
   queueUrl: string;
   queueArn: string;
-  idempotencyTableName: string;
-  idempotencyTtlSeconds: number;
-  idempotencyInProgressTtlSeconds: number;
   rateLimitRps: number;
   rateLimiterBurstCapacity: number;
   backoffBaseSeconds: number;
@@ -34,16 +31,6 @@ export function resolveConfig(): Config {
     throw new Error('PROMPT_QUEUE_ARN environment variable is required');
   }
 
-  const idempotencyTableName = process.env.IDEMPOTENCY_TABLE_NAME;
-  if (!idempotencyTableName) {
-    throw new Error('IDEMPOTENCY_TABLE_NAME environment variable is required');
-  }
-
-  const idempotencyTtlSeconds = numberFromEnv('IDEMPOTENCY_TTL_SECONDS', 86_400);
-  const idempotencyInProgressTtlSeconds = numberFromEnv(
-    'IDEMPOTENCY_IN_PROGRESS_TTL_SECONDS',
-    300,
-  );
   const rateLimitRps = Math.max(1, numberFromEnv('RATE_LIMIT_RPS', 5));
   const rateLimiterBurstCapacity = Math.max(
     1,
@@ -94,9 +81,6 @@ export function resolveConfig(): Config {
   return {
     queueUrl,
     queueArn,
-    idempotencyTableName,
-    idempotencyTtlSeconds,
-    idempotencyInProgressTtlSeconds,
     rateLimitRps,
     rateLimiterBurstCapacity,
     backoffBaseSeconds,
