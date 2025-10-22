@@ -125,3 +125,8 @@ variable "tags" {
   description = "Tags applied to Lambda resources"
   default     = {}
 }
+
+variable "gemini_api_key" {
+  type      = string
+  sensitive = true
+}

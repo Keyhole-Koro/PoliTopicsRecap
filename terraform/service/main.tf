@@ -68,6 +68,7 @@ module "lambda" {
   sqs_queue_url                                     = local.sqs_queue_url
   prompt_bucket_name                                = module.s3.bucket_name
   tags                                              = local.tags
+  gemini_api_key                                    = var.gemini_api_key
 }
 
 locals {

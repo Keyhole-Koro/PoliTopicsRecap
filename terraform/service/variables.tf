@@ -166,3 +166,9 @@ variable "scheduler_use_processor_lambda_as_target" {
   description = "Use the processor Lambda as the EventBridge target when no explicit ARN is provided"
   default     = false
 }
+
+variable "gemini_api_key" {
+  description = "API key for accessing the Gemini API"
+  type        = string
+  default     = ""
+}

@@ -206,3 +206,9 @@ variable "create_prompt_queue" {
   type        = bool
   default     = false
 }
+
+variable "gemini_api_key" {
+  description = "API key for accessing the Gemini API"
+  type        = string
+  default     = ""
+}

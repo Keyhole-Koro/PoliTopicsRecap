@@ -69,9 +69,12 @@ export class GeminiClient implements LlmClient {
 }
 
 function transformMessageToContent(message: LlmMessage): Content {
-  const role = 'system';
+  if (message.role != 'user' && message.role != 'system') {
+    throw new Error(`Unsupported message role for GeminiClient: ${message.role}`);
+  }
+  
   return {
-    role,
+    role: message.role,
     parts: [{ text: message.content }],
   };
 }

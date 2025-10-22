@@ -123,6 +123,7 @@ resource "aws_lambda_function" "this" {
       CIRCUIT_BREAKER_COOLDOWN_SECONDS           = tostring(var.lambda_circuit_breaker_cooldown_seconds)
       CIRCUIT_BREAKER_VISIBILITY_TIMEOUT_SECONDS = tostring(var.lambda_circuit_breaker_visibility_timeout_seconds)
       CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS        = tostring(var.lambda_circuit_breaker_half_open_max_calls)
+      GEMINI_API_KEY                             = var.gemini_api_key
       NODE_PATH                                  = "/opt/nodejs/node_modules"
     }
   }

@@ -57,6 +57,8 @@ module "service" {
   sqs_queue_url_override                            = local.prompt_queue_url_override
   sqs_queue_arn_override                            = local.prompt_queue_arn_override
   lookup_sqs_queue                                  = var.create_prompt_queue ? false : true
+  gemini_api_key                                    = var.gemini_api_key
+
 }
 
 output "politopics_recap_lambda_arn" {
