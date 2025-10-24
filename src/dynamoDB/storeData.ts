@@ -31,8 +31,6 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   BatchWriteCommand,
-  QueryCommand,
-  GetCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 // ---- Minimal self-contained types (replace with your project types if available) ----
@@ -100,14 +98,53 @@ function mOf(monthYYYYMM: string) { return ensureYYYYMM(monthYYYYMM).slice(5, 7)
 // Normalize input date-like string to strict ISO UTC (fixed length).
 // - If input is already ISO-like, it will be parsed and re-serialized via toISOString().
 // - If input is "YYYY-MM-DD", we treat it as 00:00:00Z of that day.
-export function toIsoUtc(dateLike: string): string {
-  if (/^\d{4}-\d{2}-\d{2}T/.test(dateLike)) {
-    return new Date(dateLike).toISOString();
+export function toIsoUtc(dateLike: unknown): string | undefined {
+  if (dateLike == null) return undefined;
+
+  // If it's already a Date
+  if (dateLike instanceof Date) {
+    if (isNaN(dateLike.getTime())) throw new Error(`Invalid Date input: ${dateLike}`);
+    return dateLike.toISOString();
   }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateLike)) {
-    return new Date(dateLike + "T00:00:00Z").toISOString();
+
+  // If it's a number (likely epoch seconds → convert to ms)
+  if (typeof dateLike === "number") {
+    const d = new Date(dateLike > 1e12 ? dateLike : dateLike * 1000);
+    if (isNaN(d.getTime())) throw new Error(`Invalid epoch time: ${dateLike}`);
+    return d.toISOString();
   }
-  return new Date(dateLike).toISOString();
+
+  // If it's a string
+  if (typeof dateLike === "string") {
+    const trimmed = dateLike.trim();
+    if (!trimmed) return undefined;
+
+    // Already ISO-ish
+    if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
+      const d = new Date(trimmed);
+      if (isNaN(d.getTime())) throw new Error(`Invalid ISO datetime: ${trimmed}`);
+      return d.toISOString();
+    }
+
+    // Only date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return new Date(trimmed + "T00:00:00Z").toISOString();
+    }
+
+    // Try to auto-fix "YYYY-MM-DD HH:mm:ss"
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(trimmed)) {
+      const d = new Date(trimmed.replace(" ", "T") + "Z");
+      if (isNaN(d.getTime())) throw new Error(`Invalid fallback datetime: ${trimmed}`);
+      return d.toISOString();
+    }
+
+    // Fallback
+    const d = new Date(trimmed);
+    if (isNaN(d.getTime())) throw new Error(`Invalid date string: ${trimmed}`);
+    return d.toISOString();
+  }
+
+  throw new Error(`Unsupported date input type: ${typeof dateLike}`);
 }
 
 // If you want "month" aligned to *JST* day boundaries instead of UTC, use this:
@@ -175,6 +212,10 @@ export default async function storeData(
 
   // ---- Normalize date & month to keep ordering and prefix filters consistent
   const iso = toIsoUtc(article.date);
+
+  if (!iso) {
+    throw new Error(`Invalid article.date, cannot normalize to ISO UTC: ${article.date}`);
+  }
 
   // Choose which alignment you want for "month":
   //   1) UTC-based (default here)

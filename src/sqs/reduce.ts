@@ -13,8 +13,8 @@ export type ReducePromptTaskMessage = {
   };
   llm: string;
   llmModel: string;
-  delayMs?: number;
   retryAttempts: number;
+  retryMs_in: number;
 };
 
 export function isReducePromptTaskMessage(value: unknown): value is ReducePromptTaskMessage {
@@ -62,11 +62,11 @@ export function isReducePromptTaskMessage(value: unknown): value is ReducePrompt
     return false;
   }
 
-  if (value.delayMs !== undefined && !isFiniteNumber(value.delayMs)) {
+  if (!isFiniteNumber(value.retryAttempts) || value.retryAttempts < 0) {
     return false;
   }
 
-  if (!isFiniteNumber(value.retryAttempts) || value.retryAttempts < 0) {
+  if (!isFiniteNumber(value.retryMs_in) || value.retryMs_in < 0) {
     return false;
   }
 

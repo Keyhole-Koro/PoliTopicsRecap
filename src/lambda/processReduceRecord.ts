@@ -1,11 +1,14 @@
 import type { S3Client } from '@aws-sdk/client-s3';
 import type { SQSClient } from '@aws-sdk/client-sqs';
 import type { SQSRecord } from 'aws-lambda';
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import type { ReducePromptTaskMessage } from '../sqs/reduce';
 import { ensureObjectExists, fetchJsonObject, parseS3Uri } from '../utils/s3';
 import { deleteMessage, pickRequeueDelaySeconds, requeueWithDelay } from './sqsActions';
 import { LlmClient } from '@llm/llmClient';
+import storeData, { Article } from 'src/dynamoDB/storeData';
 
 export interface ProcessReduceRecordArgs {
   message: ReducePromptTaskMessage;
@@ -14,7 +17,6 @@ export interface ProcessReduceRecordArgs {
   sqsClient: SQSClient;
   s3Client: S3Client;
   llmClient: LlmClient;
-  
 }
 
 export async function processReduceRecord({
@@ -26,6 +28,11 @@ export async function processReduceRecord({
   llmClient,
 }: ProcessReduceRecordArgs): Promise<void> {
   try {
+    
+    const ddbClient = new DynamoDBClient({});
+    const docClient = DynamoDBDocumentClient.from(ddbClient);
+
+
     const referencedUris = new Set<string>(message.chunk_result_urls);
     const missingSources = await findMissingObjects(s3Client, Array.from(referencedUris));
 
@@ -39,7 +46,7 @@ export async function processReduceRecord({
         queueUrl,
         record,
         message,
-        delaySeconds: pickRequeueDelaySeconds(message.delayMs),
+        delaySeconds: message.retryMs_in,
       });
       return;
     }
@@ -60,9 +67,19 @@ export async function processReduceRecord({
       promptLength: combinedPrompt.length,
     });
 
-    await llmClient.generate({
+    const result = await llmClient.generate({
       messages: [{ role: 'user', content: combinedPrompt }],
     });
+
+    // add keywords, participants, and other metadata later
+    /*
+    await storeData({
+      doc: docClient,
+      table_name: 'politopics',
+      },
+      
+    );
+    */
 
     await deleteMessage({ sqsClient, queueUrl, receiptHandle: record.receiptHandle });
     // remove s3 objects later
@@ -76,7 +93,7 @@ export async function processReduceRecord({
       queueUrl,
       record,
       message,
-      delaySeconds: pickRequeueDelaySeconds(message.delayMs),
+      delaySeconds: message.retryMs_in,
     });
   }
 }

@@ -9,8 +9,8 @@ import type { SQSRecord } from 'aws-lambda';
 import type { MapPromptTaskMessage } from '../sqs/map';
 import type { ReducePromptTaskMessage } from '../sqs/reduce';
 
-const MAX_SQS_DELAY_SECONDS = 900;
-export const FIVE_MINUTES_SECONDS = 5 * 60;
+const MAX_SQS_DELAY_SECONDS = 43200;
+export const FIVE_MINUTES_SECONDS = 3 * 60;
 
 export type PromptTaskUnion = MapPromptTaskMessage | ReducePromptTaskMessage;
 

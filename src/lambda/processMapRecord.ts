@@ -3,7 +3,7 @@ import type { SQSClient } from '@aws-sdk/client-sqs';
 import type { SQSRecord } from 'aws-lambda';
 
 import type { MapPromptTaskMessage } from '../sqs/map';
-import { fetchObjectText, parseS3Uri } from '../utils/s3';
+import { fetchObjectText, parseS3Uri, PROMPT_BUCKET, uploadJson } from '../utils/s3';
 import { deleteMessage, requeueWithDelay, FIVE_MINUTES_SECONDS } from './sqsActions';
 import { LlmClient } from '@llm/llmClient';
 
@@ -41,8 +41,20 @@ export async function processMapRecord({
       retryAttempts: message.retryAttempts,
     });
 
-    await llmClient.generate({
+    const result = await llmClient.generate({
       messages: [{ role: 'user', content: sourceText }],
+    });
+
+    const { bucket: resultBucket, key: resultKey } = parseS3Uri(message.result_url);
+
+    await uploadJson({
+      client: s3Client,
+      bucket: resultBucket,
+      key: resultKey,
+      data: result,
+      opts: {
+        contentType: 'application/json',
+      },
     });
 
     await deleteMessage({ sqsClient, queueUrl, receiptHandle: record.receiptHandle });
@@ -56,7 +68,7 @@ export async function processMapRecord({
       queueUrl,
       record,
       message,
-      delaySeconds: FIVE_MINUTES_SECONDS,
+      delaySeconds: message.retryMs_in,
     });
   }
 }

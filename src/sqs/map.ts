@@ -1,12 +1,12 @@
 export type MapPromptTaskMessage = {
   type: 'map';
   url: string; // s3://bucket/key
-  result_url?: string; // optional s3://bucket/key for result
+  result_url: string;
   meta?: Record<string, any>;
   llm: string;
   llmModel: string;
-  delayMs?: number;
   retryAttempts: number;
+  retryMs_in: number;
 };
 
 export function isMapPromptTaskMessage(value: unknown): value is MapPromptTaskMessage {
@@ -22,10 +22,7 @@ export function isMapPromptTaskMessage(value: unknown): value is MapPromptTaskMe
     return false;
   }
 
-  if (
-    value.result_url !== undefined &&
-    (typeof value.result_url !== 'string' || !value.result_url.startsWith('s3://'))
-  ) {
+  if (typeof value.result_url !== 'string' || !value.result_url.startsWith('s3://')) {
     return false;
   }
 
@@ -41,14 +38,14 @@ export function isMapPromptTaskMessage(value: unknown): value is MapPromptTaskMe
     return false;
   }
 
-  if (value.delayMs !== undefined && !isFiniteNumber(value.delayMs)) {
-    return false;
-  }
-
   if (!isFiniteNumber(value.retryAttempts) || value.retryAttempts < 0) {
     return false;
   }
 
+  if (!isFiniteNumber(value.retryMs_in) || value.retryMs_in < 0) {
+    return false;
+  }
+  
   return true;
 }
 

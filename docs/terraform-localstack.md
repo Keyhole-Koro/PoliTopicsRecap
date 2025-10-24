@@ -62,8 +62,15 @@
 # Test with mock
 
 ```bash
+export DELAY_STEP_SECONDS=60
 # after terraform applying to localstack
 npm run enqueue-mock
+```
+
+# Apply changes of lambda
+
+```bash
+nom run build:local
 ```
 
 # utilities (debuging)
@@ -73,13 +80,18 @@ npm run enqueue-mock
 ```bash
 # List all S3 buckets in LocalStack
 aws --no-cli-pager --endpoint-url http://localstack:4566 --region ap-northeast-3 s3api list-buckets
+
+aws --endpoint-url http://localstack:4566   s3 ls s3://politopics-prompts/demo/<path> \
+   --recursive \
+   --human-readable \
+   --summarize
 ```
 
 ### SQS
 
 ```bash
 # Set SQS queue URL variable
-set $Q = "http://sqs.ap-northeast-3.localhost.localstack.cloud:4566/000000000000/politopics-recap-queue"
+Q="http://sqs.ap-northeast-3.localhost.localstack.cloud:4566/000000000000/politopics-recap-queue"
 
 # Purge all messages in the SQS queue
 aws --endpoint-url http://localstack:4566 --region ap-northeast-3 sqs purge-queue --queue-url "$Q"

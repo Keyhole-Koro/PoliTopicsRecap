@@ -3,6 +3,7 @@ import { SQSClient } from '@aws-sdk/client-sqs';
 import type { SQSEvent } from 'aws-lambda';
 
 import { GeminiClient } from '@llm/geminiClient';
+import { FakeLlmClient } from '@llm/fakeLlmClient';
 import { processMapRecord } from 'lambda/processMapRecord';
 import { processReduceRecord } from './lambda/processReduceRecord';
 import { parsePromptTaskMessage, type PromptTaskMessage } from './lambda/parsePromptTaskMessage';
@@ -19,14 +20,36 @@ export async function handler(event: SQSEvent): Promise<void> {
   const sqsClient = new SQSClient(awsBase);
   const s3Client  = new S3Client(s3Cfg);
 
-  const llmClient = new GeminiClient({ apiKey: config.geminiApiKey });
   const queueUrl = config.queueUrl;
 
   for (const record of event.Records) {
     let message: PromptTaskMessage;
+    let llmClient: GeminiClient | FakeLlmClient | undefined;
 
     try {
       message = parsePromptTaskMessage(record);
+      console.log(message)
+      if (message.llm == "gemini") {
+        llmClient = new GeminiClient({
+          apiKey: config.geminiApiKey,
+          model: message.llmModel,
+        });
+      } else if (message.llm == "fake") {
+        llmClient = new FakeLlmClient({
+          mode: "echo",
+        });
+      } else {
+        console.error('Dropping SQS record with unknown or unsupported LLM', {
+          messageId: record.messageId,
+          llm: (message as { llm?: unknown }).llm,
+        });
+        await deleteMessage({
+          sqsClient,
+          queueUrl: config.queueUrl,
+          receiptHandle: record.receiptHandle,
+        });
+        continue;
+      }
     } catch (err) {
       console.error('Dropping unparseable SQS record', {
         messageId: record.messageId,

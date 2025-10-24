@@ -1,4 +1,27 @@
 // scripts/enqueue-mock-prompts.ts
+// ------------------------------------------------------------------------------------
+// Purpose:
+//   Enqueue mock MAP and REDUCE prompt tasks to SQS while spacing their visibility
+//   using per-message DelaySeconds. Messages become visible at fixed intervals.
+//
+// Key behavior:
+//   - Messages are initially invisible for DelaySeconds.
+//   - We space MAP messages at equal intervals, and enqueue REDUCE after the last MAP.
+//   - Because SQS caps DelaySeconds at 900s (15 min), we auto-adjust the step when
+//     the desired interval × number of steps would exceed 900s.
+//   - Works for both Standard and FIFO queues. For FIFO, MessageGroupId/Dedup IDs
+//     are set automatically.
+//
+// Configuration knobs (env):
+//   - DELAY_STEP_SECONDS (default: 300 = 5 minutes)
+//
+// Notes:
+//   - This does not add any “cooldown after invocation”. It only staggers initial
+//     visibility of messages in the queue.
+//   - If you need longer staging than 15 minutes total, consider multiple waves, or
+//     narrower step seconds.
+// ------------------------------------------------------------------------------------
+
 import "dotenv/config";
 import { randomUUID } from "crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -7,11 +30,7 @@ import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { getAwsBaseConfig, getS3ClientConfig } from "../src/utils/aws";
 import type { MapPromptTaskMessage } from "../src/sqs/map";
 import type { ReducePromptTaskMessage } from "../src/sqs/reduce";
-import {
-  PROMPT_VERSION,
-  chunk_prompt,
-  reduce_prompt,
-} from "./prompts";
+import { PROMPT_VERSION, chunk_prompt, reduce_prompt } from "./prompts";
 
 // ===== Types that match your LLM input contract =====
 export interface RawMeetingData {
@@ -48,7 +67,7 @@ export interface RawSpeechRecord {
   speechURL: string;
 }
 
-// ===== Mock data definitions (Japanese content) =====
+// ===== Mock data definitions (Japanese content kept as-is) =====
 type MapFixture = {
   sessionLabel: string;
   date: string; // YYYY-MM-DD
@@ -165,6 +184,30 @@ function resolveEndpoint(): string {
   return process.env.AWS_ENDPOINT_URL_S3 ?? process.env.AWS_ENDPOINT_URL ?? "http://localstack:4566";
 }
 
+// ===== Delay strategy helpers =====
+const MAX_SQS_DELAY_SECONDS = 43200; // SQS hard cap (12 hours)
+
+/**
+ * Computes an effective step (in seconds) that guarantees:
+ *    maxIndex * step <= MAX_SQS_DELAY_SECONDS
+ * where maxIndex is the number of steps needed for MAPs plus one extra step for REDUCE.
+ *
+ * Example:
+ *  - If you have 20 MAPs and want 300s, 20 steps exceed 900s. We auto-shrink step so that
+ *    (20 * step) <= 900. That yields step <= 45s. We pick floor(900 / 20) = 45.
+ */
+function computeEffectiveStepSeconds(mapsCount: number, desiredStepSeconds: number): number {
+  // Steps needed include REDUCE after the last MAP: index range = 0..mapsCount for delays
+  const stepsNeeded = Math.max(1, mapsCount); // avoid division by zero
+  const maxAllowedStep = Math.floor(MAX_SQS_DELAY_SECONDS / stepsNeeded);
+  return Math.max(0, Math.min(desiredStepSeconds, maxAllowedStep));
+}
+
+/** Quick FIFO detector based on URL suffix. */
+function isFifoQueue(queueUrl: string): boolean {
+  return queueUrl.trim().toLowerCase().endsWith(".fifo");
+}
+
 // ===== Main enqueue logic =====
 async function main(): Promise<void> {
   const queueUrl = process.env.PROMPT_QUEUE_URL;
@@ -192,6 +235,7 @@ async function main(): Promise<void> {
 
   const sqsClient = new SQSClient(awsBase);
 
+  // ---- Run/session identifiers
   const runId = randomUUID();
   const nowISO = new Date().toISOString();
   const prefix = `demo/${nowISO.replace(/[:.]/g, "-")}-${runId}`;
@@ -200,12 +244,34 @@ async function main(): Promise<void> {
   const mapPromptUris: string[] = [];
   const reduceIssueID = `EDU-OVERSIGHT-${runId.slice(0, 8).toUpperCase()}`;
 
-  // Enqueue MAP (chunk) messages
+  // ---- Delay configuration
+  const desiredStepSeconds = Number(process.env.DELAY_STEP_SECONDS ?? 360); // default 6 minutes
+  const effectiveStepSeconds = computeEffectiveStepSeconds(mapFixtures.length, desiredStepSeconds);
+  const stepAdjusted = effectiveStepSeconds !== desiredStepSeconds;
+
+  if (stepAdjusted) {
+    console.warn(
+      `[enqueue] Requested step ${desiredStepSeconds}s exceeds SQS 900s cap across ${mapFixtures.length} step(s). ` +
+      `Auto-adjusted to ${effectiveStepSeconds}s per step so that total remains <= ${MAX_SQS_DELAY_SECONDS}s.`
+    );
+  } else {
+    console.log(`[enqueue] Using step ${effectiveStepSeconds}s between messages (<= SQS cap).`);
+  }
+
+  const fifo = isFifoQueue(queueUrl);
+  if (fifo) {
+    console.log("[enqueue] Detected FIFO queue. MessageGroupId and MessageDeduplicationId will be set.");
+  } else {
+    console.log("[enqueue] Detected Standard queue.");
+  }
+
+  // ===== Enqueue MAP (chunk) messages =====
   for (let i = 0; i < mapFixtures.length; i += 1) {
     const fixture = mapFixtures[i];
     const mapNum = i + 1;
     const issueID = `${reduceIssueID}-CH${mapNum}`;
 
+    // --- Prepare inputs in S3
     const input = buildRawMeetingData(issueID, fixture, nowISO);
     const inputKey = `${prefix}/map-${mapNum}-input.json`;
     const resultKey = `${prefix}/map-${mapNum}-result.json`;
@@ -231,13 +297,15 @@ async function main(): Promise<void> {
       }),
     );
 
+    // --- Build SQS message (MAP)
     const mapMessage: MapPromptTaskMessage = {
       type: "map",
       url: `s3://${bucketName}/${inputKey}`,
       result_url: `s3://${bucketName}/${resultKey}`,
-      llm: "gemini",
-      llmModel: "gemini-2.5-pro",
+      llm: "fake",
+      llmModel: "fake-2.5-pro",
       retryAttempts: 0,
+      retryMs_in: 60000,
       meta: {
         runId,
         sessionLabel: fixture.sessionLabel,
@@ -247,18 +315,34 @@ async function main(): Promise<void> {
       },
     };
 
-    await sqsClient.send(
-      new SendMessageCommand({
-        QueueUrl: queueUrl,
-        MessageBody: JSON.stringify(mapMessage),
-      }),
-    );
+    // --- Compute delay for this MAP: i * step (capped by our effective step logic)
+    const delaySeconds = i * effectiveStepSeconds; // i=0 -> 0s, i=1 -> step, ...
+
+    const sqsParams: any = {
+      QueueUrl: queueUrl,
+      MessageBody: JSON.stringify(mapMessage),
+      DelaySeconds: delaySeconds,
+    };
+
+    // For FIFO, set required fields
+    if (fifo) {
+      sqsParams.MessageGroupId = `mock-prompts-${runId}`;
+      sqsParams.MessageDeduplicationId = `${issueID}-${runId}`;
+    }
+
+    await sqsClient.send(new SendMessageCommand(sqsParams));
 
     chunkResultUrls.push(`s3://${bucketName}/${resultKey}`);
     mapPromptUris.push(`s3://${bucketName}/${promptKey}`);
+
+    console.log(
+      `Enqueued MAP #${mapNum} issueID=${issueID} delay=${delaySeconds}s ` +
+      `(visible at T+${Math.round(delaySeconds / 60)}m)`
+    );
   }
 
-  // Enqueue REDUCE message
+  // ===== Enqueue REDUCE message =====
+  // REDUCE appears one extra step after the last MAP
   const meetingMeta = {
     issueID: reduceIssueID,
     nameOfMeeting: "教育近代化に関する特別委員会",
@@ -294,9 +378,10 @@ async function main(): Promise<void> {
     prompt: reducePromptText,
     issueID: reduceIssueID,
     meeting: meetingMeta,
-    llm: "gemini",
-    llmModel: "gemini-2.5-pro",
+    llm: "fake",
+    llmModel: "fake-2.5-pro",
     retryAttempts: 0,
+    retryMs_in: 60000,
     meta: {
       runId,
       seededBy: "enqueue-mock-prompts",
@@ -306,19 +391,37 @@ async function main(): Promise<void> {
     },
   };
 
-  await sqsClient.send(
-    new SendMessageCommand({
-      QueueUrl: queueUrl,
-      MessageBody: JSON.stringify(reduceMessage),
-    }),
+  // One extra step after the last MAP
+  const reduceDelaySeconds = mapFixtures.length * effectiveStepSeconds;
+
+  const reduceSqsParams: any = {
+    QueueUrl: queueUrl,
+    MessageBody: JSON.stringify(reduceMessage),
+    DelaySeconds: reduceDelaySeconds,
+  };
+
+  if (fifo) {
+    reduceSqsParams.MessageGroupId = `mock-prompts-${runId}`;
+    reduceSqsParams.MessageDeduplicationId = `reduce-${reduceIssueID}-${runId}`;
+  }
+
+  await sqsClient.send(new SendMessageCommand(reduceSqsParams));
+
+  console.log(
+    `Enqueued REDUCE issueID=${reduceIssueID} delay=${reduceDelaySeconds}s ` +
+    `(visible at T+${Math.round(reduceDelaySeconds / 60)}m)`
   );
 
+  // ---- Summary
   console.log("✅ Seeded mock map & reduce (prompt+input) messages:", {
     queueUrl,
     bucketName,
     runId,
     mapMessages: mapFixtures.length,
     reduceMessages: 1,
+    desiredStepSeconds,
+    effectiveStepSeconds,
+    cappedBy900s: stepAdjusted,
     chunkResultUrls,
     mapPromptUris,
     reducePromptUri,
