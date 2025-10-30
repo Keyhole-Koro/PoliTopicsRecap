@@ -19,6 +19,7 @@
 3. Initialise Terraform with the LocalStack backend configuration:
 
    ```bash
+   export LOCAL=true
    terraform init -backend-config=backends/local.hcl
    ```
 
@@ -147,4 +148,19 @@ aws lambda get-function-configuration \
 
 # invoke
 aws lambda invoke --function-name politopics-recap-local --endpoint-url http://localstack:4566 --region ap-northeast-3 out.json
+```
+
+### DynamoDB
+
+```bash
+aws dynamodb list-tables \
+  --endpoint-url http://localstack:4566 \
+  --region ap-northeast-3
+
+aws dynamodb scan \
+  --table-name politopics \
+  --endpoint-url http://localstack:4566 \
+  --region ap-northeast-3 \
+  --output json
+
 ```

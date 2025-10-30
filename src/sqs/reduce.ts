@@ -4,18 +4,20 @@ export type ReducePromptTaskMessage = {
   meta?: Record<string, any>;
   prompt: string;
   issueID: string;
-  meeting: {
-    issueID: string;
-    nameOfMeeting: string;
-    nameOfHouse: string;
-    date: string;
-    numberOfSpeeches: number;
-  };
+  meeting: Meeting
   llm: string;
   llmModel: string;
   retryAttempts: number;
   retryMs_in: number;
 };
+
+export type Meeting = {
+    issueID: string;
+    nameOfMeeting: string;
+    nameOfHouse: string;
+    date: string;
+    numberOfSpeeches: number;
+}
 
 export function isReducePromptTaskMessage(value: unknown): value is ReducePromptTaskMessage {
   if (!isRecord(value)) {
