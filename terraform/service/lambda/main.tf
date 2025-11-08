@@ -130,18 +130,3 @@ resource "aws_lambda_function" "this" {
 
   tags = var.tags
 }
-
-resource "aws_lambda_event_source_mapping" "this" {
-  event_source_arn                   = var.sqs_queue_arn
-  function_name                      = aws_lambda_function.this.arn
-  batch_size                         = var.sqs_batch_size
-  enabled                            = true
-  maximum_batching_window_in_seconds = var.lambda_maximum_batching_window_seconds
-
-  dynamic "scaling_config" {
-    for_each = var.lambda_maximum_concurrency == null ? [] : [var.lambda_maximum_concurrency]
-    content {
-      maximum_concurrency = scaling_config.value
-    }
-  }
-}

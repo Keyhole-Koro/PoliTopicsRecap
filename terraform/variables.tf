@@ -201,6 +201,48 @@ variable "scheduler_use_processor_lambda_as_target" {
   default     = false
 }
 
+variable "scheduler_use_cloudwatch_events" {
+  description = "Fallback to CloudWatch EventBridge rules instead of AWS Scheduler (useful for LocalStack where Scheduler is unavailable)"
+  type        = bool
+  default     = false
+}
+
+variable "scheduler_cron_expression" {
+  description = "Cron expression used by the EventBridge Scheduler to invoke the processor"
+  type        = string
+  default     = null
+}
+
+variable "scheduler_start_time" {
+  description = "Daily start time (HH:MM, 24h) that bounds the scheduler window when cron expression is not provided"
+  type        = string
+  default     = null
+}
+
+variable "scheduler_end_time" {
+  description = "Daily end time (HH:MM, 24h) that bounds the scheduler window when cron expression is not provided"
+  type        = string
+  default     = null
+}
+
+variable "scheduler_timezone" {
+  description = "IANA timezone identifier applied to the scheduler cron expression"
+  type        = string
+  default     = "UTC"
+}
+
+variable "scheduler_minute_step" {
+  description = "Minute step interval for the scheduler when cron expression is not provided"
+  type        = number
+  default     = 15
+}
+
+variable "enable_scheduler" {
+  description = "Enable EventBridge Scheduler resources that invoke the processor"
+  type        = bool
+  default     = true
+}
+
 variable "create_prompt_queue" {
   description = "Whether to provision the prompt SQS queue (set true for LocalStack environments)"
   type        = bool

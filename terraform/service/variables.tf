@@ -57,6 +57,12 @@ variable "lookup_sqs_queue" {
   default     = true
 }
 
+variable "enable_scheduler" {
+  type        = bool
+  description = "Whether to create EventBridge Scheduler resources that invoke the processor"
+  default     = true
+}
+
 variable "lambda_memory_mb" {
   type        = number
   description = "Lambda memory size"
@@ -165,6 +171,42 @@ variable "scheduler_use_processor_lambda_as_target" {
   type        = bool
   description = "Use the processor Lambda as the EventBridge target when no explicit ARN is provided"
   default     = false
+}
+
+variable "scheduler_use_cloudwatch_events" {
+  type        = bool
+  description = "Use CloudWatch EventBridge rules instead of AWS Scheduler (handy for LocalStack where Scheduler is unavailable)"
+  default     = false
+}
+
+variable "scheduler_cron_expression" {
+  type        = string
+  description = "Cron expression used by the EventBridge Scheduler to invoke the processor"
+  default     = null
+}
+
+variable "scheduler_start_time" {
+  type        = string
+  description = "Daily start time (HH:MM, 24h) that bounds the scheduler window when cron expression is not provided"
+  default     = null
+}
+
+variable "scheduler_end_time" {
+  type        = string
+  description = "Daily end time (HH:MM, 24h) that bounds the scheduler window when cron expression is not provided"
+  default     = null
+}
+
+variable "scheduler_timezone" {
+  type        = string
+  description = "IANA timezone identifier applied to the scheduler cron expression"
+  default     = "UTC"
+}
+
+variable "scheduler_minute_step" {
+  type        = number
+  description = "Minute step interval for the scheduler when cron expression is not provided"
+  default     = 15
 }
 
 variable "gemini_api_key" {

@@ -30,6 +30,7 @@ provider "aws" {
       lambda     = endpoints.value
       iam        = endpoints.value
       sts        = endpoints.value
+      scheduler  = endpoints.value
       events     = endpoints.value
       cloudwatch = endpoints.value
       logs       = endpoints.value

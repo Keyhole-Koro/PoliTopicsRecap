@@ -3,11 +3,6 @@ output "politopics_recap_lambda_arn" {
   value       = module.lambda.lambda_function_arn
 }
 
-output "politopics_recap_event_source_mapping_uuid" {
-  description = "UUID of the SQS -> Lambda event source mapping"
-  value       = module.lambda.event_source_mapping_uuid
-}
-
 output "politopics_table_name" {
   description = "Primary PoliTopics DynamoDB table name"
   value       = module.dynamodb.politopics_table_name

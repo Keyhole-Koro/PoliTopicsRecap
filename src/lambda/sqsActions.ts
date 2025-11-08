@@ -2,6 +2,7 @@ import {
   ChangeMessageVisibilityCommand,
   DeleteMessageCommand,
   SendMessageCommand,
+  type SendMessageCommandInput,
   type SQSClient,
 } from '@aws-sdk/client-sqs';
 import type { SQSRecord } from 'aws-lambda';
@@ -36,15 +37,22 @@ export async function requeueWithDelay({
   });
 
   const safeDelay = Math.min(MAX_SQS_DELAY_SECONDS, Math.max(0, Math.floor(delaySeconds)));
+  const isFifoQueue = queueUrl.toLowerCase().endsWith('.fifo');
 
   try {
-    await sqsClient.send(
-      new SendMessageCommand({
-        QueueUrl: queueUrl,
-        MessageBody: payload,
-        DelaySeconds: safeDelay,
-      }),
-    );
+    const sendParams: SendMessageCommandInput = {
+      QueueUrl: queueUrl,
+      MessageBody: payload,
+    };
+
+    if (isFifoQueue) {
+      sendParams.MessageGroupId = record.attributes?.['MessageGroupId'] ?? 'default';
+      sendParams.MessageDeduplicationId = `${record.messageId}-${nextRetry}-${Date.now()}`;
+    } else {
+      sendParams.DelaySeconds = safeDelay;
+    }
+
+    await sqsClient.send(new SendMessageCommand(sendParams));
 
     await deleteMessage({ sqsClient, queueUrl, receiptHandle: record.receiptHandle });
   } catch (err) {

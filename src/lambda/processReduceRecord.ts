@@ -1,15 +1,80 @@
+/**
+ * Scalability Note — Schema-on-Queue validation
+ * ---------------------------------------------
+ * To improve prompt scalability and keep workers simple, we let the SQS message
+ * carry the authoritative Article schema (or a reference to it) and validate
+ * before any LLM/DynamoDB work.
+ *
+ * Why this helps
+ * --------------
+ * - Early rejection: malformed or incompatible payloads fail fast, saving LLM/DDB.
+ * - Contract-first: producers and consumers share an explicit, versioned schema.
+ * - Decoupling: multiple reducers/consumers can evolve independently across languages.
+ * - Safer evolution: schema versioning + compatibility rules enable gradual rollout.
+ *
+ * How to implement
+ * ----------------
+ * 1) Include schema metadata in the SQS body:
+ *    {
+ *      "schemaVersion": "2025-10-01",
+ *      "schemaRef": "s3://schemas/article/2025-10-01.json", // or inline "schema"
+ *      "articleContract": { ... optional partial/article defaults ... },
+ *      "chunk_result_urls": [ ... ],
+ *      ...
+ *    }
+ *
+ * 2) At the very start of `processReduceRecord`:
+ *    - Resolve the JSON Schema (inline or fetch from S3 via `schemaRef`).
+ *    - Validate BOTH:
+ *        a) `message` envelope (required fields like meeting, chunk_result_urls, retryMs_in)
+ *        b) the final Article shape we will persist (pre-validate using LLM defaults if needed)
+ *    - If validation fails → log reason, NACK or requeue with backoff; consider DLQ on repeated failures.
+ *
+ * 3) Versioning & compatibility:
+ *    - Use date-stamped semantic versions (e.g., "2025-10-01") and keep N previous versions in S3.
+ *    - Producers set `schemaVersion`; consumers support a compatibility matrix:
+ *        - Non-breaking changes: new optional fields → ACCEPT.
+ *        - Breaking changes: increment version; roll out consumers before producers.
+ *
+ * 4) Validation strategy:
+ *    - Validate chunk JSONs individually if they have their own mini-schemas
+ *      (e.g., `ChunkJson` with `middleSummary`, `participants`, etc.).
+ *    - After LLM returns, validate the merged `Article` again before DynamoDB persist.
+ *    - Reject obviously unsafe/oversized fields (e.g., overly long `summary`) to prevent hot partitions.
+ *
+ * 5) Operational considerations:
+ *    - Cache schemas (ETag-based) to avoid S3 hot reads; fall back to last-known-good on transient errors.
+ *    - Emit structured validation errors with `issueID`, `schemaVersion`, and field paths for observability.
+ *    - Route hard validation failures to DLQ for manual inspection; keep transient fetch errors on retry path.
+ *
+ * Minimal example (message shape)
+ * ------------------------------
+ * {
+ *   "schemaVersion": "2025-10-01",
+ *   "schemaRef": "s3://schemas/article/2025-10-01.json",
+ *   "meeting": { "issueID": "xxx", "nameOfHouse": "...", "nameOfMeeting": "...", "date": "YYYY-MM-DD", "session": "..." },
+ *   "chunk_result_urls": ["s3://.../chunk1.json", "s3://.../chunk2.json"],
+ *   "prompt": "Reduce these chunks into an Article...",
+ *   "retryMs_in": 120,
+ *   "articleContract": { "imageKind": "会議録", "categories": [] } // optional defaults/constraints
+ * }
+ */
+
+
+
 import type { S3Client } from '@aws-sdk/client-s3';
 import type { SQSClient } from '@aws-sdk/client-sqs';
 import type { SQSRecord } from 'aws-lambda';
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
-import type { ReducePromptTaskMessage } from '../sqs/reduce';
-import { ensureObjectExists, fetchJsonObject, parseS3Uri } from '../utils/s3';
+import type { ReducePromptTaskMessage } from '@sqs/reduce';
+import type Article from '@dynamoDB/article';
+
+import { ensureObjectExists, fetchJsonObject, parseS3Uri } from '@utils/s3';
 import { deleteMessage, requeueWithDelay } from './sqsActions';
 import { LlmClient } from '@llm/llmClient';
-import storeData, { Article } from 'src/dynamoDB/storeData';
-
+import storeData from 'src/dynamoDB/storeData';
 // ===== Types =====
 
 export interface ProcessReduceRecordArgs {
@@ -112,11 +177,16 @@ export async function processReduceRecord({
 // ===== Helpers =====
 
 function createDocClient(): DynamoDBDocumentClient {
-  const ddbClient = new DynamoDBClient({
-    region: 'ap-northeast-3',
-    endpoint: 'http://localstack:4566',
-    credentials: { accessKeyId: 'test', secretAccessKey: 'test' }
-  });
+  if (process.env.ENV == 'local') {
+    var ddbClient = new DynamoDBClient({
+      region: 'ap-northeast-3',
+      endpoint: 'http://localstack:4566',
+      credentials: { accessKeyId: 'test', secretAccessKey: 'test' }
+    });
+  } else {
+    var ddbClient = new DynamoDBClient({});
+  }
+
   return DynamoDBDocumentClient.from(ddbClient);
 }
 
@@ -275,6 +345,7 @@ function parseLLMJson<T extends object>(llmText: string): Partial<T> {
     return {};
   }
 }
+
 function buildArticle(
   base: Partial<Article>,
   extras: {
@@ -364,11 +435,6 @@ function dedupeByStringify<T>(arr: T[]): T[] {
     }
   }
   return out;
-}
-
-// Narrower type guard for plain object
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 // Persists the final object to DynamoDB

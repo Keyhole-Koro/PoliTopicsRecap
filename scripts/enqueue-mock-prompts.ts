@@ -25,7 +25,11 @@
 import "dotenv/config";
 import { randomUUID } from "crypto";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
+import {
+  SendMessageCommand,
+  SQSClient,
+  type SendMessageCommandInput,
+} from "@aws-sdk/client-sqs";
 
 import { getAwsBaseConfig, getS3ClientConfig } from "../src/utils/aws";
 import type { MapPromptTaskMessage } from "../src/sqs/map";
@@ -184,6 +188,10 @@ function resolveEndpoint(): string {
   return process.env.AWS_ENDPOINT_URL_S3 ?? process.env.AWS_ENDPOINT_URL ?? "http://localstack:4566";
 }
 
+function isLocalEndpoint(url: string): boolean {
+  return /localhost|localstack|127\.0\.0\.1/i.test(url);
+}
+
 // ===== Delay strategy helpers =====
 const MAX_SQS_DELAY_SECONDS = 43200; // SQS hard cap (12 hours)
 
@@ -221,6 +229,9 @@ async function main(): Promise<void> {
   if (!bucketName) throw new Error("PROMPT_BUCKET_NAME or equivalent is required.");
 
   const endpoint = resolveEndpoint();
+  if (!process.env.AWS_ENDPOINT_URL && isLocalEndpoint(endpoint)) {
+    process.env.AWS_ENDPOINT_URL = endpoint;
+  }
 
   // ---- Clients
   const awsBase = getAwsBaseConfig();
@@ -318,11 +329,14 @@ async function main(): Promise<void> {
     // --- Compute delay for this MAP: i * step (capped by our effective step logic)
     const delaySeconds = i * effectiveStepSeconds; // i=0 -> 0s, i=1 -> step, ...
 
-    const sqsParams: any = {
+    const sqsParams: SendMessageCommandInput = {
       QueueUrl: queueUrl,
       MessageBody: JSON.stringify(mapMessage),
-      DelaySeconds: delaySeconds,
     };
+
+    if (!fifo) {
+      sqsParams.DelaySeconds = delaySeconds;
+    }
 
     // For FIFO, set required fields
     if (fifo) {
@@ -394,11 +408,14 @@ async function main(): Promise<void> {
   // One extra step after the last MAP
   const reduceDelaySeconds = mapFixtures.length * effectiveStepSeconds;
 
-  const reduceSqsParams: any = {
+  const reduceSqsParams: SendMessageCommandInput = {
     QueueUrl: queueUrl,
     MessageBody: JSON.stringify(reduceMessage),
-    DelaySeconds: reduceDelaySeconds,
   };
+
+  if (!fifo) {
+    reduceSqsParams.DelaySeconds = reduceDelaySeconds;
+  }
 
   if (fifo) {
     reduceSqsParams.MessageGroupId = `mock-prompts-${runId}`;

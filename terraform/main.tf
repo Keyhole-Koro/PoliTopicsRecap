@@ -18,8 +18,9 @@ module "prompt_queue" {
 }
 
 locals {
-  prompt_queue_url_override = var.create_prompt_queue ? module.prompt_queue[0].queue_url : null
-  prompt_queue_arn_override = var.create_prompt_queue ? module.prompt_queue[0].queue_arn : null
+  prompt_queue_url_override   = var.create_prompt_queue ? module.prompt_queue[0].queue_url : null
+  prompt_queue_arn_override   = var.create_prompt_queue ? module.prompt_queue[0].queue_arn : null
+  prompt_queue_name_effective = var.create_prompt_queue ? module.prompt_queue[0].queue_name : var.sqs_queue_name
 }
 
 module "service" {
@@ -32,7 +33,7 @@ module "service" {
   lambda_layer_package_path                         = local.resolved_lambda_layer_package_path
   prompt_bucket_name                                = var.prompt_bucket_name
   politopics_table_name                             = var.politopics_table_name
-  sqs_queue_name                                    = var.sqs_queue_name
+  sqs_queue_name                                    = local.prompt_queue_name_effective
   lambda_memory_mb                                  = var.lambda_memory_mb
   lambda_timeout_seconds                            = var.lambda_timeout_seconds
   sqs_batch_size                                    = var.sqs_batch_size
@@ -54,6 +55,13 @@ module "service" {
   enable_sqs_alarm_eventbridge                      = var.enable_sqs_alarm_eventbridge
   scheduler_target_lambda_arn                       = var.scheduler_target_lambda_arn
   scheduler_use_processor_lambda_as_target          = var.scheduler_use_processor_lambda_as_target
+  scheduler_use_cloudwatch_events                   = var.scheduler_use_cloudwatch_events
+  scheduler_cron_expression                         = var.scheduler_cron_expression
+  scheduler_start_time                              = var.scheduler_start_time
+  scheduler_end_time                                = var.scheduler_end_time
+  scheduler_timezone                                = var.scheduler_timezone
+  scheduler_minute_step                             = var.scheduler_minute_step
+  enable_scheduler                                  = var.enable_scheduler
   sqs_queue_url_override                            = local.prompt_queue_url_override
   sqs_queue_arn_override                            = local.prompt_queue_arn_override
   lookup_sqs_queue                                  = var.create_prompt_queue ? false : true
@@ -64,9 +72,4 @@ module "service" {
 output "politopics_recap_lambda_arn" {
   description = "ARN of the PoliTopicsRecap SQS processing Lambda function"
   value       = module.service.politopics_recap_lambda_arn
-}
-
-output "politopics_recap_event_source_mapping_uuid" {
-  description = "UUID of the SQS -> Lambda event source mapping"
-  value       = module.service.politopics_recap_event_source_mapping_uuid
 }

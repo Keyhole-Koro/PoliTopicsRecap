@@ -14,13 +14,14 @@
     "baseUrl": "./src",                    // Base URL for module resolution
     "paths": {         // Optional: For aliasing paths (e.g., "@/components")
       "@interfaces/*": ["interfaces/*"],
-      "@DynamoDBHandler/*": ["DynamoDBHandler/*"],
+      "@dynamoDB/*": ["dynamoDB/*"],
       "@LLMSummarize/*": ["LLMSummarize/*"],
       "@NationalDietAPIHandler/*": ["NationalDietAPIHandler/*"],
       "@llm/*": ["llm/*"],
       "@services/*": ["services/*"],
       "@utils/*": ["utils/*"],
-      "@S3/*": ["S3/*"],
+      "@s3/*": ["s3/*"],
+      "@sqs/*": ["sqs/*"],
       "src/*": ["*"]
     },
   },

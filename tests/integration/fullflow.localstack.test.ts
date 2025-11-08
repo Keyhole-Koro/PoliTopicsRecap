@@ -28,8 +28,10 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import type { SQSEvent } from 'aws-lambda';
 
-import storeData, { type Article } from '../../src/dynamoDB/storeData';
+import storeData from '../../src/dynamoDB/storeData';
+import type Article from '../../src/dynamoDB/article';
 import { handler } from '../../src/lambda_handler';
+import { FIVE_MINUTES_SECONDS } from '../../src/lambda/sqsActions';
 
 const endpoint = process.env.AWS_ENDPOINT_URL;
 const region = process.env.AWS_REGION ?? 'us-east-1';
@@ -132,6 +134,7 @@ describe('LocalStack SQS to Lambda to S3 to LLM integration', () => {
         new SendMessageCommand({
           QueueUrl: queue.queueUrl,
           MessageBody: JSON.stringify(mapMessage),
+          MessageGroupId: 'map-group',
         }),
       );
 
@@ -144,6 +147,142 @@ describe('LocalStack SQS to Lambda to S3 to LLM integration', () => {
       const invocation = global.__geminiGenerateMock.mock.calls[0]?.[0];
       expect(invocation).toBeDefined();
       expect(invocation.contents?.[0]?.parts?.[0]?.text).toContain(sourceBody);
+
+      const { Messages } = await sqsClient.send(
+        new ReceiveMessageCommand({
+          QueueUrl: queue.queueUrl,
+          WaitTimeSeconds: 1,
+        }),
+      );
+      expect(Messages ?? []).toHaveLength(0);
+    } finally {
+      await cleanupQueue(queue);
+      await cleanupBucket(bucketName);
+    }
+  });
+
+  test('requeues failed messages and preserves FIFO order', async () => {
+    const bucketName = uniqueName('retry-bucket');
+    await s3Client.send(new CreateBucketCommand({ Bucket: bucketName }));
+
+    const queue = await createQueue(uniqueName('retry-queue'));
+    try {
+      const sourceKey = 'inputs/payload.json';
+      const sourceBody = JSON.stringify({ summary: 'Initial payload for retry test.' });
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: bucketName,
+          Key: sourceKey,
+          Body: sourceBody,
+        }),
+      );
+
+      const messagePayload = {
+        type: 'map' as const,
+        url: `s3://${bucketName}/${sourceKey}`,
+        result_url: `s3://${bucketName}/results/output.json`,
+        llm: 'gemini',
+        llmModel: 'gemini-1.5-pro',
+        retryAttempts: 0,
+        retryMs_in: FIVE_MINUTES_SECONDS * 1000,
+        meta: { fixture: true },
+      };
+
+      await sqsClient.send(
+        new SendMessageCommand({
+          QueueUrl: queue.queueUrl,
+          MessageBody: JSON.stringify(messagePayload),
+          MessageGroupId: 'retry-group',
+        }),
+      );
+
+      const event = await receiveOneMessageAsEvent(queue);
+      setEnvForHandler(queue);
+
+      let invocationCount = 0;
+      global.__geminiGenerateMock.mockImplementation(() => {
+        invocationCount += 1;
+        if (invocationCount === 1) {
+          throw new Error('Simulated processing failure');
+        }
+        return Promise.resolve({
+          response: { text: () => 'retry success' },
+        });
+      });
+
+      await handler(event);
+
+      const { Messages: firstRetryMessages } = await sqsClient.send(
+        new ReceiveMessageCommand({
+          QueueUrl: queue.queueUrl,
+          AttributeNames: ['All'],
+          WaitTimeSeconds: 1,
+        }),
+      );
+
+      expect(invocationCount).toBe(1);
+      expect(firstRetryMessages ?? []).toHaveLength(1);
+      const retryMessage = firstRetryMessages?.[0];
+      expect(retryMessage?.MessageAttributes).toBeUndefined();
+      expect(retryMessage?.Attributes?.MessageGroupId).toBeDefined();
+      expect(retryMessage?.Attributes?.MessageDeduplicationId).toBeDefined();
+      expect(retryMessage?.Body).toBeDefined();
+
+      const retryEvent = toSQSEvent(retryMessage as Message, queue.queueArn);
+      await handler(retryEvent);
+
+      expect(invocationCount).toBe(2);
+      const { Messages: remaining } = await sqsClient.send(
+        new ReceiveMessageCommand({
+          QueueUrl: queue.queueUrl,
+          WaitTimeSeconds: 1,
+        }),
+      );
+      expect(remaining ?? []).toHaveLength(0);
+    } finally {
+      await cleanupQueue(queue);
+      await cleanupBucket(bucketName);
+    }
+  });
+
+  test('scheduled invocation polls a single message', async () => {
+    const bucketName = uniqueName('scheduled-bucket');
+    await s3Client.send(new CreateBucketCommand({ Bucket: bucketName }));
+
+    const queue = await createQueue(uniqueName('scheduled-queue'));
+    try {
+      const sourceKey = 'inputs/source.txt';
+      const sourceBody = 'Scheduler-triggered payload.';
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: bucketName,
+          Key: sourceKey,
+          Body: sourceBody,
+        }),
+      );
+
+      const mapMessage = {
+        type: 'map' as const,
+        url: `s3://${bucketName}/${sourceKey}`,
+        result_url: `s3://${bucketName}/results/output.json`,
+        llm: 'gemini',
+        llmModel: 'gemini-1.5-pro',
+        retryAttempts: 0,
+        meta: { fixture: true },
+      };
+
+      await sqsClient.send(
+        new SendMessageCommand({
+          QueueUrl: queue.queueUrl,
+          MessageBody: JSON.stringify(mapMessage),
+          MessageGroupId: 'scheduled-group',
+        }),
+      );
+
+      setEnvForHandler(queue);
+      await handler({ source: 'aws.scheduler' } as any);
+
+      expect(global.__geminiGenerateMock).toHaveBeenCalledTimes(1);
 
       const { Messages } = await sqsClient.send(
         new ReceiveMessageCommand({
@@ -212,6 +351,7 @@ describe('LocalStack SQS to Lambda to S3 to LLM integration', () => {
         new SendMessageCommand({
           QueueUrl: queue.queueUrl,
           MessageBody: JSON.stringify(reduceMessage),
+          MessageGroupId: 'reduce-group',
         }),
       );
 
@@ -321,9 +461,14 @@ function uniqueName(prefix: string): string {
 }
 
 async function createQueue(queueName: string): Promise<QueueResource> {
+  const fifoQueueName = queueName.endsWith('.fifo') ? queueName : `${queueName}.fifo`;
   const { QueueUrl } = await sqsClient.send(
     new CreateQueueCommand({
-      QueueName: queueName,
+      QueueName: fifoQueueName,
+      Attributes: {
+        FifoQueue: 'true',
+        ContentBasedDeduplication: 'true',
+      },
     }),
   );
 
@@ -338,9 +483,9 @@ async function createQueue(queueName: string): Promise<QueueResource> {
     }),
   );
 
-  const queueArn = Attributes?.QueueArn ?? `arn:aws:sqs:${region}:000000000000:${queueName}`;
+  const queueArn = Attributes?.QueueArn ?? `arn:aws:sqs:${region}:000000000000:${fifoQueueName}`;
 
-  return { queueUrl: QueueUrl, queueArn, queueName };
+  return { queueUrl: QueueUrl, queueArn, queueName: fifoQueueName };
 }
 
 async function receiveOneMessageAsEvent(queue: QueueResource): Promise<SQSEvent> {
@@ -380,6 +525,9 @@ function toSQSEvent(message: Message, queueArn: string): SQSEvent {
           SentTimestamp: message.Attributes?.SentTimestamp ?? timestamp,
           SenderId: message.Attributes?.SenderId ?? '000000000000',
           ApproximateFirstReceiveTimestamp: message.Attributes?.ApproximateFirstReceiveTimestamp ?? timestamp,
+          MessageGroupId: message.Attributes?.MessageGroupId ?? 'test-group',
+          MessageDeduplicationId: message.Attributes?.MessageDeduplicationId,
+          SequenceNumber: message.Attributes?.SequenceNumber,
         },
         messageAttributes: {},
         md5OfBody: message.MD5OfBody ?? '',

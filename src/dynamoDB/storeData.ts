@@ -33,6 +33,8 @@ import {
   BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 
+import type Article from './article';
+
 // ---- Minimal self-contained types (replace with your project types if available) ----
 export type Summary = unknown;
 export type SoftSummary = unknown;
@@ -41,27 +43,6 @@ export type Dialog = { speaker?: string; text?: string };
 export type Participant = { name?: string };
 export type Keyword = { keyword?: string };
 export type Term = { term?: string };
-
-export interface Article {
-  id: string;
-  title: string;
-  date: string;  // ISO string or "YYYY-MM-DD" (will be normalized to ISO UTC)
-  month: string; // "YYYY-MM" (will be normalized to align with `date`)
-  imageKind: "会議録" | "目次" | "索引" | "附録" | "追録";
-  session: number;
-  nameOfHouse: string;
-  nameOfMeeting: string;
-  categories: string[];
-  description: string;
-
-  summary: Summary;
-  soft_summary: SoftSummary;
-  middle_summary: MiddleSummary[];
-  dialogs: Dialog[];
-  participants: Participant[];
-  keywords: Keyword[];
-  terms: Term[];
-}
 
 export type Cfg = {
   doc: DynamoDBDocumentClient;

@@ -1,6 +1,10 @@
 ﻿import { S3Client } from '@aws-sdk/client-s3';
-import { SQSClient } from '@aws-sdk/client-sqs';
-import type { SQSEvent } from 'aws-lambda';
+import {
+  ReceiveMessageCommand,
+  SQSClient,
+  type Message,
+} from '@aws-sdk/client-sqs';
+import type { SQSEvent, SQSRecord } from 'aws-lambda';
 
 import { GeminiClient } from '@llm/geminiClient';
 import { FakeLlmClient } from '@llm/fakeLlmClient';
@@ -11,7 +15,12 @@ import { deleteMessage } from './lambda/sqsActions';
 import { resolveConfig } from '@utils/config';
 import { getAwsBaseConfig, getS3ClientConfig } from '@utils/aws';
 
-export async function handler(event: SQSEvent): Promise<void> {
+type SchedulerEvent = {
+  source?: string;
+  [key: string]: unknown;
+};
+
+export async function handler(event: SQSEvent | SchedulerEvent | undefined = undefined): Promise<void> {
   const config = resolveConfig();
 
   const awsBase = getAwsBaseConfig();
@@ -22,7 +31,13 @@ export async function handler(event: SQSEvent): Promise<void> {
 
   const queueUrl = config.queueUrl;
 
-  for (const record of event.Records) {
+  const records = await resolveRecords(event, sqsClient, queueUrl, config.queueArn);
+  if (records.length === 0) {
+    console.log('[handler] No SQS messages to process');
+    return;
+  }
+
+  for (const record of records) {
     let message: PromptTaskMessage;
     let llmClient: GeminiClient | FakeLlmClient | undefined;
 
@@ -94,4 +109,119 @@ export async function handler(event: SQSEvent): Promise<void> {
       });
     }
   }
+}
+
+function isSqsEvent(event: unknown): event is SQSEvent {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    Array.isArray((event as { Records?: unknown }).Records)
+  );
+}
+
+async function resolveRecords(
+  event: SQSEvent | SchedulerEvent | undefined,
+  sqsClient: SQSClient,
+  queueUrl: string,
+  queueArn: string,
+): Promise<SQSRecord[]> {
+  if (event && isSqsEvent(event)) {
+    return event.Records;
+  }
+
+  const response = await sqsClient.send(
+    new ReceiveMessageCommand({
+      QueueUrl: queueUrl,
+      MaxNumberOfMessages: 1,
+      AttributeNames: ['All'],
+      MessageAttributeNames: ['All'],
+      WaitTimeSeconds: 0,
+    }),
+  );
+
+  const [message] = response.Messages ?? [];
+  if (!message) {
+    return [];
+  }
+
+  const record = messageToRecord(message, queueArn);
+  if (!record) {
+    return [];
+  }
+
+  return [record];
+}
+
+function messageToRecord(message: Message, queueArn: string): SQSRecord | null {
+  if (!message.Body || !message.ReceiptHandle || !message.MessageId) {
+    console.warn('[handler] Received SQS message missing body/receipt/messageId, skipping', {
+      message,
+    });
+    return null;
+  }
+
+  const timestamp = Date.now().toString();
+  const arnParts = queueArn.split(':');
+  const regionFromArn = arnParts.length >= 4 ? arnParts[3] : undefined;
+
+  return {
+    messageId: message.MessageId,
+    receiptHandle: message.ReceiptHandle,
+    body: message.Body,
+    attributes: {
+      ApproximateReceiveCount: message.Attributes?.ApproximateReceiveCount ?? '1',
+      SentTimestamp: message.Attributes?.SentTimestamp ?? timestamp,
+      SenderId: message.Attributes?.SenderId ?? 'scheduler',
+      ApproximateFirstReceiveTimestamp:
+        message.Attributes?.ApproximateFirstReceiveTimestamp ?? timestamp,
+      MessageGroupId: message.Attributes?.MessageGroupId,
+      MessageDeduplicationId: message.Attributes?.MessageDeduplicationId,
+      SequenceNumber: message.Attributes?.SequenceNumber,
+    },
+    messageAttributes: convertMessageAttributes(message.MessageAttributes),
+    md5OfBody: message.MD5OfBody ?? '',
+    eventSource: 'aws:sqs',
+    eventSourceARN: queueArn,
+    awsRegion: regionFromArn ?? process.env.AWS_REGION ?? 'us-east-1',
+  };
+}
+
+function convertMessageAttributes(
+  attributes: Message['MessageAttributes'],
+): SQSRecord['messageAttributes'] {
+  if (!attributes) {
+    return {};
+  }
+
+  const converted: SQSRecord['messageAttributes'] = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    if (!value) {
+      continue;
+    }
+
+    converted[key] = {
+      stringValue: value.StringValue,
+      binaryValue: toBase64(value.BinaryValue),
+      stringListValues: value.StringListValues ?? [],
+      binaryListValues: (value.BinaryListValues ?? []).map(toBase64).filter(isString),
+      dataType: value.DataType ?? 'String',
+    };
+  }
+  return converted;
+}
+
+function toBase64(value: string | Uint8Array | undefined | null): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  return Buffer.from(value).toString('base64');
+}
+
+function isString(value: string | undefined): value is string {
+  return typeof value === 'string';
 }

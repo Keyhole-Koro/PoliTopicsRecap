@@ -2,13 +2,14 @@ import { BatchWriteCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
 import storeData, {
-  type Article,
   type Cfg,
   toIsoUtc,
   toYYYYMM,
   monthFromIsoUsingJST,
   lastNDaysRange,
 } from 'src/dynamoDB/storeData';
+
+import type Article from 'src/dynamoDB/article';
 
 describe('dynamoDB/storeData helpers', () => {
   it('normalizes ISO date inputs', () => {
