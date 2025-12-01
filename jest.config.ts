@@ -2,10 +2,10 @@ import type { Config } from 'jest';
 
 const config: Config = {
   preset: 'ts-jest',
+  setupFiles: ['<rootDir>/tests/setup/localstack.ts'],
   testEnvironment: 'node',
-  roots: ['<rootDir>/tests'],
+  roots: ['<rootDir>/tests', '<rootDir>/src'],
   testMatch: ['**/?(*.)+(spec|test).[tj]s?(x)'],
-  setupFilesAfterEnv: ['<rootDir>/tests/setup/localstack.ts'],
   moduleNameMapper: {
     '^@interfaces/(.*)$': '<rootDir>/src/interfaces/$1',
     '^@DynamoDBHandler/(.*)$': '<rootDir>/src/DynamoDBHandler/$1',

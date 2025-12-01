@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
-    "test": "jest --config jest.config.ts",
+    "test": "jest --config jest.config.ts --runInBand",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
     "local:test:e2e": "jest --config jest.config.ts --runTestsByPath tests/integration/fullFlow.test.ts",
     "build:local": "node scripts/build-local-lambda.js",

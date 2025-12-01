@@ -67,12 +67,25 @@ variable "prompt_bucket_name" {
 variable "politopics_table_name" {
   description = "Primary DynamoDB table name for PoliTopics records"
   type        = string
-  default     = "politopics"
+  default     = "PoliTopics"
 }
 
-variable "sqs_queue_name" {
-  description = "Name of the existing SQS queue to subscribe the Lambda to"
+variable "task_table_name" {
+  description = "DynamoDB table that stores LLM map/reduce tasks"
   type        = string
+  default     = "PoliTopics-llm-tasks"
+}
+
+variable "task_status_index_name" {
+  description = "Name of the GSI that uses status as the partition key"
+  type        = string
+  default     = "StatusIndex"
+}
+
+variable "create_task_table" {
+  description = "Whether to provision the LLM task table (enable for LocalStack)"
+  type        = bool
+  default     = false
 }
 
 variable "lambda_memory_mb" {
@@ -85,24 +98,6 @@ variable "lambda_timeout_seconds" {
   description = "Timeout (in seconds) for the Lambda function"
   type        = number
   default     = 60
-}
-
-variable "sqs_batch_size" {
-  description = "Maximum number of SQS messages the Lambda should process per invocation"
-  type        = number
-  default     = 10
-}
-
-variable "lambda_maximum_batching_window_seconds" {
-  description = "Maximum batching window in seconds for SQS event source mapping"
-  type        = number
-  default     = 0
-}
-
-variable "lambda_maximum_concurrency" {
-  description = "Maximum concurrency for the event source mapping"
-  type        = number
-  default     = null
 }
 
 variable "lambda_reserved_concurrency" {
@@ -183,12 +178,6 @@ variable "lambda_circuit_breaker_half_open_max_calls" {
   default     = 1
 }
 
-variable "enable_sqs_alarm_eventbridge" {
-  description = "Whether to create the EventBridge rule/target reacting to the SQS backlog alarm"
-  type        = bool
-  default     = false
-}
-
 variable "scheduler_target_lambda_arn" {
   description = "Optional ARN of an external starter Lambda invoked by the SQS backlog alarm"
   type        = string
@@ -241,12 +230,6 @@ variable "enable_scheduler" {
   description = "Enable EventBridge Scheduler resources that invoke the processor"
   type        = bool
   default     = true
-}
-
-variable "create_prompt_queue" {
-  description = "Whether to provision the prompt SQS queue (set true for LocalStack environments)"
-  type        = bool
-  default     = false
 }
 
 variable "gemini_api_key" {

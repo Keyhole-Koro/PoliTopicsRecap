@@ -41,13 +41,17 @@ data "aws_iam_policy_document" "lambda_execution" {
     sid    = "AllowQueueProcessing"
     effect = "Allow"
     actions = [
-      "sqs:ReceiveMessage",
-      "sqs:DeleteMessage",
-      "sqs:GetQueueAttributes",
-      "sqs:ChangeMessageVisibility",
-      "sqs:GetQueueUrl"
+      "dynamodb:BatchWriteItem",
+      "dynamodb:GetItem",
+      "dynamodb:PutItem",
+      "dynamodb:Query",
+      "dynamodb:UpdateItem"
     ]
-    resources = [var.sqs_queue_arn]
+    resources = [
+      var.task_table_arn,
+      "${var.task_table_arn}/index/*",
+      var.article_table_arn
+    ]
   }
 
   statement {
@@ -93,7 +97,7 @@ resource "aws_lambda_layer_version" "dependencies" {
 
 resource "aws_lambda_function" "this" {
   function_name = var.lambda_name
-  description   = "Processes PoliTopicsRecap messages from SQS"
+  description   = "Processes PoliTopicsRecap tasks from DynamoDB"
   role          = aws_iam_role.this.arn
   filename      = var.lambda_package_path
 
@@ -108,23 +112,12 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      PROMPT_QUEUE_URL                           = var.sqs_queue_url
-      PROMPT_QUEUE_ARN                           = var.sqs_queue_arn
-      PROMPT_BUCKET_NAME                         = var.prompt_bucket_name
-      RATE_LIMIT_RPS                             = tostring(var.lambda_rate_limit_rps)
-      RATE_LIMIT_BURST                           = tostring(var.lambda_rate_limit_burst)
-      BACKOFF_BASE_SECONDS                       = tostring(var.lambda_backoff_base_seconds)
-      BACKOFF_CAP_SECONDS                        = tostring(var.lambda_backoff_cap_seconds)
-      MAX_ATTEMPTS                               = tostring(var.lambda_max_attempts)
-      API_TIMEOUT_MS                             = tostring(var.lambda_api_timeout_ms)
-      OVERALL_TIMEOUT_MS                         = tostring(var.lambda_overall_timeout_ms)
-      CIRCUIT_BREAKER_FAILURE_THRESHOLD          = tostring(var.lambda_circuit_breaker_failure_threshold)
-      CIRCUIT_BREAKER_MIN_REQUESTS               = tostring(var.lambda_circuit_breaker_minimum_requests)
-      CIRCUIT_BREAKER_COOLDOWN_SECONDS           = tostring(var.lambda_circuit_breaker_cooldown_seconds)
-      CIRCUIT_BREAKER_VISIBILITY_TIMEOUT_SECONDS = tostring(var.lambda_circuit_breaker_visibility_timeout_seconds)
-      CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS        = tostring(var.lambda_circuit_breaker_half_open_max_calls)
-      GEMINI_API_KEY                             = var.gemini_api_key
-      NODE_PATH                                  = "/opt/nodejs/node_modules"
+      LLM_TASK_TABLE         = var.task_table_name
+      LLM_TASK_STATUS_INDEX  = var.task_status_index_name
+      ARTICLE_TABLE_NAME     = var.article_table_name
+      PROMPT_BUCKET_NAME     = var.prompt_bucket_name
+      GEMINI_API_KEY         = var.gemini_api_key
+      NODE_PATH              = "/opt/nodejs/node_modules"
     }
   }
 

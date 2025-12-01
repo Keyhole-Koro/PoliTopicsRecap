@@ -17,3 +17,4 @@ terraform plan  -var-file="tfvars/localstack.tfvars" \
 && export PROMPT_BUCKET_NAME="politopics-prompts" \
 && export AWS_ENDPOINT_URL="http://localstack:4566" \
 && npm run enqueue-mock
+  

@@ -34,27 +34,20 @@ variable "politopics_table_name" {
   description = "Primary DynamoDB table name for PoliTopics records"
 }
 
-variable "sqs_queue_name" {
+variable "task_table_name" {
   type        = string
-  description = "Name of the SQS queue to subscribe"
+  description = "DynamoDB table that stores LLM map/reduce tasks"
 }
 
-variable "sqs_queue_arn_override" {
+variable "task_status_index_name" {
   type        = string
-  description = "Optional override for the SQS queue ARN"
-  default     = null
+  description = "GSI name for querying pending tasks by status"
 }
 
-variable "sqs_queue_url_override" {
-  type        = string
-  description = "Optional override for the SQS queue URL"
-  default     = null
-}
-
-variable "lookup_sqs_queue" {
+variable "create_task_table" {
   type        = bool
-  description = "Whether to resolve the SQS queue via aws_sqs_queue data source"
-  default     = true
+  description = "Whether to provision the LLM tasks table (set true for LocalStack)"
+  default     = false
 }
 
 variable "enable_scheduler" {
@@ -71,22 +64,6 @@ variable "lambda_memory_mb" {
 variable "lambda_timeout_seconds" {
   type        = number
   description = "Lambda timeout in seconds"
-}
-
-variable "sqs_batch_size" {
-  type        = number
-  description = "SQS batch size for Lambda trigger"
-}
-
-variable "lambda_maximum_batching_window_seconds" {
-  type        = number
-  description = "Maximum batching window in seconds"
-}
-
-variable "lambda_maximum_concurrency" {
-  type        = number
-  description = "Maximum concurrency for event source mapping"
-  default     = null
 }
 
 variable "lambda_reserved_concurrency" {
@@ -153,12 +130,6 @@ variable "lambda_circuit_breaker_visibility_timeout_seconds" {
 variable "lambda_circuit_breaker_half_open_max_calls" {
   type        = number
   description = "Half-open breaker max calls"
-}
-
-variable "enable_sqs_alarm_eventbridge" {
-  type        = bool
-  description = "Whether to connect the SQS backlog alarm to EventBridge"
-  default     = false
 }
 
 variable "scheduler_target_lambda_arn" {

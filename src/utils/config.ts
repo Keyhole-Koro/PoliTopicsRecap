@@ -1,102 +1,52 @@
-export type CircuitBreakerConfig = {
-  failureThreshold: number;
-  minimumRequests: number;
-  cooldownMs: number;
-  halfOpenMaxCalls: number;
-};
-
 export type Config = {
-  queueUrl: string;
-  queueArn: string;
-  rateLimitRps: number;
-  rateLimiterBurstCapacity: number;
+  taskTableName: string;
+  taskStatusIndexName: string;
+  articleTableName: string;
+  geminiApiKey: string;
   backoffBaseSeconds: number;
   backoffCapSeconds: number;
-  maxAttempts: number;
-  apiTimeoutMs: number;
-  overallTimeoutMs: number;
-  pauseOnRetryAfterSeconds: number;
-  circuitBreaker: CircuitBreakerConfig;
-  geminiApiKey: string;
 };
 
 export function resolveConfig(): Config {
-  const queueUrl = process.env.PROMPT_QUEUE_URL;
-  if (!queueUrl) {
-    throw new Error('PROMPT_QUEUE_URL environment variable is required');
-  }
-
-  const queueArn = process.env.PROMPT_QUEUE_ARN;
-  if (!queueArn) {
-    throw new Error('PROMPT_QUEUE_ARN environment variable is required');
-  }
-
-  const rateLimitRps = Math.max(1, numberFromEnv('RATE_LIMIT_RPS', 5));
-  const rateLimiterBurstCapacity = Math.max(
-    1,
-    numberFromEnv('RATE_LIMIT_BURST', rateLimitRps),
+  const taskTableName = getEnvWithFallback(
+    ['LLM_TASK_TABLE', 'TASK_TABLE_NAME'],
+    'PoliTopics-llm-tasks',
   );
-  const backoffBaseSeconds = Math.max(
-    0.1,
-    numberFromEnv('BACKOFF_BASE_SECONDS', 1),
+  const taskStatusIndexName = getEnvWithFallback(
+    ['LLM_TASK_STATUS_INDEX', 'TASK_STATUS_INDEX_NAME'],
+    'StatusIndex',
   );
-  const backoffCapSeconds = Math.max(
-    backoffBaseSeconds,
-    numberFromEnv('BACKOFF_CAP_SECONDS', 60),
-  );
-  const maxAttempts = Math.max(1, numberFromEnv('MAX_ATTEMPTS', 5));
-  const apiTimeoutMs = Math.max(100, numberFromEnv('API_TIMEOUT_MS', 10_000));
-  const overallTimeoutMs = Math.max(
-    apiTimeoutMs + 1_000,
-    numberFromEnv('OVERALL_TIMEOUT_MS', 45_000),
-  );
-
-  const circuitFailureThreshold = Math.max(
-    1,
-    numberFromEnv('CIRCUIT_BREAKER_FAILURE_THRESHOLD', 5),
-  );
-  const circuitMinimumRequests = Math.max(
-    1,
-    numberFromEnv('CIRCUIT_BREAKER_MIN_REQUESTS', 5),
-  );
-  const circuitCooldownSeconds = Math.max(
-    1,
-    numberFromEnv('CIRCUIT_BREAKER_COOLDOWN_SECONDS', 60),
-  );
-  const halfOpenMaxCalls = Math.max(
-    1,
-    numberFromEnv('CIRCUIT_BREAKER_HALF_OPEN_MAX_CALLS', 1),
-  );
-
-  const pauseOnRetryAfterSeconds = Math.max(
-    0,
-    numberFromEnv('PAUSE_ON_RETRY_AFTER_SECONDS', 60),
-  );
-
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY environment variable is required');
-  }
+  const articleTableName = requireEnv('ARTICLE_TABLE_NAME');
+  const geminiApiKey = requireEnv('GEMINI_API_KEY');
+  const backoffBaseSeconds = numberFromEnv('BACKOFF_BASE_SECONDS', 1);
+  const backoffCapSeconds = numberFromEnv('BACKOFF_CAP_SECONDS', 60);
 
   return {
-    queueUrl,
-    queueArn,
-    rateLimitRps,
-    rateLimiterBurstCapacity,
+    taskTableName,
+    taskStatusIndexName,
+    articleTableName,
+    geminiApiKey,
     backoffBaseSeconds,
     backoffCapSeconds,
-    maxAttempts,
-    apiTimeoutMs,
-    overallTimeoutMs,
-    pauseOnRetryAfterSeconds,
-    circuitBreaker: {
-      failureThreshold: circuitFailureThreshold,
-      minimumRequests: circuitMinimumRequests,
-      cooldownMs: circuitCooldownSeconds * 1_000,
-      halfOpenMaxCalls,
-    },
-    geminiApiKey,
   };
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (value && value.length > 0) {
+    return value;
+  }
+  throw new Error(`${name} environment variable is required`);
+}
+
+function getEnvWithFallback(names: string[], defaultValue: string): string {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value && value.length > 0) {
+      return value;
+    }
+  }
+  return defaultValue;
 }
 
 function numberFromEnv(name: string, defaultValue: number): number {
@@ -108,6 +58,5 @@ function numberFromEnv(name: string, defaultValue: number): number {
   if (Number.isFinite(value)) {
     return value;
   }
-  console.warn(`[PoliTopicsRecapSqsProcessor] Invalid numeric env ${name}: ${raw}`);
   return defaultValue;
 }

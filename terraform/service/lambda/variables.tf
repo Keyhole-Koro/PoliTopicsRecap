@@ -29,22 +29,6 @@ variable "lambda_reserved_concurrency" {
   default     = null
 }
 
-variable "sqs_batch_size" {
-  type        = number
-  description = "Maximum number of SQS messages per invocation"
-}
-
-variable "lambda_maximum_batching_window_seconds" {
-  type        = number
-  description = "Maximum batching window in seconds"
-}
-
-variable "lambda_maximum_concurrency" {
-  type        = number
-  description = "Maximum concurrency for the event source mapping"
-  default     = null
-}
-
 variable "lambda_rate_limit_rps" {
   type        = number
   description = "Rate limiter tokens per second"
@@ -105,19 +89,34 @@ variable "lambda_circuit_breaker_half_open_max_calls" {
   description = "Half-open breaker max calls"
 }
 
-variable "sqs_queue_arn" {
-  type        = string
-  description = "ARN of the source SQS queue"
-}
-
-variable "sqs_queue_url" {
-  type        = string
-  description = "URL of the source SQS queue"
-}
-
 variable "prompt_bucket_name" {
   type        = string
   description = "Prompt storage bucket name"
+}
+
+variable "task_table_name" {
+  type        = string
+  description = "DynamoDB table name for LLM tasks"
+}
+
+variable "task_table_arn" {
+  type        = string
+  description = "DynamoDB table ARN for LLM tasks"
+}
+
+variable "task_status_index_name" {
+  type        = string
+  description = "GSI used to fetch pending tasks by status"
+}
+
+variable "article_table_name" {
+  type        = string
+  description = "DynamoDB table name for storing reduced articles"
+}
+
+variable "article_table_arn" {
+  type        = string
+  description = "DynamoDB table ARN for storing reduced articles"
 }
 
 variable "tags" {

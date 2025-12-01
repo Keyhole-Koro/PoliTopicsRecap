@@ -8,7 +8,7 @@ jest.mock('@google/generative-ai', () => ({
   GoogleGenerativeAI: googleGenerativeAiCtorMock,
 }));
 
-import { GeminiClient } from 'src/llm/geminiClient';
+import { GeminiClient } from './geminiClient';
 
 describe('GeminiClient', () => {
   beforeEach(() => {
@@ -23,7 +23,7 @@ describe('GeminiClient', () => {
 
     expect(googleGenerativeAiCtorMock).toHaveBeenCalledWith('test-api-key');
     expect(getGenerativeModelMock).toHaveBeenCalledWith({
-      model: 'gemini-1.5-pro',
+      model: 'gemini-2.5-pro',
       systemInstruction: undefined,
     });
   });
@@ -54,7 +54,7 @@ describe('GeminiClient', () => {
     });
     expect(generateContentMock).toHaveBeenCalledWith({
       contents: [{
-        role: 'system',
+        role: 'user',
         parts: [{ text: 'Hello' }],
       }],
       generationConfig: {

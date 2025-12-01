@@ -1,227 +1,170 @@
-﻿import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client } from "@aws-sdk/client-s3";
+import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+
+import { GeminiClient } from "@llm/geminiClient";
+import { FakeLlmClient } from "@llm/fakeLlmClient";
+import { LlmClient } from "@llm/llmClient";
 import {
-  ReceiveMessageCommand,
-  SQSClient,
-  type Message,
-} from '@aws-sdk/client-sqs';
-import type { SQSEvent, SQSRecord } from 'aws-lambda';
+  bumpRetryAttempts,
+  fetchOldestPendingTask,
+  markChunkReady,
+  markTaskSucceeded,
+  type TaskRepositoryConfig,
+} from "./tasks/taskRepository";
+import type { TaskItem } from "./tasks/types";
+import type Article from "./dynamoDB/article";
+import storeData from "./dynamoDB/storeData";
+import { resolveConfig } from "@utils/config";
+import { getS3ClientConfig } from "@utils/aws";
+import { createDocumentClient } from "@utils/dynamo";
+import { fetchObjectText, parseS3Uri, uploadObject } from "@utils/s3";
 
-import { GeminiClient } from '@llm/geminiClient';
-import { FakeLlmClient } from '@llm/fakeLlmClient';
-import { processMapRecord } from 'lambda/processMapRecord';
-import { processReduceRecord } from './lambda/processReduceRecord';
-import { parsePromptTaskMessage, type PromptTaskMessage } from './lambda/parsePromptTaskMessage';
-import { deleteMessage } from './lambda/sqsActions';
-import { resolveConfig } from '@utils/config';
-import { getAwsBaseConfig, getS3ClientConfig } from '@utils/aws';
+export async function handler(): Promise<void> {
+  const config = resolveConfig();
+  const s3Client = new S3Client(getS3ClientConfig());
+  const docClient = createDocumentClient();
 
-type SchedulerEvent = {
-  source?: string;
-  [key: string]: unknown;
+  const repoConfig: TaskRepositoryConfig = {
+    tableName: config.taskTableName,
+    statusIndexName: config.taskStatusIndexName,
+  };
+
+  let task: TaskItem | null = null;
+  try {
+    task = await fetchOldestPendingTask(docClient, repoConfig);
+    if (!task) {
+      console.log("[handler] No pending tasks to process");
+      return;
+    }
+
+    const llmClient = createLlmClient(task, config.geminiApiKey);
+    if (!llmClient) {
+      console.error("Unsupported LLM provider", { taskId: task.pk, llm: task.llm });
+      await bumpRetryAttempts(docClient, repoConfig, task);
+      return;
+    }
+
+    if (task.processingMode === "direct") {
+      await handleDirectTask({
+        task,
+        docClient,
+        repoConfig,
+        s3Client,
+        llmClient,
+        articleTableName: config.articleTableName,
+      });
+      return;
+    }
+
+    await handleChunkedTask({
+      task,
+      docClient,
+      repoConfig,
+      s3Client,
+      llmClient,
+      articleTableName: config.articleTableName,
+    });
+  } catch (error) {
+    console.error("[handler] Failed to process task", {
+      taskId: task?.pk,
+      error,
+    });
+    if (task) {
+      await bumpRetryAttempts(docClient, repoConfig, task);
+    }
+  }
+}
+
+function createLlmClient(task: TaskItem, apiKey: string): LlmClient | null {
+  if (task.llm === "gemini") {
+    return new GeminiClient({ apiKey, model: task.llmModel });
+  }
+  if (task.llm === "fake") {
+    return new FakeLlmClient({ mode: "echo" });
+  }
+  return null;
+}
+
+type TaskArgs = {
+  task: TaskItem;
+  docClient: DynamoDBDocumentClient;
+  repoConfig: TaskRepositoryConfig;
+  s3Client: S3Client;
+  llmClient: LlmClient;
+  articleTableName: string;
 };
 
-export async function handler(event: SQSEvent | SchedulerEvent | undefined = undefined): Promise<void> {
-  const config = resolveConfig();
+async function handleDirectTask(args: TaskArgs): Promise<void> {
+  const { task, s3Client, llmClient, docClient, repoConfig, articleTableName } = args;
+  const promptText = await readS3Text(s3Client, task.prompt_url);
+  const llmResult = await llmClient.generate({
+    messages: [{ role: "user", content: promptText }],
+  });
+  await writeS3Text(s3Client, task.result_url, llmResult.text);
+  await persistArticleIfPossible(docClient, articleTableName, llmResult.text);
+  await markTaskSucceeded(docClient, repoConfig, task);
+}
 
-  const awsBase = getAwsBaseConfig();
-  const s3Cfg   = getS3ClientConfig();
-
-  const sqsClient = new SQSClient(awsBase);
-  const s3Client  = new S3Client(s3Cfg);
-
-  const queueUrl = config.queueUrl;
-
-  const records = await resolveRecords(event, sqsClient, queueUrl, config.queueArn);
-  if (records.length === 0) {
-    console.log('[handler] No SQS messages to process');
+async function handleChunkedTask(args: TaskArgs): Promise<void> {
+  const { task, s3Client, llmClient, docClient, repoConfig, articleTableName } = args;
+  if (!task.chunks || task.chunks.length === 0) {
+    console.warn("Chunked task missing chunk definitions", { taskId: task.pk });
+    await markTaskSucceeded(docClient, repoConfig, task);
     return;
   }
 
-  for (const record of records) {
-    let message: PromptTaskMessage;
-    let llmClient: GeminiClient | FakeLlmClient | undefined;
-
-    try {
-      message = parsePromptTaskMessage(record);
-      console.log(message)
-      if (message.llm == "gemini") {
-        llmClient = new GeminiClient({
-          apiKey: config.geminiApiKey,
-          model: message.llmModel,
-        });
-      } else if (message.llm == "fake") {
-        llmClient = new FakeLlmClient({
-          mode: "echo",
-        });
-      } else {
-        console.error('Dropping SQS record with unknown or unsupported LLM', {
-          messageId: record.messageId,
-          llm: (message as { llm?: unknown }).llm,
-        });
-        await deleteMessage({
-          sqsClient,
-          queueUrl: config.queueUrl,
-          receiptHandle: record.receiptHandle,
-        });
-        continue;
-      }
-    } catch (err) {
-      console.error('Dropping unparseable SQS record', {
-        messageId: record.messageId,
-        error: err,
-      });
-      await deleteMessage({
-        sqsClient,
-        queueUrl: config.queueUrl,
-        receiptHandle: record.receiptHandle,
-      });
-      continue;
-    }
-
-    // validate if the corresponding record exists later implementation
-    if (message.type === 'map') {
-      await processMapRecord({
-        message,
-        record,
-        sqsClient,
-        s3Client,
-        llmClient,
-        queueUrl: config.queueUrl,
-      });
-    } else if (message.type === 'reduce') {
-      await processReduceRecord({
-        message,
-        record,
-        sqsClient,
-        s3Client,
-        llmClient,
-        queueUrl: config.queueUrl,
-      });
-    } else {
-        console.error('Dropping SQS record with unknown task type', {
-        messageId: record.messageId,
-        taskType: (message as { type?: unknown }).type,
-      });
-      await deleteMessage({
-        sqsClient,
-        queueUrl: config.queueUrl,
-        receiptHandle: record.receiptHandle,
-      });
-    }
-  }
-}
-
-function isSqsEvent(event: unknown): event is SQSEvent {
-  return (
-    typeof event === 'object' &&
-    event !== null &&
-    Array.isArray((event as { Records?: unknown }).Records)
-  );
-}
-
-async function resolveRecords(
-  event: SQSEvent | SchedulerEvent | undefined,
-  sqsClient: SQSClient,
-  queueUrl: string,
-  queueArn: string,
-): Promise<SQSRecord[]> {
-  if (event && isSqsEvent(event)) {
-    return event.Records;
-  }
-
-  const response = await sqsClient.send(
-    new ReceiveMessageCommand({
-      QueueUrl: queueUrl,
-      MaxNumberOfMessages: 1,
-      AttributeNames: ['All'],
-      MessageAttributeNames: ['All'],
-      WaitTimeSeconds: 0,
-    }),
-  );
-
-  const [message] = response.Messages ?? [];
-  if (!message) {
-    return [];
-  }
-
-  const record = messageToRecord(message, queueArn);
-  if (!record) {
-    return [];
-  }
-
-  return [record];
-}
-
-function messageToRecord(message: Message, queueArn: string): SQSRecord | null {
-  if (!message.Body || !message.ReceiptHandle || !message.MessageId) {
-    console.warn('[handler] Received SQS message missing body/receipt/messageId, skipping', {
-      message,
+  const nextChunk = task.chunks.find((chunk) => chunk.status !== "ready");
+  if (nextChunk) {
+    const promptText = await readS3Text(s3Client, nextChunk.prompt_url);
+    const llmResult = await llmClient.generate({
+      messages: [{ role: "user", content: promptText }],
     });
-    return null;
+
+    await writeS3Text(s3Client, nextChunk.result_url, llmResult.text);
+    await markChunkReady(docClient, repoConfig, task, nextChunk.id);
+    return;
   }
 
-  const timestamp = Date.now().toString();
-  const arnParts = queueArn.split(':');
-  const regionFromArn = arnParts.length >= 4 ? arnParts[3] : undefined;
+  const reducePrompt = await readS3Text(s3Client, task.prompt_url);
+  const reduceResult = await llmClient.generate({
+    messages: [{ role: "user", content: reducePrompt }],
+  });
 
-  return {
-    messageId: message.MessageId,
-    receiptHandle: message.ReceiptHandle,
-    body: message.Body,
-    attributes: {
-      ApproximateReceiveCount: message.Attributes?.ApproximateReceiveCount ?? '1',
-      SentTimestamp: message.Attributes?.SentTimestamp ?? timestamp,
-      SenderId: message.Attributes?.SenderId ?? 'scheduler',
-      ApproximateFirstReceiveTimestamp:
-        message.Attributes?.ApproximateFirstReceiveTimestamp ?? timestamp,
-      MessageGroupId: message.Attributes?.MessageGroupId,
-      MessageDeduplicationId: message.Attributes?.MessageDeduplicationId,
-      SequenceNumber: message.Attributes?.SequenceNumber,
+  await writeS3Text(s3Client, task.result_url, reduceResult.text);
+  await persistArticleIfPossible(docClient, articleTableName, reduceResult.text);
+  await markTaskSucceeded(docClient, repoConfig, task);
+}
+
+async function readS3Text(client: S3Client, uri: string): Promise<string> {
+  const { bucket, key } = parseS3Uri(uri);
+  return fetchObjectText(client, bucket, key);
+}
+
+async function writeS3Text(client: S3Client, uri: string, body: string): Promise<void> {
+  const { bucket, key } = parseS3Uri(uri);
+  await uploadObject({
+    client,
+    bucket,
+    key,
+    body,
+    opts: {
+      contentType: "application/json; charset=utf-8",
     },
-    messageAttributes: convertMessageAttributes(message.MessageAttributes),
-    md5OfBody: message.MD5OfBody ?? '',
-    eventSource: 'aws:sqs',
-    eventSourceARN: queueArn,
-    awsRegion: regionFromArn ?? process.env.AWS_REGION ?? 'us-east-1',
-  };
+  });
 }
 
-function convertMessageAttributes(
-  attributes: Message['MessageAttributes'],
-): SQSRecord['messageAttributes'] {
-  if (!attributes) {
-    return {};
-  }
-
-  const converted: SQSRecord['messageAttributes'] = {};
-  for (const [key, value] of Object.entries(attributes)) {
-    if (!value) {
-      continue;
+async function persistArticleIfPossible(
+  docClient: DynamoDBDocumentClient,
+  tableName: string,
+  payloadText: string,
+): Promise<void> {
+  try {
+    const article = JSON.parse(payloadText) as Article;
+    if (typeof article !== "object" || article === null) {
+      throw new Error("Reduced payload is not an object");
     }
-
-    converted[key] = {
-      stringValue: value.StringValue,
-      binaryValue: toBase64(value.BinaryValue),
-      stringListValues: value.StringListValues ?? [],
-      binaryListValues: (value.BinaryListValues ?? []).map(toBase64).filter(isString),
-      dataType: value.DataType ?? 'String',
-    };
+    await storeData({ doc: docClient, table_name: tableName }, article);
+  } catch (error) {
+    console.warn("[handler] Skipping article persistence", { error });
   }
-  return converted;
-}
-
-function toBase64(value: string | Uint8Array | undefined | null): string | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  return Buffer.from(value).toString('base64');
-}
-
-function isString(value: string | undefined): value is string {
-  return typeof value === 'string';
 }

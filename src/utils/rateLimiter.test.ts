@@ -1,10 +1,10 @@
-jest.mock('src/utils/timing', () => ({
+jest.mock('./timing', () => ({
   sleep: jest.fn(),
 }));
 
-import { TokenBucketRateLimiter } from 'src/utils/rateLimiter';
+import { TokenBucketRateLimiter } from './rateLimiter';
 
-const { sleep } = jest.requireMock('src/utils/timing');
+const { sleep } = jest.requireMock('./timing');
 
 describe('TokenBucketRateLimiter', () => {
   let now = 0;

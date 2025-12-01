@@ -1,5 +1,11 @@
-import { BatchWriteCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  BatchWriteCommand,
+  DynamoDBDocumentClient,
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+} from '@aws-sdk/lib-dynamodb';
 
 import storeData, {
   type Cfg,
@@ -7,9 +13,9 @@ import storeData, {
   toYYYYMM,
   monthFromIsoUsingJST,
   lastNDaysRange,
-} from 'src/dynamoDB/storeData';
+} from './storeData';
 
-import type Article from 'src/dynamoDB/article';
+import type Article from './article';
 
 describe('dynamoDB/storeData helpers', () => {
   it('normalizes ISO date inputs', () => {
@@ -36,7 +42,61 @@ describe('dynamoDB/storeData helpers', () => {
   });
 });
 
-describe('storeData', () => {
+const region = process.env.AWS_REGION!;
+const endpoint =
+  process.env.AWS_ENDPOINT_URL ??
+  process.env.LOCALSTACK_URL ??
+  process.env.LOCALSTACK_ENDPOINT;
+const persistentTableName =
+  process.env.STORE_DATA_TEST_TABLE ?? process.env.ARTICLE_TABLE_NAME ?? 'PoliTopics';
+
+describe('storeData (LocalStack integration)', () => {
+  if (!endpoint) {
+    it('skips when AWS_ENDPOINT_URL is not set', () => {
+      expect(true).toBe(true);
+    });
+    return;
+  }
+
+  const dynamoClient = new DynamoDBClient({
+    region,
+    endpoint,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? 'test',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? 'test',
+    },
+  });
+  const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+    marshallOptions: { removeUndefinedValues: true },
+  });
+
+  it('writes to the shared PoliTopics table so records can be inspected manually', async () => {
+    const article = buildArticle(`article-ls-${Date.now()}`);
+
+    await storeData({ doc: docClient, table_name: persistentTableName }, article);
+
+    const mainItem = await docClient.send(
+      new GetCommand({
+        TableName: persistentTableName,
+        Key: { PK: `A#${article.id}`, SK: 'META' },
+      }),
+    );
+    expect(mainItem.Item?.title).toBe(article.title);
+
+    const categoryItems = await docClient.send(
+      new QueryCommand({
+        TableName: persistentTableName,
+        KeyConditionExpression: 'PK = :pk',
+        ExpressionAttributeValues: {
+          ':pk': `CATEGORY#${article.categories[0]}`,
+        },
+      }),
+    );
+    expect(categoryItems.Items?.some((item) => item.articleId === article.id)).toBe(true);
+  });
+});
+
+describe('storeData (mocked client)', () => {
   const baseArticle: Article = {
     id: 'article-123',
     title: 'Example Article',
@@ -139,3 +199,25 @@ describe('storeData', () => {
     );
   });
 });
+
+function buildArticle(id: string): Article {
+  return {
+    id,
+    title: 'Example Article',
+    date: '2024-05-01',
+    month: '2024-05',
+    imageKind: '会議録',
+    session: 12,
+    nameOfHouse: 'Lower House',
+    nameOfMeeting: 'Committee A',
+    categories: ['budget'],
+    description: 'Internal description',
+    summary: {},
+    soft_summary: {},
+    middle_summary: [],
+    dialogs: [{ speaker: 'Alice', text: 'hello' }],
+    participants: [{ name: 'Alice' }],
+    keywords: [{ keyword: 'finance' }],
+    terms: [{ term: 'policy' }],
+  };
+}
