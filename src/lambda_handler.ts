@@ -1,4 +1,4 @@
-import { S3Client } from "@aws-sdk/client-s3";
+﻿import { S3Client } from "@aws-sdk/client-s3";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import { GeminiClient } from "@llm/geminiClient";
@@ -159,7 +159,8 @@ async function persistArticleIfPossible(
   payloadText: string,
 ): Promise<void> {
   try {
-    const article = JSON.parse(payloadText) as Article;
+    const jsonText = sanitizeJsonPayload(payloadText);
+    const article = JSON.parse(jsonText) as Article;
     if (typeof article !== "object" || article === null) {
       throw new Error("Reduced payload is not an object");
     }
@@ -167,4 +168,14 @@ async function persistArticleIfPossible(
   } catch (error) {
     console.warn("[handler] Skipping article persistence", { error });
   }
+}
+
+function sanitizeJsonPayload(payloadText: string): string {
+  const trimmed = payloadText.trim();
+  // eliminate ```json ... ``` fences in case
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+  if (fenceMatch && fenceMatch[1]) {
+    return fenceMatch[1].trim();
+  }
+  return trimmed;
 }
