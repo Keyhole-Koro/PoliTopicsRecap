@@ -11,6 +11,7 @@ env:
   NODE_VERSION: "22"
   TERRAFORM_VERSION: "1.9.5"
   TF_WORKING_DIR: terraform
+  PNPM_VERSION: "9.12.3"
 
 jobs:
   deploy:
@@ -38,8 +39,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - name: Enable Corepack
-        run: corepack enable
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
