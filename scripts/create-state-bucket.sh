@@ -11,10 +11,10 @@ REGION="ap-northeast-3"
 
 case "$ENV" in
   stage)
-    BUCKET="politopics-recap-stage-terraform"
+    BUCKET="politopics-recap-stage-state"
     ;;
   prod)
-    BUCKET="politopics-recap-prod-terraform"
+    BUCKET="politopics-recap-prod-state"
     ;;
   *)
     echo "Unknown environment: $ENV"

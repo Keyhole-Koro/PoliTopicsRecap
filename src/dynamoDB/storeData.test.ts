@@ -56,6 +56,7 @@ describe('dynamoDB/storeData helpers', () => {
 
 const region = process.env.AWS_REGION!;
 const endpoint =
+  process.env.LOCALSTACK_ENDPOINT_URL ??
   process.env.AWS_ENDPOINT_URL ??
   process.env.LOCALSTACK_URL ??
   process.env.LOCALSTACK_ENDPOINT;
@@ -64,7 +65,7 @@ const persistentTableName =
 
 describe('storeData (LocalStack integration)', () => {
   if (!endpoint) {
-    it('skips when AWS_ENDPOINT_URL is not set', () => {
+    it('skips when no LocalStack endpoint is set', () => {
       expect(true).toBe(true);
     });
     return;

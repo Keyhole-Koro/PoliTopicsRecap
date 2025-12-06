@@ -22,8 +22,18 @@ export function getAwsRegion(): string {
 }
 
 export function getAwsEndpoint(): string | undefined {
-  const ep = process.env.AWS_ENDPOINT_URL;
-  return ep && ep.trim().length ? ep : undefined;
+  const candidates = [
+    process.env.LOCALSTACK_ENDPOINT_URL,
+    process.env.AWS_ENDPOINT_URL,
+    process.env.LOCALSTACK_URL,
+    process.env.LOCALSTACK_ENDPOINT,
+  ];
+  for (const candidate of candidates) {
+    if (candidate && candidate.trim().length) {
+      return candidate;
+    }
+  }
+  return undefined;
 }
 
 export function getAwsBaseConfig(): AwsBaseConfig {

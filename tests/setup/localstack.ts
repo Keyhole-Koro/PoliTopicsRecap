@@ -8,14 +8,15 @@ declare global {
 }
 
 const endpoint =
+  process.env.LOCALSTACK_ENDPOINT_URL ??
   process.env.AWS_ENDPOINT_URL ??
   process.env.LOCALSTACK_URL ??
-  process.env.LOCALSTACK_ENDPOINT;
-if (endpoint) {
-  process.env.AWS_ENDPOINT_URL = endpoint;
-}
+  process.env.LOCALSTACK_ENDPOINT ??
+  "http://localstack:4566";
+
+process.env.LOCALSTACK_ENDPOINT_URL = endpoint;
 if (!process.env.AWS_ENDPOINT_URL) {
-  process.env.AWS_ENDPOINT_URL = "http://localstack:4566";
+  process.env.AWS_ENDPOINT_URL = endpoint;
 }
 
 process.env.PROMPT_BUCKET_NAME = process.env.PROMPT_BUCKET_NAME ?? "politopics-prompts";

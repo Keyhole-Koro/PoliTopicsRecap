@@ -107,8 +107,7 @@ resource "aws_lambda_function" "this" {
   timeout          = var.lambda_timeout_seconds
   memory_size      = var.lambda_memory_mb
 
-  reserved_concurrent_executions = var.lambda_reserved_concurrency
-  layers                         = [aws_lambda_layer_version.dependencies.arn]
+  layers = [aws_lambda_layer_version.dependencies.arn]
 
   environment {
     variables = {

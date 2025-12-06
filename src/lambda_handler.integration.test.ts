@@ -24,6 +24,7 @@ import {
 
 const region = process.env.AWS_REGION!;
 const endpoint =
+  process.env.LOCALSTACK_ENDPOINT_URL ??
   process.env.AWS_ENDPOINT_URL ??
   process.env.LOCALSTACK_URL ??
   process.env.LOCALSTACK_ENDPOINT ??

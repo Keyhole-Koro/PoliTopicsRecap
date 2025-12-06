@@ -244,6 +244,22 @@ run_import() {
   "${TF_CMD[@]}" import "-var-file=$VAR_FILE" -no-color "$address" "$identifier"
 }
 
+iam_role_exists() {
+  local role_name="$1"
+  aws iam get-role --role-name "$role_name" >/dev/null 2>&1
+}
+
+iam_role_policy_exists() {
+  local role_name="$1"
+  local policy_name="$2"
+  aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name" >/dev/null 2>&1
+}
+
+scheduler_schedule_exists() {
+  local schedule_name="$1"
+  aws scheduler get-schedule --name "$schedule_name" >/dev/null 2>&1
+}
+
 PROMPT_BUCKET_RES="module.service.module.s3"
 run_import "$PROMPT_BUCKET_RES.aws_s3_bucket.this" "$PROMPT_BUCKET_NAME"
 run_import "$PROMPT_BUCKET_RES.aws_s3_bucket_versioning.this" "$PROMPT_BUCKET_NAME"
@@ -282,11 +298,33 @@ fi
 if [[ "${SCHEDULER_BACKEND:-none}" == "aws_scheduler" ]]; then
   SCHED_ROLE_NAME="${LAMBDA_NAME}-scheduler-role"
   SCHED_POLICY_NAME="${LAMBDA_NAME}-scheduler-invoke"
-  run_import "module.service.aws_iam_role.scheduler[0]" "$SCHED_ROLE_NAME"
-  run_import "module.service.aws_iam_role_policy.scheduler_invoke_lambda[0]" "${SCHED_ROLE_NAME}:${SCHED_POLICY_NAME}"
+  if iam_role_exists "$SCHED_ROLE_NAME"; then
+    run_import "module.service.aws_iam_role.scheduler[0]" "$SCHED_ROLE_NAME"
+  else
+    echo "Skipping scheduler role import; IAM role $SCHED_ROLE_NAME not found."
+  fi
+  if iam_role_policy_exists "$SCHED_ROLE_NAME" "$SCHED_POLICY_NAME"; then
+    run_import "module.service.aws_iam_role_policy.scheduler_invoke_lambda[0]" "${SCHED_ROLE_NAME}:${SCHED_POLICY_NAME}"
+  else
+    echo "Skipping scheduler invoke policy import; inline policy ${SCHED_POLICY_NAME} not found on ${SCHED_ROLE_NAME}."
+  fi
 
+  declare -a EXISTING_SCHED_KEYS=()
   for key in "${SCHED_KEYS[@]}"; do
     [[ -z "$key" ]] && continue
+    schedule_name="${LAMBDA_NAME}-schedule-${key}"
+    if scheduler_schedule_exists "$schedule_name"; then
+      EXISTING_SCHED_KEYS+=("$key")
+    else
+      echo "Skipping scheduler import for key '${key}'; schedule ${schedule_name} not found."
+    fi
+  done
+
+  if [[ ${#EXISTING_SCHED_KEYS[@]} -eq 0 ]]; then
+    echo "No AWS Scheduler schedules detected; skipping schedule imports."
+  fi
+
+  for key in "${EXISTING_SCHED_KEYS[@]}"; do
     schedule_name="${LAMBDA_NAME}-schedule-${key}"
     printf -v schedule_address 'module.service.aws_scheduler_schedule.processor["%s"]' "$key"
     run_import "$schedule_address" "$schedule_name"

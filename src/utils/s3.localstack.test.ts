@@ -16,6 +16,7 @@ import {
 
 const region = process.env.AWS_REGION!;
 const endpoint =
+  process.env.LOCALSTACK_ENDPOINT_URL ??
   process.env.AWS_ENDPOINT_URL ??
   process.env.LOCALSTACK_URL ??
   process.env.LOCALSTACK_ENDPOINT;
@@ -30,7 +31,7 @@ const describeIfEndpoint = endpoint ? describe : describe.skip;
 
 describeIfEndpoint('LocalStack S3 roundtrip using utils/s3 helpers', () => {
   if (!endpoint) {
-    it('skipped because AWS_ENDPOINT_URL is not set', () => {
+    it('skipped because no LocalStack endpoint is set', () => {
       expect(true).toBe(true);
     });
     return;

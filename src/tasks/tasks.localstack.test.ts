@@ -26,6 +26,7 @@ import { handler } from "../lambda_handler";
 
 const region = process.env.AWS_REGION!;
 const endpoint =
+  process.env.LOCALSTACK_ENDPOINT_URL ??
   process.env.AWS_ENDPOINT_URL ??
   process.env.LOCALSTACK_URL ??
   process.env.LOCALSTACK_ENDPOINT ??
@@ -43,7 +44,7 @@ const describeIfEndpoint = endpoint ? describe : describe.skip;
 
 describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   if (!endpoint) {
-    it("skipped because AWS_ENDPOINT_URL is not set", () => {
+    it("skipped because no LocalStack endpoint is set", () => {
       expect(true).toBe(true);
     });
     return;

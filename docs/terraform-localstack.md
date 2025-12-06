@@ -47,19 +47,11 @@
 6. Run the new Dynamo workflow test once the stack is up (point at LocalStack):
 
    ```bash
-   AWS_ENDPOINT_URL=http://localstack:4566 \
+   LOCALSTACK_ENDPOINT_URL=http://localstack:4566 \
    npm test -- --runInBand src/tasks/tasks.localstack.test.ts
    ```
 
    The worker now pulls tasks directly from the `PoliTopics-llm-tasks` table via its `StatusIndex` GSI, and it writes final reduce results to the `PoliTopics` article table using `storeData`.
-
-# Test with mock
-
-```bash
-export DELAY_STEP_SECONDS=60
-# after terraform applying to localstack
-npm run enqueue-mock
-```
 
 # Apply changes of lambda
 

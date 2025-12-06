@@ -4,8 +4,6 @@ export type Config = {
   articleTableName: string;
   articleAssetBucketName: string;
   geminiApiKey: string;
-  backoffBaseSeconds: number;
-  backoffCapSeconds: number;
 };
 
 export function resolveConfig(): Config {
@@ -20,8 +18,6 @@ export function resolveConfig(): Config {
   const articleTableName = requireEnv('ARTICLE_TABLE_NAME');
   const articleAssetBucketName = requireEnv('PROMPT_BUCKET_NAME');
   const geminiApiKey = requireEnv('GEMINI_API_KEY');
-  const backoffBaseSeconds = numberFromEnv('BACKOFF_BASE_SECONDS', 1);
-  const backoffCapSeconds = numberFromEnv('BACKOFF_CAP_SECONDS', 60);
 
   return {
     taskTableName,
@@ -29,8 +25,6 @@ export function resolveConfig(): Config {
     articleTableName,
     articleAssetBucketName,
     geminiApiKey,
-    backoffBaseSeconds,
-    backoffCapSeconds,
   };
 }
 
@@ -48,18 +42,6 @@ function getEnvWithFallback(names: string[], defaultValue: string): string {
     if (value && value.length > 0) {
       return value;
     }
-  }
-  return defaultValue;
-}
-
-function numberFromEnv(name: string, defaultValue: number): number {
-  const raw = process.env[name];
-  if (raw === undefined) {
-    return defaultValue;
-  }
-  const value = Number(raw);
-  if (Number.isFinite(value)) {
-    return value;
   }
   return defaultValue;
 }
