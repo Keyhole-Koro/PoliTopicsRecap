@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "type": "commonjs",
+  "packageManager": "pnpm@10.18.2",
   "scripts": {
     "test": "jest --config jest.config.ts --runInBand",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
