@@ -11,7 +11,7 @@ env:
   NODE_VERSION: "22"
   TERRAFORM_VERSION: "1.9.5"
   TF_WORKING_DIR: terraform
-  PNPM_VERSION: "9.12.3"
+  # keep npm-based tooling aligned with repo
 
 jobs:
   deploy:
@@ -37,18 +37,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Setup pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
+          cache: npm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install
 
       - name: Build Lambda bundle
-        run: pnpm run build
+        run: npm run build
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
