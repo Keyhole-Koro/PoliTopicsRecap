@@ -33,16 +33,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node.js
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-
-      - name: Setup pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
