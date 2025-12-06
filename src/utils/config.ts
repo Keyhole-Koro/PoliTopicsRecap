@@ -2,6 +2,7 @@ export type Config = {
   taskTableName: string;
   taskStatusIndexName: string;
   articleTableName: string;
+  articleAssetBucketName: string;
   geminiApiKey: string;
   backoffBaseSeconds: number;
   backoffCapSeconds: number;
@@ -17,6 +18,7 @@ export function resolveConfig(): Config {
     'StatusIndex',
   );
   const articleTableName = requireEnv('ARTICLE_TABLE_NAME');
+  const articleAssetBucketName = requireEnv('PROMPT_BUCKET_NAME');
   const geminiApiKey = requireEnv('GEMINI_API_KEY');
   const backoffBaseSeconds = numberFromEnv('BACKOFF_BASE_SECONDS', 1);
   const backoffCapSeconds = numberFromEnv('BACKOFF_CAP_SECONDS', 60);
@@ -25,6 +27,7 @@ export function resolveConfig(): Config {
     taskTableName,
     taskStatusIndexName,
     articleTableName,
+    articleAssetBucketName,
     geminiApiKey,
     backoffBaseSeconds,
     backoffCapSeconds,

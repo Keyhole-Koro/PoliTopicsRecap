@@ -32,21 +32,22 @@ import {
   PutCommand,
   BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
+import type { S3Client } from "@aws-sdk/client-s3";
 
 import type Article from './article';
+import { uploadJson } from "@utils/s3";
 
-// ---- Minimal self-contained types (replace with your project types if available) ----
-export type Summary = unknown;
-export type SoftSummary = unknown;
-export type MiddleSummary = unknown;
-export type Dialog = { speaker?: string; text?: string };
-export type Participant = { name?: string };
-export type Keyword = { keyword?: string };
-export type Term = { term?: string };
+export type ArticleAssetStorage = {
+  client: S3Client;
+  bucket: string;
+  prefix?: string;
+  makeUrl?: (bucket: string, key: string) => string;
+};
 
 export type Cfg = {
   doc: DynamoDBDocumentClient;
   table_name: string; // single table name
+  assets: ArticleAssetStorage;
 };
 
 // ==========================
@@ -63,6 +64,7 @@ const kindKey = (k: string) => `IMAGEKIND#${k}`;
 const sessionKey = (s: number | string) => `SESSION#${String(s).padStart(4, "0")}`;
 const houseKey = (h: string) => `HOUSE#${h}`;
 const meetingKey = (m: string) => `MEETING#${m}`;
+const DEFAULT_ASSET_PREFIX = "articles";
 
 // ==========================
 // Validators / formatters
@@ -182,6 +184,33 @@ async function batchPutAll(
   }
 }
 
+type ArticlePayload = Pick<Article, "summary" | "soft_summary" | "middle_summary" | "dialogs">;
+
+async function persistArticlePayload(
+  assets: ArticleAssetStorage,
+  articleId: string,
+  payload: ArticlePayload
+): Promise<string> {
+  if (!assets?.client || !assets.bucket) {
+    throw new Error("Article asset storage configuration is required");
+  }
+  const trimmedPrefix = trimSlashes(assets.prefix ?? DEFAULT_ASSET_PREFIX);
+  const basePrefix = trimmedPrefix ? `${trimmedPrefix}/${articleId}` : articleId;
+  const key = `${basePrefix}/payload.json`;
+  await uploadJson({
+    client: assets.client,
+    bucket: assets.bucket,
+    key,
+    data: payload,
+  });
+  const buildUrl = assets.makeUrl ?? ((bucket: string, objectKey: string) => `s3://${bucket}/${objectKey}`);
+  return buildUrl(assets.bucket, key);
+}
+
+function trimSlashes(input: string): string {
+  return input.replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
 // ==========================
 // Store: main item + thin index items
 // ==========================
@@ -189,7 +218,7 @@ export default async function storeData(
   config: Cfg,
   article: Article
 ): Promise<{ ok: boolean; id: string }> {
-  const { doc, table_name: TableName } = config;
+  const { doc, table_name: TableName, assets } = config;
 
   // ---- Normalize date & month to keep ordering and prefix filters consistent
   const iso = toIsoUtc(article.date);
@@ -206,14 +235,30 @@ export default async function storeData(
 
   const gsi2pk = `Y#${yOf(monthNorm)}#M#${mOf(monthNorm)}`;
 
-  // ---- Main item (heavy fields kept here)
+  const {
+    summary,
+    soft_summary,
+    middle_summary,
+    dialogs,
+    ...articleRest
+  } = article;
+
+  const payloadUrl = await persistArticlePayload(assets, article.id, {
+    summary,
+    soft_summary,
+    middle_summary,
+    dialogs,
+  });
+
+  // ---- Main item (heavy fields kept in S3 references)
   const mainItem = {
-    ...article,            // keep original fields (will be overridden below)
+    ...articleRest,
     date: iso,             // enforce ISO UTC
     month: monthNorm,      // align month with normalized date
     PK: artPK(article.id),
     SK: artSK,
     type: "ARTICLE",
+    payload_url: payloadUrl,
 
     // GSIs for global listings
     GSI1PK: "ARTICLE",

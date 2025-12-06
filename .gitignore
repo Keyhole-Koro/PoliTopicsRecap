@@ -10,11 +10,12 @@ build
 **/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+terraform/.terraform
+
 tfplan
 tfplan_bootstrap
 terraform.tfstate
 
-*.tfvars
 *.tfvars.json
 tfplan
 crash.log
@@ -23,3 +24,5 @@ crash.log
 
 layer_content
 out.json
+
+.env

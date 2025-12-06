@@ -9,6 +9,7 @@ import {
 
 import storeData, {
   type Cfg,
+  type ArticleAssetStorage,
   toIsoUtc,
   toYYYYMM,
   monthFromIsoUsingJST,
@@ -16,6 +17,17 @@ import storeData, {
 } from './storeData';
 
 import type Article from './article';
+
+function createAssetStorageMock(bucket = 'article-assets'): { storage: ArticleAssetStorage; send: jest.Mock } {
+  const send = jest.fn(async () => ({}));
+  return {
+    storage: {
+      client: { send } as unknown as ArticleAssetStorage['client'],
+      bucket,
+    },
+    send,
+  };
+}
 
 describe('dynamoDB/storeData helpers', () => {
   it('normalizes ISO date inputs', () => {
@@ -73,7 +85,8 @@ describe('storeData (LocalStack integration)', () => {
   it('writes to the shared PoliTopics table so records can be inspected manually', async () => {
     const article = buildArticle(`article-ls-${Date.now()}`);
 
-    await storeData({ doc: docClient, table_name: persistentTableName }, article);
+    const assetMock = createAssetStorageMock();
+    await storeData({ doc: docClient, table_name: persistentTableName, assets: assetMock.storage }, article);
 
     const mainItem = await docClient.send(
       new GetCommand({
@@ -108,19 +121,30 @@ describe('storeData (mocked client)', () => {
     nameOfMeeting: 'Committee A',
     categories: ['budget'],
     description: 'Internal description',
-    summary: {},
-    soft_summary: {},
-    middle_summary: [],
-    dialogs: [{ speaker: 'Alice', text: 'hello' }],
-    participants: [{ name: 'Alice' }],
-    keywords: [{ keyword: 'finance' }],
-    terms: [{ term: 'policy' }],
+    summary: { based_on_orders: [1, 2], summary: '審議の全体像を説明' },
+    soft_summary: { based_on_orders: [1], summary: '丁寧に要点を紹介' },
+    middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
+    dialogs: [{
+      order: 1,
+      summary: 'Aliceが予算の遅れを指摘',
+      soft_language: 'Aliceさんは落ち着いた口調で遅延を確認しました',
+      speaker: 'Alice',
+    }],
+    participants: [{
+      name: 'Alice',
+      position: '議員',
+      summary: '執行遅れを質した',
+      based_on_orders: [1],
+    }],
+    keywords: [{ keyword: 'finance', priority: 'high' }],
+    terms: [{ term: 'policy', definition: '国の方針' }],
   };
 
-  function buildCfg(send: jest.Mock): Cfg {
+  function buildCfg(send: jest.Mock, assets?: ArticleAssetStorage): Cfg {
     return {
       doc: { send } as unknown as DynamoDBDocumentClient,
       table_name: 'ArticlesTable',
+      assets: assets ?? createAssetStorageMock().storage,
     };
   }
 
@@ -132,9 +156,11 @@ describe('storeData (mocked client)', () => {
       return {};
     });
 
-    await storeData(buildCfg(send), baseArticle);
+    const assetMock = createAssetStorageMock();
+    await storeData(buildCfg(send, assetMock.storage), baseArticle);
 
     expect(send).toHaveBeenCalledTimes(2);
+    expect(assetMock.send).toHaveBeenCalledTimes(1);
 
     const putCall = send.mock.calls.find(([cmd]) => cmd instanceof PutCommand);
     expect(putCall).toBeDefined();
@@ -146,6 +172,12 @@ describe('storeData (mocked client)', () => {
       type: 'ARTICLE',
       GSI1PK: 'ARTICLE',
     });
+    const putItem = putInput.Item!;
+    expect(putItem.summary).toBeUndefined();
+    expect(putItem.soft_summary).toBeUndefined();
+    expect(putItem.middle_summary).toBeUndefined();
+    expect(putItem.dialogs).toBeUndefined();
+    expect(putItem.payload_url).toBe('s3://article-assets/articles/article-123/payload.json');
 
     const batchCall = send.mock.calls.find(([cmd]) => cmd instanceof BatchWriteCommand);
     expect(batchCall).toBeDefined();
@@ -212,12 +244,22 @@ function buildArticle(id: string): Article {
     nameOfMeeting: 'Committee A',
     categories: ['budget'],
     description: 'Internal description',
-    summary: {},
-    soft_summary: {},
-    middle_summary: [],
-    dialogs: [{ speaker: 'Alice', text: 'hello' }],
-    participants: [{ name: 'Alice' }],
-    keywords: [{ keyword: 'finance' }],
-    terms: [{ term: 'policy' }],
+    summary: { based_on_orders: [1, 2], summary: '審議の全体像を説明' },
+    soft_summary: { based_on_orders: [1], summary: '丁寧に要点を紹介' },
+    middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
+    dialogs: [{
+      order: 1,
+      summary: 'Aliceが予算の遅れを指摘',
+      soft_language: 'Aliceさんは落ち着いた口調で遅延を確認しました',
+      speaker: 'Alice',
+    }],
+    participants: [{
+      name: 'Alice',
+      position: '議員',
+      summary: '執行遅れを質した',
+      based_on_orders: [1],
+    }],
+    keywords: [{ keyword: 'finance', priority: 'high' }],
+    terms: [{ term: 'policy', definition: '国の方針' }],
   };
 }

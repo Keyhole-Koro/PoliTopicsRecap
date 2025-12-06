@@ -376,12 +376,22 @@ function buildArticle(issueID: string) {
     nameOfMeeting: "Test Committee",
     categories: ["test"],
     description: "Automated test article",
-    summary: [{ ja: "要約", en: "summary" }],
-    soft_summary: [{ text: "soft" }],
-    middle_summary: [{ section: "main" }],
-    dialogs: [{ speaker: "Chair", text: "Opening" }],
-    participants: [{ name: "Member A" }],
+    summary: { based_on_orders: [1], summary: "要約" },
+    soft_summary: { based_on_orders: [1], summary: "やわらか説明" },
+    middle_summary: [{ based_on_orders: [1], summary: "main" }],
+    dialogs: [{
+      order: 1,
+      summary: "Chairが開会宣言をした",
+      soft_language: "委員長が落ちついて会議開始を伝えた",
+      speaker: "Chair",
+    }],
+    participants: [{
+      name: "Member A",
+      position: "委員",
+      summary: "議事について発言",
+      based_on_orders: [1],
+    }],
     keywords: [{ keyword: "test", priority: "high" }],
-    terms: [{ term: "Term" }],
+    terms: [{ term: "Term", definition: "説明" }],
   };
 }

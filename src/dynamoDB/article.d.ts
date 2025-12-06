@@ -1,3 +1,39 @@
+export type BaseSummary = {
+  based_on_orders: number[];
+  summary: string;
+};
+
+export type Summary = BaseSummary;
+export type SoftSummary = BaseSummary;
+export type MiddleSummary = BaseSummary;
+
+export type Dialog = {
+  order: number;
+  summary: string;
+  soft_language: string;
+  speaker?: string;
+  position?: string;
+};
+
+export type Participant = {
+  name: string;
+  position?: string;
+  summary: string;
+  based_on_orders?: number[];
+};
+
+export type KeywordPriority = "high" | "medium" | "low";
+
+export type Keyword = {
+  keyword: string;
+  priority: KeywordPriority;
+};
+
+export type Term = {
+  term: string;
+  definition: string;
+};
+
 export default interface Article {
   id: string;
   title: string;
