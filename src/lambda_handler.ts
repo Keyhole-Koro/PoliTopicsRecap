@@ -96,10 +96,11 @@ type BuildArgsInput = {
   llmClient: LlmClient;
   articleTableName: string;
   articleAssetBucketName: string;
+  meeting?: TaskItem["meeting"];
 };
 
 function buildTaskArgs(input: BuildArgsInput): TaskProcessorArgs {
-  const { task, docClient, repoConfig, s3Client, llmClient, articleTableName, articleAssetBucketName } = input;
+  const { task, docClient, repoConfig, s3Client, llmClient, articleTableName, articleAssetBucketName, meeting } = input;
   return {
     task,
     docClient,
@@ -111,6 +112,6 @@ function buildTaskArgs(input: BuildArgsInput): TaskProcessorArgs {
       client: s3Client,
       bucket: articleAssetBucketName,
     },
-    meeting: task.meeting,
+    meeting: meeting ?? task.meeting,
   };
 }
