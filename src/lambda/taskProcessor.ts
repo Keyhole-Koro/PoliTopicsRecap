@@ -21,21 +21,22 @@ export type TaskProcessorArgs = {
   llmClient: LlmClient;
   articleTableName: string;
   articleAssets: ArticleAssetStorage;
+  meeting: TaskItem["meeting"];
 };
 
 export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
-  const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets } = args;
+  const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets, meeting } = args;
   const promptText = await readS3Text(s3Client, task.prompt_url);
   const llmResult = await llmClient.generate({
     messages: [{ role: "user", content: promptText }],
   });
   await writeS3Text(s3Client, task.result_url, llmResult.text);
-  await persistArticleIfPossible(docClient, articleTableName, llmResult.text, articleAssets);
+  await persistArticleIfPossible(docClient, articleTableName, llmResult.text, articleAssets, meeting);
   await markTaskSucceeded(docClient, repoConfig, task);
 }
 
 export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> {
-  const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets } = args;
+  const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets, meeting } = args;
   if (!task.chunks || task.chunks.length === 0) {
     console.warn("Chunked task missing chunk definitions", { taskId: task.pk });
     await markTaskSucceeded(docClient, repoConfig, task);
@@ -60,7 +61,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
   });
 
   await writeS3Text(s3Client, task.result_url, reduceResult.text);
-  await persistArticleIfPossible(docClient, articleTableName, reduceResult.text, articleAssets);
+  await persistArticleIfPossible(docClient, articleTableName, reduceResult.text, articleAssets, meeting);
   await markTaskSucceeded(docClient, repoConfig, task);
 }
 
@@ -87,6 +88,7 @@ async function persistArticleIfPossible(
   tableName: string,
   payloadText: string,
   assets: ArticleAssetStorage,
+  meeting: TaskItem["meeting"],
 ): Promise<void> {
   try {
     const jsonText = sanitizeJsonPayload(payloadText);
@@ -94,7 +96,14 @@ async function persistArticleIfPossible(
     if (typeof article !== "object" || article === null) {
       throw new Error("Reduced payload is not an object");
     }
-    await storeData({ doc: docClient, table_name: tableName, assets }, article);
+    const withFallbacks: Article = {
+      ...article,
+      date: article.date ?? meeting?.date,
+      month: article.month ?? (meeting?.date ? meeting.date.slice(0, 7) : article.month),
+      nameOfMeeting: article.nameOfMeeting ?? meeting?.nameOfMeeting ?? "",
+      nameOfHouse: article.nameOfHouse ?? meeting?.nameOfHouse ?? "",
+    };
+    await storeData({ doc: docClient, table_name: tableName, assets }, withFallbacks);
   } catch (error) {
     console.warn("[handler] Skipping article persistence", { error });
   }

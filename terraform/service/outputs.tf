@@ -22,3 +22,13 @@ output "prompt_bucket_arn" {
   description = "Prompt storage bucket ARN"
   value       = module.s3.bucket_arn
 }
+
+output "article_asset_bucket_name" {
+  description = "Article payload storage bucket name"
+  value       = module.article_asset_bucket.bucket_name
+}
+
+output "article_asset_bucket_arn" {
+  description = "Article payload storage bucket ARN"
+  value       = module.article_asset_bucket.bucket_arn
+}

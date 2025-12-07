@@ -4,6 +4,7 @@ locals {
   lambda_role_name          = "${var.lambda_name}-role"
   log_group_name            = "/aws/lambda/${var.lambda_name}"
   prompt_bucket_arn         = "arn:aws:s3:::${var.prompt_bucket_name}"
+  article_asset_bucket_arn  = "arn:aws:s3:::${var.article_asset_bucket_name}"
 }
 
 data "aws_iam_policy_document" "lambda_assume_role" {
@@ -55,23 +56,29 @@ data "aws_iam_policy_document" "lambda_execution" {
   }
 
   statement {
-    sid    = "AllowPromptBucketAccess"
+    sid    = "AllowBucketObjectAccess"
     effect = "Allow"
     actions = [
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject"
     ]
-    resources = ["${local.prompt_bucket_arn}/*"]
+    resources = [
+      "${local.prompt_bucket_arn}/*",
+      "${local.article_asset_bucket_arn}/*"
+    ]
   }
 
   statement {
-    sid    = "AllowPromptBucketList"
+    sid    = "AllowBucketList"
     effect = "Allow"
     actions = [
       "s3:ListBucket"
     ]
-    resources = [local.prompt_bucket_arn]
+    resources = [
+      local.prompt_bucket_arn,
+      local.article_asset_bucket_arn,
+    ]
   }
 }
 
@@ -116,6 +123,7 @@ resource "aws_lambda_function" "this" {
       LLM_TASK_STATUS_INDEX = var.task_status_index_name
       ARTICLE_TABLE_NAME    = var.article_table_name
       PROMPT_BUCKET_NAME    = var.prompt_bucket_name
+      ARTICLE_ASSET_BUCKET_NAME = var.article_asset_bucket_name
       GEMINI_API_KEY        = var.gemini_api_key
       NODE_PATH             = "/opt/nodejs/node_modules"
     }

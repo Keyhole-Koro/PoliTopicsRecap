@@ -29,6 +29,11 @@ variable "prompt_bucket_name" {
   description = "S3 bucket name used for prompts"
 }
 
+variable "article_asset_bucket_name" {
+  type        = string
+  description = "S3 bucket name used for storing article payloads/assets"
+}
+
 variable "politopics_table_name" {
   type        = string
   description = "Primary DynamoDB table name for PoliTopics records"

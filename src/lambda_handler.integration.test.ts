@@ -66,15 +66,21 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
 
   let envSnapshot: Record<string, string | undefined> = {};
 
-  beforeAll(async () => {
-    const bucket = process.env.PROMPT_BUCKET_NAME!;
+  async function ensureBucketExists(bucket: string) {
     try {
       await s3Client.send(new CreateBucketCommand({ Bucket: bucket }));
     } catch (err: any) {
-      if (err?.name !== "BucketAlreadyOwnedByYou") {
+      if (err?.name !== "BucketAlreadyOwnedByYou" && err?.name !== "BucketAlreadyExists") {
         throw err;
       }
     }
+  }
+
+  beforeAll(async () => {
+    const promptBucket = process.env.PROMPT_BUCKET_NAME!;
+    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? promptBucket;
+    await ensureBucketExists(promptBucket);
+    await ensureBucketExists(articleAssetBucket);
   });
 
   afterAll(async () => {
@@ -87,6 +93,7 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
       LLM_TASK_TABLE: process.env.LLM_TASK_TABLE,
       LLM_TASK_STATUS_INDEX: process.env.LLM_TASK_STATUS_INDEX,
       PROMPT_BUCKET_NAME: process.env.PROMPT_BUCKET_NAME,
+      ARTICLE_ASSET_BUCKET_NAME: process.env.ARTICLE_ASSET_BUCKET_NAME,
       ARTICLE_TABLE_NAME: process.env.ARTICLE_TABLE_NAME,
     };
   });
@@ -95,15 +102,18 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     process.env.LLM_TASK_TABLE = envSnapshot.LLM_TASK_TABLE ?? "PoliTopics-llm-tasks";
     process.env.LLM_TASK_STATUS_INDEX = envSnapshot.LLM_TASK_STATUS_INDEX ?? "StatusIndex";
     process.env.PROMPT_BUCKET_NAME = envSnapshot.PROMPT_BUCKET_NAME ?? "politopics-prompts";
+    process.env.ARTICLE_ASSET_BUCKET_NAME = envSnapshot.ARTICLE_ASSET_BUCKET_NAME ?? "politopics-articles";
     process.env.ARTICLE_TABLE_NAME = envSnapshot.ARTICLE_TABLE_NAME ?? "PoliTopics";
   });
 
   test("polling lambda_handler every minute eventually stores a recap in PoliTopics", async () => {
     const bucket = process.env.PROMPT_BUCKET_NAME!;
+    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
     const tableName = process.env.LLM_TASK_TABLE!;
     const articleTableName = process.env.ARTICLE_TABLE_NAME!;
 
     await cleanupBucket(bucket);
+    await cleanupBucket(articleAssetBucket);
     await cleanupTaskTable(tableName);
     await cleanupArticleTable(articleTableName);
 
@@ -138,6 +148,9 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
 
     const stored = await getTask(tableName, issueID);
     expect(stored?.status).toBe("completed");
+
+    const articleItem = await getArticle(articleTableName, issueID);
+    expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
   });
 
   async function getTask(tableName: string, issueID: string) {
@@ -256,10 +269,12 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
 
   test("chunked processing completes after sequential minute polls", async () => {
     const bucket = process.env.PROMPT_BUCKET_NAME!;
+    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
     const tableName = process.env.LLM_TASK_TABLE!;
     const articleTableName = process.env.ARTICLE_TABLE_NAME!;
 
     await cleanupBucket(bucket);
+    await cleanupBucket(articleAssetBucket);
     await cleanupTaskTable(tableName);
     await cleanupArticleTable(articleTableName);
 
@@ -346,7 +361,7 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     expect(reduceOutput.id).toBe(issueID);
 
     const articleItem = await getArticle(articleTableName, issueID);
-    console.log("articleItem", articleItem);
+    expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
   });
 
   function stripCodeFence(payload: string): string {

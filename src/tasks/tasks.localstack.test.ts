@@ -73,16 +73,21 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
 
   let envSnapshot: Record<string, string | undefined> = {};
 
-  beforeAll(async () => {
-    const bucket = process.env.PROMPT_BUCKET_NAME!;
-
+  async function ensureBucketExists(bucket: string) {
     try {
       await s3Client.send(new CreateBucketCommand({ Bucket: bucket }));
     } catch (err: any) {
-      if (err?.name !== "BucketAlreadyOwnedByYou") {
-        // ignore BucketAlreadyOwnedByYou
+      if (err?.name !== "BucketAlreadyOwnedByYou" && err?.name !== "BucketAlreadyExists") {
+        // ignore already-provisioned buckets
       }
     }
+  }
+
+  beforeAll(async () => {
+    const promptBucket = process.env.PROMPT_BUCKET_NAME!;
+    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? promptBucket;
+    await ensureBucketExists(promptBucket);
+    await ensureBucketExists(articleAssetBucket);
   });
 
   afterAll(async () => {
@@ -95,6 +100,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       LLM_TASK_TABLE: process.env.LLM_TASK_TABLE,
       LLM_TASK_STATUS_INDEX: process.env.LLM_TASK_STATUS_INDEX,
       PROMPT_BUCKET_NAME: process.env.PROMPT_BUCKET_NAME,
+      ARTICLE_ASSET_BUCKET_NAME: process.env.ARTICLE_ASSET_BUCKET_NAME,
       ARTICLE_TABLE_NAME: process.env.ARTICLE_TABLE_NAME,
     };
 
@@ -113,15 +119,20 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
     process.env.LLM_TASK_TABLE = envSnapshot.LLM_TASK_TABLE ?? 'PoliTopics-llm-tasks';
     process.env.LLM_TASK_STATUS_INDEX = envSnapshot.LLM_TASK_STATUS_INDEX ?? 'StatusIndex';
     process.env.PROMPT_BUCKET_NAME = envSnapshot.PROMPT_BUCKET_NAME ?? 'politopics-prompts';
+    process.env.ARTICLE_ASSET_BUCKET_NAME = envSnapshot.ARTICLE_ASSET_BUCKET_NAME ?? 'politopics-articles';
     process.env.ARTICLE_TABLE_NAME = envSnapshot.ARTICLE_TABLE_NAME ?? 'PoliTopics';
   });
 
   test("processes a direct task, stores reduce result, and marks it completed", async () => {
     const bucket = process.env.PROMPT_BUCKET_NAME!;
+    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
     const tableName = process.env.LLM_TASK_TABLE!;
     const articleTableName = process.env.ARTICLE_TABLE_NAME!;
 
     try {
+      await cleanupBucket(bucket);
+      await cleanupBucket(articleAssetBucket);
+
       const issueID = uniqueIssue();
       const promptKey = `prompts/reduce/${issueID}_direct.json`;
       const resultKey = `results/${issueID}_reduce.json`;
@@ -165,6 +176,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
 
       const articleItem = await getArticle(articleTableName, issueID);
       expect(articleItem?.title).toContain("Test Committee");
+      expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
     } finally {
       // await cleanupTestRun(tableName);
     }
@@ -172,10 +184,14 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
 
   test("processes a chunked task, marks chunks ready, and writes reduce output", async () => {
     const bucket = process.env.PROMPT_BUCKET_NAME!;
+    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
     const tableName = process.env.LLM_TASK_TABLE!;
     const articleTableName = process.env.ARTICLE_TABLE_NAME!;
     
     try {
+      await cleanupBucket(bucket);
+      await cleanupBucket(articleAssetBucket);
+
       const issueID = uniqueIssue();
       const chunkPromptKey = `prompts/${issueID}_0-1.json`;
       const chunkResultKey = `results/${issueID}_0-1_result.json`;
@@ -242,6 +258,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
 
       const articleItem = await getArticle(articleTableName, issueID);
       expect(articleItem?.title).toContain("Test Committee");
+      expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
     } finally {
       // await cleanupTestRun(tableName);
     }
@@ -282,6 +299,9 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
 
   async function cleanupTestRun(taskTable: string) {
     await cleanupBucket(process.env.PROMPT_BUCKET_NAME!);
+    if (process.env.ARTICLE_ASSET_BUCKET_NAME) {
+      await cleanupBucket(process.env.ARTICLE_ASSET_BUCKET_NAME);
+    }
     const articleTable = process.env.ARTICLE_TABLE_NAME!;
     // This is a simplistic cleanup. In a real scenario with many tests,
     // you might need a more robust way to track and clean up created items.

@@ -98,5 +98,6 @@ function buildTaskArgs(input: BuildArgsInput): TaskProcessorArgs {
       client: s3Client,
       bucket: articleAssetBucketName,
     },
+    meeting: task.meeting,
   };
 }

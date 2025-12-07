@@ -49,12 +49,19 @@ resource "aws_dynamodb_table" "llm_tasks" {
 
 locals {
   llm_task_table_name = var.create_task_table ? aws_dynamodb_table.llm_tasks[0].name : data.aws_dynamodb_table.llm_tasks[0].name
-  llm_task_table_arn  = var.create_task_table ? aws_dynamodb_table.llm_tasks[0].arn  : data.aws_dynamodb_table.llm_tasks[0].arn
+  llm_task_table_arn  = var.create_task_table ? aws_dynamodb_table.llm_tasks[0].arn : data.aws_dynamodb_table.llm_tasks[0].arn
 }
 
 module "s3" {
   source        = "./s3"
   bucket_name   = var.prompt_bucket_name
+  force_destroy = false
+  tags          = local.tags
+}
+
+module "article_asset_bucket" {
+  source        = "./s3"
+  bucket_name   = var.article_asset_bucket_name
   force_destroy = false
   tags          = local.tags
 }
@@ -68,22 +75,23 @@ module "dynamodb" {
 module "lambda" {
   source = "./lambda"
 
-  lambda_name                                       = var.lambda_name
-  lambda_package_path                               = var.lambda_package_path
-  lambda_layer_package_path                         = var.lambda_layer_package_path
-  lambda_memory_mb                                  = var.lambda_memory_mb
-  lambda_timeout_seconds                            = var.lambda_timeout_seconds
-  lambda_max_attempts                               = var.lambda_max_attempts
-  lambda_api_timeout_ms                             = var.lambda_api_timeout_ms
-  lambda_overall_timeout_ms                         = var.lambda_overall_timeout_ms
-  prompt_bucket_name                                = module.s3.bucket_name
-  task_table_name                                   = local.llm_task_table_name
-  task_table_arn                                    = local.llm_task_table_arn
-  task_status_index_name                            = var.task_status_index_name
-  article_table_name                                = module.dynamodb.politopics_table_name
-  article_table_arn                                 = module.dynamodb.politopics_table_arn
-  tags                                              = local.tags
-  gemini_api_key                                    = var.gemini_api_key
+  lambda_name               = var.lambda_name
+  lambda_package_path       = var.lambda_package_path
+  lambda_layer_package_path = var.lambda_layer_package_path
+  lambda_memory_mb          = var.lambda_memory_mb
+  lambda_timeout_seconds    = var.lambda_timeout_seconds
+  lambda_max_attempts       = var.lambda_max_attempts
+  lambda_api_timeout_ms     = var.lambda_api_timeout_ms
+  lambda_overall_timeout_ms = var.lambda_overall_timeout_ms
+  prompt_bucket_name        = module.s3.bucket_name
+  article_asset_bucket_name = module.article_asset_bucket.bucket_name
+  task_table_name           = local.llm_task_table_name
+  task_table_arn            = local.llm_task_table_arn
+  task_status_index_name    = var.task_status_index_name
+  article_table_name        = module.dynamodb.politopics_table_name
+  article_table_arn         = module.dynamodb.politopics_table_arn
+  tags                      = local.tags
+  gemini_api_key            = var.gemini_api_key
 }
 
 #############################################

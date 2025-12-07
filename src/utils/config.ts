@@ -16,7 +16,13 @@ export function resolveConfig(): Config {
     'StatusIndex',
   );
   const articleTableName = requireEnv('ARTICLE_TABLE_NAME');
-  const articleAssetBucketName = requireEnv('PROMPT_BUCKET_NAME');
+  const articleAssetBucketName = getEnvWithFallback(
+    ['ARTICLE_ASSET_BUCKET_NAME', 'PROMPT_BUCKET_NAME'],
+    '',
+  );
+  if (!articleAssetBucketName) {
+    throw new Error('ARTICLE_ASSET_BUCKET_NAME environment variable is required (PROMPT_BUCKET_NAME is accepted as a fallback)');
+  }
   const geminiApiKey = requireEnv('GEMINI_API_KEY');
 
   return {

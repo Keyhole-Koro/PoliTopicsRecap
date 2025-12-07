@@ -13,6 +13,7 @@ module "service" {
   lambda_package_path                      = local.resolved_lambda_package_path
   lambda_layer_package_path                = local.resolved_lambda_layer_package_path
   prompt_bucket_name                       = var.prompt_bucket_name
+  article_asset_bucket_name                = var.article_asset_bucket_name
   politopics_table_name                    = var.politopics_table_name
   task_table_name                          = var.task_table_name
   task_status_index_name                   = var.task_status_index_name

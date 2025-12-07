@@ -64,6 +64,12 @@ variable "prompt_bucket_name" {
   default     = "politopics-prompts"
 }
 
+variable "article_asset_bucket_name" {
+  description = "S3 bucket name used for storing article payloads/assets"
+  type        = string
+  default     = "politopics-articles"
+}
+
 variable "politopics_table_name" {
   description = "Primary DynamoDB table name for PoliTopics records"
   type        = string

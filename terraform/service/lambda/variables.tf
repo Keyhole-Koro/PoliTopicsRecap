@@ -43,6 +43,11 @@ variable "prompt_bucket_name" {
   description = "Prompt storage bucket name"
 }
 
+variable "article_asset_bucket_name" {
+  type        = string
+  description = "Article asset storage bucket name"
+}
+
 variable "task_table_name" {
   type        = string
   description = "DynamoDB table name for LLM tasks"

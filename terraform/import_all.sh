@@ -69,6 +69,7 @@ keys = [
   "environment",
   "lambda_name",
   "prompt_bucket_name",
+  "article_asset_bucket_name",
   "politopics_table_name",
   "enable_scheduler",
   "scheduler_use_cloudwatch_events",
@@ -86,6 +87,7 @@ aws_region = values.get("aws_region") or ""
 environment = values.get("environment") or ""
 lambda_name = values.get("lambda_name") or ""
 prompt_bucket = values.get("prompt_bucket_name") or ""
+article_asset_bucket = values.get("article_asset_bucket_name") or ""
 politopics_table = values.get("politopics_table_name") or ""
 
 enable_scheduler = bool(values.get("enable_scheduler"))
@@ -208,6 +210,7 @@ emit("AWS_REGION", aws_region)
 emit("ENVIRONMENT", environment)
 emit("LAMBDA_NAME", lambda_name)
 emit("PROMPT_BUCKET_NAME", prompt_bucket)
+emit("ARTICLE_ASSET_BUCKET_NAME", article_asset_bucket)
 emit("POLITOPICS_TABLE_NAME", politopics_table)
 emit("ENABLE_SCHEDULER", "true" if enable_scheduler else "false")
 emit("SCHEDULER_BACKEND", backend)
@@ -216,7 +219,7 @@ emit("SCHEDULER_HAS_TARGET", "true" if scheduler_has_target else "false")
 PY
 )"
 
-for required in AWS_REGION LAMBDA_NAME PROMPT_BUCKET_NAME POLITOPICS_TABLE_NAME; do
+for required in AWS_REGION LAMBDA_NAME PROMPT_BUCKET_NAME ARTICLE_ASSET_BUCKET_NAME POLITOPICS_TABLE_NAME; do
   if [[ -z "${!required:-}" ]]; then
     echo "Missing required value for $required (check $VAR_FILE)" >&2
     exit 1
@@ -265,6 +268,12 @@ run_import "$PROMPT_BUCKET_RES.aws_s3_bucket.this" "$PROMPT_BUCKET_NAME"
 run_import "$PROMPT_BUCKET_RES.aws_s3_bucket_versioning.this" "$PROMPT_BUCKET_NAME"
 run_import "$PROMPT_BUCKET_RES.aws_s3_bucket_server_side_encryption_configuration.this" "$PROMPT_BUCKET_NAME"
 run_import "$PROMPT_BUCKET_RES.aws_s3_bucket_public_access_block.this" "$PROMPT_BUCKET_NAME"
+
+ARTICLE_BUCKET_RES="module.service.module.article_asset_bucket"
+run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket.this" "$ARTICLE_ASSET_BUCKET_NAME"
+run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket_versioning.this" "$ARTICLE_ASSET_BUCKET_NAME"
+run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket_server_side_encryption_configuration.this" "$ARTICLE_ASSET_BUCKET_NAME"
+run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket_public_access_block.this" "$ARTICLE_ASSET_BUCKET_NAME"
 
 run_import "module.service.module.dynamodb.aws_dynamodb_table.politopics" "$POLITOPICS_TABLE_NAME"
 
