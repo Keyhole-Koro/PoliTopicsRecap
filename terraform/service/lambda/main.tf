@@ -92,7 +92,7 @@ resource "aws_lambda_layer_version" "dependencies" {
   description         = "Runtime dependencies for ${var.lambda_name}"
   filename            = var.lambda_layer_package_path
   source_code_hash    = local.lambda_layer_package_hash
-  compatible_runtimes = ["nodejs20.x"]
+  compatible_runtimes = ["nodejs22.x"]
 }
 
 resource "aws_lambda_function" "this" {
@@ -103,7 +103,8 @@ resource "aws_lambda_function" "this" {
 
   source_code_hash = local.lambda_package_hash
   handler          = "lambda_handler.handler"
-  runtime          = "nodejs20.x"
+  runtime          = "nodejs22.x"
+  architectures    = ["arm64"]
   timeout          = var.lambda_timeout_seconds
   memory_size      = var.lambda_memory_mb
 
@@ -111,12 +112,12 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      LLM_TASK_TABLE         = var.task_table_name
-      LLM_TASK_STATUS_INDEX  = var.task_status_index_name
-      ARTICLE_TABLE_NAME     = var.article_table_name
-      PROMPT_BUCKET_NAME     = var.prompt_bucket_name
-      GEMINI_API_KEY         = var.gemini_api_key
-      NODE_PATH              = "/opt/nodejs/node_modules"
+      LLM_TASK_TABLE        = var.task_table_name
+      LLM_TASK_STATUS_INDEX = var.task_status_index_name
+      ARTICLE_TABLE_NAME    = var.article_table_name
+      PROMPT_BUCKET_NAME    = var.prompt_bucket_name
+      GEMINI_API_KEY        = var.gemini_api_key
+      NODE_PATH             = "/opt/nodejs/node_modules"
     }
   }
 

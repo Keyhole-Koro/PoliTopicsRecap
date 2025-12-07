@@ -1,5 +1,6 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
+const os = require("node:os");
 const fs = require("fs-extra");
 
 const rootDir = path.resolve(__dirname, "..");
@@ -80,7 +81,24 @@ async function installProdDependencies(destinationDir, packageManager) {
   console.log("[build-lambda] Installing production dependencies");
 
   if (packageManager === "pnpm") {
-    runCommand("pnpm", ["install", "--prod", "--frozen-lockfile", "--ignore-scripts"], { cwd: destinationDir });
+    const tempWorkDir = await fs.mkdtemp(path.join(os.tmpdir(), "pnpm-layer-"));
+    await fs.copy(path.join(destinationDir, "package.json"), path.join(tempWorkDir, "package.json"));
+    if (await fs.pathExists(path.join(destinationDir, "pnpm-lock.yaml"))) {
+      await fs.copy(path.join(destinationDir, "pnpm-lock.yaml"), path.join(tempWorkDir, "pnpm-lock.yaml"));
+    }
+    if (await fs.pathExists(path.join(destinationDir, ".npmrc"))) {
+      await fs.copy(path.join(destinationDir, ".npmrc"), path.join(tempWorkDir, ".npmrc"));
+    }
+
+    runCommand("pnpm", ["install", "--prod", "--frozen-lockfile", "--ignore-scripts"], {
+      cwd: tempWorkDir,
+    });
+
+    await fs.copy(path.join(tempWorkDir, "node_modules"), path.join(destinationDir, "node_modules"));
+    if (await fs.pathExists(path.join(tempWorkDir, ".pnpm"))) {
+      await fs.copy(path.join(tempWorkDir, ".pnpm"), path.join(destinationDir, ".pnpm"));
+    }
+    await fs.remove(tempWorkDir);
     return;
   }
 
@@ -94,6 +112,20 @@ async function copyFunctionSources() {
   }
 
   await fs.copy(compiledSrcDir, functionStagingDir);
+}
+
+async function copyDependenciesIntoFunctionPackage() {
+  const depsSourceDir = path.join(layerNodejsDir, "node_modules");
+  if (!(await fs.pathExists(depsSourceDir))) {
+    throw new Error("Layer dependencies not found; ensure buildLayer completed before building the function package.");
+  }
+  const depsTargetDir = path.join(functionStagingDir, "node_modules");
+  await fs.copy(depsSourceDir, depsTargetDir);
+
+  const packageJsonSrc = path.join(layerNodejsDir, "package.json");
+  if (await fs.pathExists(packageJsonSrc)) {
+    await fs.copyFile(packageJsonSrc, path.join(functionStagingDir, "package.json"));
+  }
 }
 
 async function createZipArchive(sourceDir, outputPath) {
@@ -129,6 +161,9 @@ async function buildFunctionArchive() {
 
   console.log("[build-lambda] Copying compiled sources into function staging");
   await copyFunctionSources();
+
+  console.log("[build-lambda] Copying runtime dependencies into function package");
+  await copyDependenciesIntoFunctionPackage();
 
   console.log("[build-lambda] Creating Lambda function archive");
   await createZipArchive(functionStagingDir, functionZipPath);
