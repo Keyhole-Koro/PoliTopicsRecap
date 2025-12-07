@@ -18,6 +18,7 @@ import {
 } from "./lambda/taskProcessor";
 
 export async function handler(): Promise<void> {
+  console.log("[handler] start");
   const config = resolveConfig();
   const s3Client = new S3Client(getS3ClientConfig());
   const docClient = createDocumentClient();
@@ -34,6 +35,11 @@ export async function handler(): Promise<void> {
       console.log("[handler] No pending tasks to process");
       return;
     }
+    console.log("[handler] fetched task", {
+      taskId: task.pk,
+      mode: task.processingMode,
+      llm: task.llm,
+    });
 
     const llmClient = createLlmClient(task, config.geminiApiKey);
     if (!llmClient) {
@@ -41,8 +47,10 @@ export async function handler(): Promise<void> {
       await bumpRetryAttempts(docClient, repoConfig, task);
       return;
     }
+    console.log("[handler] llm client ready", { taskId: task.pk, llm: task.llm, model: task.llmModel });
 
     if (task.processingMode === "direct") {
+      console.log("[handler] handling direct task", { taskId: task.pk });
       await handleDirectTask(buildTaskArgs({
         task,
         docClient,
@@ -51,10 +59,13 @@ export async function handler(): Promise<void> {
         llmClient,
         articleTableName: config.articleTableName,
         articleAssetBucketName: config.articleAssetBucketName,
+        meeting: task.meeting,
       }));
+      console.log("[handler] direct task completed", { taskId: task.pk });
       return;
     }
 
+    console.log("[handler] handling chunked task", { taskId: task.pk });
     await handleChunkedTask(buildTaskArgs({
       task,
       docClient,
@@ -63,7 +74,9 @@ export async function handler(): Promise<void> {
       llmClient,
       articleTableName: config.articleTableName,
       articleAssetBucketName: config.articleAssetBucketName,
+      meeting: task.meeting,
     }));
+    console.log("[handler] chunked task step completed", { taskId: task.pk });
   } catch (error) {
     console.error("[handler] Failed to process task", {
       taskId: task?.pk,
