@@ -115,6 +115,7 @@ async function persistArticleIfPossible(
       month: article.month ?? (meeting?.date ? meeting.date.slice(0, 7) : article.month),
       nameOfMeeting: article.nameOfMeeting ?? meeting?.nameOfMeeting ?? "",
       nameOfHouse: article.nameOfHouse ?? meeting?.nameOfHouse ?? "",
+      session: article.session ?? meeting?.session ?? article.session,
     };
     await storeData({ doc: docClient, table_name: tableName, assets }, withFallbacks);
     console.log("[taskProcessor] article persisted", { tableName, meetingDate: withFallbacks.date });

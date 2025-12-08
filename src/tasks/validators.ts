@@ -59,7 +59,8 @@ function isMeeting(value: unknown): value is TaskItem["meeting"] {
     isString(value.nameOfMeeting) &&
     isString(value.nameOfHouse) &&
     isString(value.date) &&
-    isFiniteNumber(value.numberOfSpeeches)
+    isFiniteNumber(value.numberOfSpeeches) &&
+    isFiniteNumber(value.session)
   );
 }
 

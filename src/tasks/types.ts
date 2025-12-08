@@ -8,6 +8,7 @@ export type Meeting = {
   nameOfHouse: string;
   date: string;
   numberOfSpeeches: number;
+  session: number;
 };
 
 export type ChunkItem = {

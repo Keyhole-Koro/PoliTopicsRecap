@@ -12,6 +12,7 @@ import storeData, {
   type ArticleAssetStorage,
   toIsoUtc,
   toYYYYMM,
+  toDateOnly,
   monthFromIsoUsingJST,
   lastNDaysRange,
 } from './storeData';
@@ -33,6 +34,11 @@ describe('dynamoDB/storeData helpers', () => {
   it('normalizes ISO date inputs', () => {
     expect(toIsoUtc('2024-01-15')).toBe('2024-01-15T00:00:00.000Z');
     expect(toIsoUtc('2024-01-15T12:34:56.000Z')).toBe('2024-01-15T12:34:56.000Z');
+  });
+
+  it('normalizes date-like inputs to date-only strings', () => {
+    expect(toDateOnly('2024-01-15')).toBe('2024-01-15');
+    expect(toDateOnly('2024-01-15T12:34:56.000Z')).toBe('2024-01-15');
   });
 
   it('computes JST-aligned month from ISO timestamps', () => {
@@ -114,7 +120,7 @@ describe('storeData (mocked client)', () => {
   const baseArticle: Article = {
     id: 'article-123',
     title: 'Example Article',
-    date: '2024-05-01',
+    date: '2024-05-01T09:00:00.000Z',
     month: '2024-05',
     imageKind: '会議録',
     session: 12,
@@ -174,6 +180,9 @@ describe('storeData (mocked client)', () => {
       GSI1PK: 'ARTICLE',
     });
     const putItem = putInput.Item!;
+    expect(putItem.date).toBe('2024-05-01');
+    expect(putItem.GSI1SK).toBe('2024-05-01');
+    expect(putItem.GSI2SK).toBe('2024-05-01');
     expect(putItem.summary).toBeUndefined();
     expect(putItem.soft_summary).toBeUndefined();
     expect(putItem.middle_summary).toBeUndefined();
@@ -191,7 +200,7 @@ describe('storeData (mocked client)', () => {
         expect.objectContaining({ PK: 'CATEGORY#budget', kind: 'CATEGORY_INDEX' }),
         expect.objectContaining({ PK: 'PERSON#Alice', kind: 'PERSON_INDEX' }),
         expect.objectContaining({ PK: 'KEYWORD#finance', kind: 'KEYWORD_INDEX' }),
-        expect.objectContaining({ PK: 'KEYWORD_RECENT', kind: 'KEYWORD_OCCURRENCE' }),
+        expect.objectContaining({ PK: 'KEYWORD_RECENT', kind: 'KEYWORD_OCCURRENCE', SK: 'D#2024-05-01#KW#finance#A#article-123' }),
         expect.objectContaining({ PK: 'IMAGEKIND#会議録', kind: 'IMAGEKIND_INDEX' }),
         expect.objectContaining({ PK: 'SESSION#0012', kind: 'SESSION_INDEX' }),
         expect.objectContaining({ PK: 'HOUSE#Lower House', kind: 'HOUSE_INDEX' }),

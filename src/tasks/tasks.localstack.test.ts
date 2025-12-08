@@ -381,6 +381,7 @@ function makeMeeting(issueID: string) {
     nameOfMeeting: "Test Committee",
     nameOfHouse: "House of Representatives",
     date: "2025-01-01",
+    session: 1,
     numberOfSpeeches: 1,
   };
 }

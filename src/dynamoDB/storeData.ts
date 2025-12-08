@@ -140,7 +140,7 @@ export function monthFromIsoUsingJST(isoUtc: string): string {
   return `${y}-${m}`;
 }
 
-// Compose thin-index SK as "Y#YYYY#M#MM#D#<ISO-UTC>#A#<id>"
+// Compose thin-index SK as "Y#YYYY#M#MM#D#<YYYY-MM-DD>#A#<id>"
 const idxSK = (monthYYYYMM: string, isoDate: string, id: string) =>
   `Y#${yOf(monthYYYYMM)}#M#${mOf(monthYYYYMM)}#D#${isoDate}#A#${id}`;
 
@@ -149,6 +149,12 @@ export function toYYYYMM(monthLike: string, baseDate = new Date()): string {
   const m = monthLike.padStart(2, "0").slice(-2);
   const y = String(baseDate.getUTCFullYear());
   return `${y}-${m}`;
+}
+
+export function toDateOnly(dateLike: unknown): string | undefined {
+  const iso = toIsoUtc(dateLike);
+  if (!iso) return undefined;
+  return iso.slice(0, 10);
 }
 
 export function lastNDaysRange(n: number, now = new Date()) {
@@ -221,15 +227,15 @@ export default async function storeData(
   const { doc, table_name: TableName, assets } = config;
 
   // ---- Normalize date & month to keep ordering and prefix filters consistent
-  const iso = toIsoUtc(article.date);
+  const isoDate = toDateOnly(article.date);
 
-  if (!iso) {
-    throw new Error(`Invalid article.date, cannot normalize to ISO UTC: ${article.date}`);
+  if (!isoDate) {
+    throw new Error(`Invalid article.date, cannot normalize to date-only string: ${article.date}`);
   }
 
   // Choose which alignment you want for "month":
   //   1) UTC-based (default here)
-  const monthNorm = ensureYYYYMM(article.month ?? iso.slice(0, 7));
+  const monthNorm = ensureYYYYMM(article.month ?? isoDate.slice(0, 7));
   //   2) JST-based (uncomment the next line and comment out the UTC line above if needed)
   // const monthNorm = monthFromIsoUsingJST(iso);
 
@@ -253,7 +259,7 @@ export default async function storeData(
   // ---- Main item (heavy fields kept in S3 references)
   const mainItem = {
     ...articleRest,
-    date: iso,             // enforce ISO UTC
+    date: isoDate,         // date-only for display and ordering
     month: monthNorm,      // align month with normalized date
     PK: artPK(article.id),
     SK: artSK,
@@ -262,9 +268,9 @@ export default async function storeData(
 
     // GSIs for global listings
     GSI1PK: "ARTICLE",
-    GSI1SK: iso,
+    GSI1SK: isoDate,
     GSI2PK: gsi2pk,
-    GSI2SK: iso,
+    GSI2SK: isoDate,
   };
 
   await doc.send(new PutCommand({ TableName, Item: mainItem }));
@@ -274,7 +280,7 @@ export default async function storeData(
     type: "THIN_INDEX",
     articleId: article.id,
     title: article.title,
-    date: iso,             // ISO UTC
+    date: isoDate,         // date-only
     month: monthNorm,      // aligned to date
     imageKind: article.imageKind,
     nameOfMeeting: article.nameOfMeeting,
@@ -284,7 +290,7 @@ export default async function storeData(
     // description: article.description,
   };
 
-  const sk = idxSK(monthNorm, iso, article.id);
+  const sk = idxSK(monthNorm, isoDate, article.id);
   const idxItems: any[] = [];
 
   // Category indexes
@@ -325,12 +331,12 @@ export default async function storeData(
     // Optional: recent keyword occurrence (for "trending keywords" views)
     idxItems.push({
       PK: "KEYWORD_RECENT",
-      SK: `D#${iso}#KW#${kw}#A#${article.id}`,
+      SK: `D#${isoDate}#KW#${kw}#A#${article.id}`,
       kind: "KEYWORD_OCCURRENCE",
       keyword: kw,
       articleId: article.id,
       title: article.title,
-      date: iso,
+      date: isoDate,
       month: monthNorm,
     });
   }
