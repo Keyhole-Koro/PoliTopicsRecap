@@ -21,9 +21,9 @@ if (!process.env.AWS_ENDPOINT_URL) {
 
 process.env.PROMPT_BUCKET_NAME = process.env.PROMPT_BUCKET_NAME ?? "politopics-prompts";
 process.env.ARTICLE_ASSET_BUCKET_NAME = process.env.ARTICLE_ASSET_BUCKET_NAME ?? "politopics-articles";
-process.env.LLM_TASK_TABLE = process.env.LLM_TASK_TABLE ?? "PoliTopics-llm-tasks";
+process.env.LLM_TASK_TABLE = process.env.LLM_TASK_TABLE ?? "politopics-llm-tasks-local";
 process.env.LLM_TASK_STATUS_INDEX = process.env.LLM_TASK_STATUS_INDEX ?? "StatusIndex";
-process.env.ARTICLE_TABLE_NAME = process.env.ARTICLE_TABLE_NAME ?? "PoliTopics";
+process.env.ARTICLE_TABLE_NAME = process.env.ARTICLE_TABLE_NAME ?? "politopics-local";
 
 // Some CI terminals report tiny or negative column widths, which breaks Jest's status renderer.
 const stdout: any = process.stdout;

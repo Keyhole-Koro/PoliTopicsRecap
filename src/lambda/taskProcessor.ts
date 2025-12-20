@@ -26,7 +26,7 @@ export type TaskProcessorArgs = {
 
 export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
   const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets, meeting } = args;
-  console.log("[taskProcessor] direct task start", { taskId: task.pk });
+  console.log("[taskProcessor] single_chunk task start", { taskId: task.pk });
   const promptText = await readS3Text(s3Client, task.prompt_url);
   console.log("[taskProcessor] prompt fetched", { taskId: task.pk, promptUrl: task.prompt_url });
   const llmResult = await llmClient.generate({
@@ -37,7 +37,7 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
   console.log("[taskProcessor] result uploaded", { taskId: task.pk, resultUrl: task.result_url });
   await persistArticleIfPossible(docClient, articleTableName, llmResult.text, articleAssets, meeting);
   await markTaskSucceeded(docClient, repoConfig, task);
-  console.log("[taskProcessor] direct task done", { taskId: task.pk });
+  console.log("[taskProcessor] single_chunk task done", { taskId: task.pk });
 }
 
 export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> {

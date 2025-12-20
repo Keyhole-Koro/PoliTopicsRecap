@@ -1,8 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VAR_FILE_INPUT="${1:-$TF_DIR/tfvars/stage.tfvars}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TF_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <local|stage|prod>" >&2
+  exit 1
+fi
+
+ENVIRONMENT_INPUT="$1"
+case "$ENVIRONMENT_INPUT" in
+  local)
+    VAR_FILE_INPUT="$TF_DIR/tfvars/localstack.tfvars"
+    ;;
+  stage)
+    VAR_FILE_INPUT="$TF_DIR/tfvars/stage.tfvars"
+    ;;
+  prod)
+    VAR_FILE_INPUT="$TF_DIR/tfvars/prod.tfvars"
+    ;;
+  *)
+    echo "Unknown environment: $ENVIRONMENT_INPUT" >&2
+    echo "Usage: $0 <local|stage|prod>" >&2
+    exit 1
+    ;;
+esac
 
 if [[ ! -f "$VAR_FILE_INPUT" ]]; then
   echo "Variable file not found: $VAR_FILE_INPUT" >&2

@@ -49,8 +49,8 @@ export async function handler(): Promise<void> {
     }
     console.log("[handler] llm client ready", { taskId: task.pk, llm: task.llm, model: task.llmModel });
 
-    if (task.processingMode === "direct") {
-      console.log("[handler] handling direct task", { taskId: task.pk });
+    if (task.processingMode === "single_chunk") {
+      console.log("[handler] handling single_chunk task", { taskId: task.pk });
       await handleDirectTask(buildTaskArgs({
         task,
         docClient,
@@ -61,7 +61,7 @@ export async function handler(): Promise<void> {
         articleAssetBucketName: config.articleAssetBucketName,
         meeting: task.meeting,
       }));
-      console.log("[handler] direct task completed", { taskId: task.pk });
+      console.log("[handler] single_chunk task completed", { taskId: task.pk });
       return;
     }
 

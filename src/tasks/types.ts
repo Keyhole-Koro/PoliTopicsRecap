@@ -1,6 +1,6 @@
 export type TaskStatus = "pending" | "completed";
 export type ChunkStatus = "notReady" | "ready";
-export type ProcessingMode = "direct" | "chunked";
+export type ProcessingMode = "single_chunk" | "chunked";
 
 export type Meeting = {
   issueID: string;

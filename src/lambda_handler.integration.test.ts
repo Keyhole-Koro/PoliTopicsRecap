@@ -32,8 +32,14 @@ const endpoint =
 
 const describeIfEndpoint = endpoint ? describe : describe.skip;
 
-jest.unmock("@google/generative-ai");
 jest.setTimeout(120000);
+
+const { GoogleGenerativeAI: googleGenerativeAiCtorMock } = jest.requireMock("@google/generative-ai") as {
+  GoogleGenerativeAI: jest.Mock;
+};
+
+const generateContentMock = jest.fn();
+const getGenerativeModelMock = jest.fn();
 
 describeIfEndpoint("lambda_handler LocalStack integration", () => {
   if (!endpoint) {
@@ -96,14 +102,24 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
       ARTICLE_ASSET_BUCKET_NAME: process.env.ARTICLE_ASSET_BUCKET_NAME,
       ARTICLE_TABLE_NAME: process.env.ARTICLE_TABLE_NAME,
     };
+
+    generateContentMock.mockReset();
+    getGenerativeModelMock.mockReset();
+    getGenerativeModelMock.mockImplementation(() => ({
+      generateContent: generateContentMock,
+    }));
+    googleGenerativeAiCtorMock.mockReset();
+    googleGenerativeAiCtorMock.mockImplementation(() => ({
+      getGenerativeModel: getGenerativeModelMock,
+    }));
   });
 
   afterEach(() => {
-    process.env.LLM_TASK_TABLE = envSnapshot.LLM_TASK_TABLE ?? "PoliTopics-llm-tasks";
+    process.env.LLM_TASK_TABLE = envSnapshot.LLM_TASK_TABLE ?? "politopics-llm-tasks-local";
     process.env.LLM_TASK_STATUS_INDEX = envSnapshot.LLM_TASK_STATUS_INDEX ?? "StatusIndex";
     process.env.PROMPT_BUCKET_NAME = envSnapshot.PROMPT_BUCKET_NAME ?? "politopics-prompts";
     process.env.ARTICLE_ASSET_BUCKET_NAME = envSnapshot.ARTICLE_ASSET_BUCKET_NAME ?? "politopics-articles";
-    process.env.ARTICLE_TABLE_NAME = envSnapshot.ARTICLE_TABLE_NAME ?? "PoliTopics";
+    process.env.ARTICLE_TABLE_NAME = envSnapshot.ARTICLE_TABLE_NAME ?? "politopics-local";
   });
 
   test("polling lambda_handler every minute eventually stores a recap in PoliTopics", async () => {
@@ -134,13 +150,17 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
           retryAttempts: 0,
           createdAt: now,
           updatedAt: now,
-          processingMode: "direct",
+          processingMode: "single_chunk",
           prompt_url: `s3://${bucket}/${promptKey}`,
           result_url: `s3://${bucket}/${resultKey}`,
           meeting: makeMeeting(issueID),
         },
       }),
     );
+
+    generateContentMock.mockResolvedValueOnce({
+      response: { text: () => JSON.stringify(buildReduceArticle(issueID)) },
+    });
 
     for (let minute = 0; minute < 3; minute += 1) {
       await handler();
@@ -342,6 +362,17 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
       }),
     );
 
+    generateContentMock
+      .mockResolvedValueOnce({
+        response: { text: () => JSON.stringify(buildChunkOutput(issueID)) },
+      })
+      .mockResolvedValueOnce({
+        response: { text: () => JSON.stringify(buildChunkOutput(issueID)) },
+      })
+      .mockResolvedValueOnce({
+        response: { text: () => JSON.stringify(buildReduceArticle(issueID)) },
+      });
+
     const minutePolls = chunkDefinitions.length + 2;
     for (let minute = 0; minute < minutePolls; minute += 1) {
       await handler();
@@ -397,4 +428,60 @@ ${orders.join("\n")}
 
 [meta]
 idは必ず ${issueID} を使用すること。`;
+}
+
+function buildChunkOutput(issueID: string) {
+  return {
+    prompt_version: PROMPT_VERSION,
+    id: issueID,
+    middle_summary: [{ based_on_orders: [1], summary: "chunk summary" }],
+    soft_summary: { based_on_orders: [1], summary: "chunk soft summary" },
+    dialogs: [
+      {
+        order: 1,
+        summary: "chunk dialog",
+        soft_language: "chunk dialog soft",
+      },
+    ],
+    participants: [{ name: "Member A", position: "委員", summary: "chunk participant" }],
+    terms: [{ term: "Term", definition: "説明" }],
+    keywords: [{ keyword: "budget", priority: "high" }],
+  };
+}
+
+function buildReduceArticle(issueID: string) {
+  return {
+    prompt_version: PROMPT_VERSION,
+    id: issueID,
+    title: "Test Committee Summary",
+    date: "2025-01-01T00:00:00Z",
+    month: "2025-01",
+    imageKind: "会議録",
+    session: 1,
+    nameOfHouse: "House of Representatives",
+    nameOfMeeting: "Test Committee",
+    categories: ["test"],
+    description: "Automated test article",
+    summary: { based_on_orders: [1], summary: "summary" },
+    soft_summary: { based_on_orders: [1], summary: "soft summary" },
+    middle_summary: [{ based_on_orders: [1], summary: "middle summary" }],
+    dialogs: [
+      {
+        order: 1,
+        summary: "Chairが開会宣言をした",
+        soft_language: "委員長が落ちついて会議開始を伝えた",
+        speaker: "Chair",
+      },
+    ],
+    participants: [
+      {
+        name: "Member A",
+        position: "委員",
+        summary: "議事について発言",
+        based_on_orders: [1],
+      },
+    ],
+    keywords: [{ keyword: "test", priority: "high" }],
+    terms: [{ term: "Term", definition: "説明" }],
+  };
 }

@@ -32,6 +32,7 @@ const endpoint =
   process.env.LOCALSTACK_ENDPOINT ??
   "http://localstack:4566";
 
+  console.log("Using LocalStack endpoint:", endpoint);
 const { GoogleGenerativeAI: googleGenerativeAiCtorMock } = jest.requireMock("@google/generative-ai") as {
   GoogleGenerativeAI: jest.Mock;
 };
@@ -116,14 +117,14 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   });
 
   afterEach(() => {
-    process.env.LLM_TASK_TABLE = envSnapshot.LLM_TASK_TABLE ?? 'PoliTopics-llm-tasks';
+    process.env.LLM_TASK_TABLE = envSnapshot.LLM_TASK_TABLE ?? 'politopics-llm-tasks-local';
     process.env.LLM_TASK_STATUS_INDEX = envSnapshot.LLM_TASK_STATUS_INDEX ?? 'StatusIndex';
     process.env.PROMPT_BUCKET_NAME = envSnapshot.PROMPT_BUCKET_NAME ?? 'politopics-prompts';
     process.env.ARTICLE_ASSET_BUCKET_NAME = envSnapshot.ARTICLE_ASSET_BUCKET_NAME ?? 'politopics-articles';
-    process.env.ARTICLE_TABLE_NAME = envSnapshot.ARTICLE_TABLE_NAME ?? 'PoliTopics';
+    process.env.ARTICLE_TABLE_NAME = envSnapshot.ARTICLE_TABLE_NAME ?? 'politopics-local';
   });
 
-  test("processes a direct task, stores reduce result, and marks it completed", async () => {
+  test("processes a single_chunk task, stores reduce result, and marks it completed", async () => {
     const bucket = process.env.PROMPT_BUCKET_NAME!;
     const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
     const tableName = process.env.LLM_TASK_TABLE!;
@@ -134,13 +135,15 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       await cleanupBucket(articleAssetBucket);
 
       const issueID = uniqueIssue();
-      const promptKey = `prompts/reduce/${issueID}_direct.json`;
+      const promptKey = `prompts/reduce/${issueID}_single_chunk.json`;
       const resultKey = `results/${issueID}_reduce.json`;
 
       await putJson(promptKey, {
-        mode: "direct",
+        mode: "single_chunk",
         prompt: "Summarize the speeches.",
       });
+
+      console.log(tableName);
 
       const now = new Date().toISOString();
       await dynamoDoc.send(
@@ -154,7 +157,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
             retryAttempts: 0,
             createdAt: now,
             updatedAt: now,
-            processingMode: "direct",
+            processingMode: "single_chunk",
             prompt_url: `s3://${bucket}/${promptKey}`,
             result_url: `s3://${bucket}/${resultKey}`,
             meeting: makeMeeting(issueID),
@@ -288,6 +291,8 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   }
 
   async function getArticle(tableName: string, issueID: string) {
+  console.log(tableName)
+
     const res = await dynamoDoc.send(
       new GetCommand({
         TableName: tableName,

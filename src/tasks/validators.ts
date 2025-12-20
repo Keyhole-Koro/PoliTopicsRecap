@@ -2,7 +2,7 @@ import type { ChunkItem, ChunkStatus, ProcessingMode, TaskItem, TaskStatus } fro
 
 const TASK_STATUSES: TaskStatus[] = ["pending", "completed"];
 const CHUNK_STATUSES: ChunkStatus[] = ["notReady", "ready"];
-const PROCESSING_MODES: ProcessingMode[] = ["direct", "chunked"];
+const PROCESSING_MODES: ProcessingMode[] = ["single_chunk", "chunked"];
 
 export function asTaskItem(raw: unknown): TaskItem | null {
   const fail = (path: string, message: string): null => {

@@ -67,7 +67,7 @@ const endpoint =
   process.env.LOCALSTACK_URL ??
   process.env.LOCALSTACK_ENDPOINT;
 const persistentTableName =
-  process.env.STORE_DATA_TEST_TABLE ?? process.env.ARTICLE_TABLE_NAME ?? 'PoliTopics';
+  process.env.STORE_DATA_TEST_TABLE ?? process.env.ARTICLE_TABLE_NAME ?? 'politopics-local';
 
 describe('storeData (LocalStack integration)', () => {
   if (!endpoint) {
