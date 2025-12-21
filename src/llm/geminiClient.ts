@@ -12,6 +12,7 @@ import type {
   LlmGenerateResponse,
   LlmMessage,
 } from './llmClient';
+import { appConfig } from "../config";
 
 export interface GeminiClientOptions {
   apiKey?: string;
@@ -25,9 +26,9 @@ export class GeminiClient implements LlmClient {
   private readonly defaultGenerationConfig?: Partial<GenerationConfig>;
 
   constructor(options: GeminiClientOptions = {}) {
-    const apiKey = options.apiKey ?? process.env.GEMINI_API_KEY;
+    const apiKey = options.apiKey ?? appConfig.geminiApiKey;
     if (!apiKey) {
-      throw new Error('GEMINI_API_KEY environment variable is required');
+      throw new Error('Gemini API key is required in config');
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);

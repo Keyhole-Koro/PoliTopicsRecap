@@ -18,8 +18,7 @@ describe('GeminiClient', () => {
   });
 
   it('requires an API key and uses the default model', () => {
-    process.env.GEMINI_API_KEY = 'test-api-key';
-    new GeminiClient();
+    new GeminiClient({ apiKey: 'test-api-key' });
 
     expect(googleGenerativeAiCtorMock).toHaveBeenCalledWith('test-api-key');
     expect(getGenerativeModelMock).toHaveBeenCalledWith({
@@ -29,7 +28,6 @@ describe('GeminiClient', () => {
   });
 
   it('passes merged generation configs to generateContent and returns trimmed text', async () => {
-    process.env.GEMINI_API_KEY = 'another-key';
     generateContentMock.mockResolvedValue({
       response: {
         text: () => '  generated text  ',
@@ -37,6 +35,7 @@ describe('GeminiClient', () => {
     });
 
     const client = new GeminiClient({
+      apiKey: 'another-key',
       defaultGenerationConfig: { temperature: 0.4, maxOutputTokens: 1000 },
       systemInstruction: 'stay-formal',
       model: 'gemini-pro-custom',
@@ -67,8 +66,7 @@ describe('GeminiClient', () => {
   });
 
   it('throws when no messages are provided', async () => {
-    process.env.GEMINI_API_KEY = 'key';
-    const client = new GeminiClient();
+    const client = new GeminiClient({ apiKey: 'key' });
     await expect(client.generate({ messages: [] })).rejects.toThrow(
       'GeminiClient.generate requires at least one message',
     );

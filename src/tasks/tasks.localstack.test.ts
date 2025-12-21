@@ -23,16 +23,15 @@ import {
 } from "@aws-sdk/lib-dynamodb";
 
 import { handler } from "../lambda_handler";
+import { appConfig } from "../config";
 
-const region = process.env.AWS_REGION!;
-const endpoint =
-  process.env.LOCALSTACK_ENDPOINT_URL ??
-  process.env.AWS_ENDPOINT_URL ??
-  process.env.LOCALSTACK_URL ??
-  process.env.LOCALSTACK_ENDPOINT ??
-  "http://localstack:4566";
+const region = appConfig.aws.region;
+const endpoint = appConfig.aws.endpoint ?? "http://localstack:4566";
+const credentials = appConfig.aws.credentials ?? {
+  accessKeyId: "test",
+  secretAccessKey: "test",
+};
 
-  console.log("Using LocalStack endpoint:", endpoint);
 const { GoogleGenerativeAI: googleGenerativeAiCtorMock } = jest.requireMock("@google/generative-ai") as {
   GoogleGenerativeAI: jest.Mock;
 };
@@ -55,24 +54,16 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
     region,
     endpoint,
     forcePathStyle: true,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
+    credentials,
   });
   const dynamoClient = new DynamoDBClient({
     region,
     endpoint,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
+    credentials,
   });
   const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
     marshallOptions: { removeUndefinedValues: true },
   });
-
-  let envSnapshot: Record<string, string | undefined> = {};
 
   async function ensureBucketExists(bucket: string) {
     try {
@@ -85,8 +76,8 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   }
 
   beforeAll(async () => {
-    const promptBucket = process.env.PROMPT_BUCKET_NAME!;
-    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? promptBucket;
+    const promptBucket = appConfig.promptBucketName;
+    const articleAssetBucket = appConfig.articleAssetBucketName || promptBucket;
     await ensureBucketExists(promptBucket);
     await ensureBucketExists(articleAssetBucket);
   });
@@ -97,14 +88,6 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   });
 
   beforeEach(() => {
-    envSnapshot = {
-      LLM_TASK_TABLE: process.env.LLM_TASK_TABLE,
-      LLM_TASK_STATUS_INDEX: process.env.LLM_TASK_STATUS_INDEX,
-      PROMPT_BUCKET_NAME: process.env.PROMPT_BUCKET_NAME,
-      ARTICLE_ASSET_BUCKET_NAME: process.env.ARTICLE_ASSET_BUCKET_NAME,
-      ARTICLE_TABLE_NAME: process.env.ARTICLE_TABLE_NAME,
-    };
-
     generateContentMock.mockReset();
     getGenerativeModelMock.mockReset();
     getGenerativeModelMock.mockImplementation(() => ({
@@ -116,19 +99,11 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
     }));
   });
 
-  afterEach(() => {
-    process.env.LLM_TASK_TABLE = envSnapshot.LLM_TASK_TABLE ?? 'politopics-llm-tasks-local';
-    process.env.LLM_TASK_STATUS_INDEX = envSnapshot.LLM_TASK_STATUS_INDEX ?? 'StatusIndex';
-    process.env.PROMPT_BUCKET_NAME = envSnapshot.PROMPT_BUCKET_NAME ?? 'politopics-prompts';
-    process.env.ARTICLE_ASSET_BUCKET_NAME = envSnapshot.ARTICLE_ASSET_BUCKET_NAME ?? 'politopics-articles';
-    process.env.ARTICLE_TABLE_NAME = envSnapshot.ARTICLE_TABLE_NAME ?? 'politopics-local';
-  });
-
   test("processes a single_chunk task, stores reduce result, and marks it completed", async () => {
-    const bucket = process.env.PROMPT_BUCKET_NAME!;
-    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
-    const tableName = process.env.LLM_TASK_TABLE!;
-    const articleTableName = process.env.ARTICLE_TABLE_NAME!;
+    const bucket = appConfig.promptBucketName;
+    const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
+    const tableName = appConfig.taskTableName;
+    const articleTableName = appConfig.articleTableName;
 
     try {
       await cleanupBucket(bucket);
@@ -143,9 +118,9 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
         prompt: "Summarize the speeches.",
       });
 
-      console.log(tableName);
 
-      const now = new Date().toISOString();
+      const createdAt = new Date().toISOString();
+      const updatedAt = createdAt.slice(0, 10);
       await dynamoDoc.send(
         new PutCommand({
           TableName: tableName,
@@ -155,8 +130,8 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
             llm: "gemini",
             llmModel: "gemini-pro",
             retryAttempts: 0,
-            createdAt: now,
-            updatedAt: now,
+            createdAt,
+            updatedAt,
             processingMode: "single_chunk",
             prompt_url: `s3://${bucket}/${promptKey}`,
             result_url: `s3://${bucket}/${resultKey}`,
@@ -186,10 +161,10 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   });
 
   test("processes a chunked task, marks chunks ready, and writes reduce output", async () => {
-    const bucket = process.env.PROMPT_BUCKET_NAME!;
-    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
-    const tableName = process.env.LLM_TASK_TABLE!;
-    const articleTableName = process.env.ARTICLE_TABLE_NAME!;
+    const bucket = appConfig.promptBucketName;
+    const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
+    const tableName = appConfig.taskTableName;
+    const articleTableName = appConfig.articleTableName;
     
     try {
       await cleanupBucket(bucket);
@@ -210,7 +185,8 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
         chunks: [chunkResultKey],
       });
 
-      const now = new Date().toISOString();
+      const createdAt = new Date().toISOString();
+      const updatedAt = createdAt.slice(0, 10);
       await dynamoDoc.send(
         new PutCommand({
           TableName: tableName,
@@ -220,8 +196,8 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
             llm: "gemini",
             llmModel: "gemini-pro",
             retryAttempts: 0,
-            createdAt: now,
-            updatedAt: now,
+            createdAt,
+            updatedAt,
             processingMode: "chunked",
             prompt_url: `s3://${bucket}/${reducePromptKey}`,
             result_url: `s3://${bucket}/${reduceResultKey}`,
@@ -291,8 +267,6 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   }
 
   async function getArticle(tableName: string, issueID: string) {
-  console.log(tableName)
-
     const res = await dynamoDoc.send(
       new GetCommand({
         TableName: tableName,
@@ -303,11 +277,11 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   }
 
   async function cleanupTestRun(taskTable: string) {
-    await cleanupBucket(process.env.PROMPT_BUCKET_NAME!);
-    if (process.env.ARTICLE_ASSET_BUCKET_NAME) {
-      await cleanupBucket(process.env.ARTICLE_ASSET_BUCKET_NAME);
+    await cleanupBucket(appConfig.promptBucketName);
+    if (appConfig.articleAssetBucketName) {
+      await cleanupBucket(appConfig.articleAssetBucketName);
     }
-    const articleTable = process.env.ARTICLE_TABLE_NAME!;
+    const articleTable = appConfig.articleTableName;
     // This is a simplistic cleanup. In a real scenario with many tests,
     // you might need a more robust way to track and clean up created items.
     const taskItems = await dynamoDoc.send(new ScanCommand({ TableName: taskTable, ProjectionExpression: "pk" }));
@@ -336,7 +310,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   }
 
   async function putJson(key: string, value: unknown) {
-    const bucket = process.env.PROMPT_BUCKET_NAME!;
+    const bucket = appConfig.promptBucketName;
     await s3Client.send(
       new PutObjectCommand({
         Bucket: bucket,

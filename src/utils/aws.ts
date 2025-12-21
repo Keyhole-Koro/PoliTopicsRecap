@@ -1,5 +1,6 @@
 // utils/aws.ts
 import type { S3ClientConfig } from '@aws-sdk/client-s3';
+import { appConfig } from "../config";
 
 type AwsBaseConfig = {
   region: string;
@@ -7,57 +8,23 @@ type AwsBaseConfig = {
   credentials?: { accessKeyId: string; secretAccessKey: string };
 };
 
-function looksLocal(value?: string): boolean {
-  if (!value) return false;
-  const normalized = value.toLowerCase();
-  return (
-    normalized.includes('localhost') ||
-    normalized.includes('127.0.0.1') ||
-    normalized.includes('localstack')
-  );
-}
-
 export function getAwsRegion(): string {
-  return process.env.AWS_REGION || 'ap-northeast-3';
+  return appConfig.aws.region;
 }
 
 export function getAwsEndpoint(): string | undefined {
-  const candidates = [
-    process.env.LOCALSTACK_ENDPOINT_URL,
-    process.env.AWS_ENDPOINT_URL,
-    process.env.LOCALSTACK_URL,
-    process.env.LOCALSTACK_ENDPOINT,
-  ];
-  for (const candidate of candidates) {
-    if (candidate && candidate.trim().length) {
-      return candidate;
-    }
-  }
-  return undefined;
+  return appConfig.aws.endpoint;
 }
 
 export function getAwsBaseConfig(): AwsBaseConfig {
-  const region = getAwsRegion();
-  const endpoint = getAwsEndpoint();
-  const isLocal = looksLocal(endpoint);
-
-  const credentials = isLocal
-    ? {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
-      }
-    : undefined;
-
+  const { region, endpoint, credentials } = appConfig.aws;
   return endpoint ? { region, endpoint, credentials } : { region, credentials };
 }
 
 export function getS3ClientConfig(): S3ClientConfig {
   const base = getAwsBaseConfig();
-  const endpoint = base.endpoint;
-  const isLocal = looksLocal(endpoint);
-
   return {
     ...base,
-    forcePathStyle: isLocal ? true : undefined,
+    forcePathStyle: appConfig.aws.forcePathStyle,
   };
 }

@@ -61,7 +61,7 @@ export async function markChunkReady(
     throw new Error(`Chunk ${chunkId} not found in task ${task.pk}`);
   }
 
-  const now = new Date().toISOString();
+  const now = dateOnlyNow();
   await doc.send(
     new UpdateCommand({
       TableName: cfg.tableName,
@@ -87,7 +87,7 @@ export async function markTaskSucceeded(
   cfg: TaskRepositoryConfig,
   task: TaskItem,
 ): Promise<void> {
-  const now = new Date().toISOString();
+  const now = dateOnlyNow();
   await doc.send(
     new UpdateCommand({
       TableName: cfg.tableName,
@@ -112,7 +112,7 @@ export async function bumpRetryAttempts(
   cfg: TaskRepositoryConfig,
   task: TaskItem,
 ): Promise<void> {
-  const now = new Date().toISOString();
+  const now = dateOnlyNow();
   await doc.send(
     new UpdateCommand({
       TableName: cfg.tableName,
@@ -125,4 +125,8 @@ export async function bumpRetryAttempts(
       },
     }),
   );
+}
+
+function dateOnlyNow(): string {
+  return new Date().toISOString().slice(0, 10);
 }

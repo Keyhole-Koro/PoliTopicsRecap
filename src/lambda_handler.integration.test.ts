@@ -21,14 +21,14 @@ import {
   chunk_prompt,
   buildTestReduceInput,
 } from "./prompts.for.llmtest";
+import { appConfig } from "./config";
 
-const region = process.env.AWS_REGION!;
-const endpoint =
-  process.env.LOCALSTACK_ENDPOINT_URL ??
-  process.env.AWS_ENDPOINT_URL ??
-  process.env.LOCALSTACK_URL ??
-  process.env.LOCALSTACK_ENDPOINT ??
-  "http://localstack:4566";
+const region = appConfig.aws.region;
+const endpoint = appConfig.aws.endpoint ?? "http://localstack:4566";
+const credentials = appConfig.aws.credentials ?? {
+  accessKeyId: "test",
+  secretAccessKey: "test",
+};
 
 const describeIfEndpoint = endpoint ? describe : describe.skip;
 
@@ -53,24 +53,16 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     region,
     endpoint,
     forcePathStyle: true,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
+    credentials,
   });
   const dynamoClient = new DynamoDBClient({
     region,
     endpoint,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-    },
+    credentials,
   });
   const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
     marshallOptions: { removeUndefinedValues: true },
   });
-
-  let envSnapshot: Record<string, string | undefined> = {};
 
   async function ensureBucketExists(bucket: string) {
     try {
@@ -83,8 +75,8 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
   }
 
   beforeAll(async () => {
-    const promptBucket = process.env.PROMPT_BUCKET_NAME!;
-    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? promptBucket;
+    const promptBucket = appConfig.promptBucketName;
+    const articleAssetBucket = appConfig.articleAssetBucketName || promptBucket;
     await ensureBucketExists(promptBucket);
     await ensureBucketExists(articleAssetBucket);
   });
@@ -95,14 +87,6 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
   });
 
   beforeEach(() => {
-    envSnapshot = {
-      LLM_TASK_TABLE: process.env.LLM_TASK_TABLE,
-      LLM_TASK_STATUS_INDEX: process.env.LLM_TASK_STATUS_INDEX,
-      PROMPT_BUCKET_NAME: process.env.PROMPT_BUCKET_NAME,
-      ARTICLE_ASSET_BUCKET_NAME: process.env.ARTICLE_ASSET_BUCKET_NAME,
-      ARTICLE_TABLE_NAME: process.env.ARTICLE_TABLE_NAME,
-    };
-
     generateContentMock.mockReset();
     getGenerativeModelMock.mockReset();
     getGenerativeModelMock.mockImplementation(() => ({
@@ -114,19 +98,11 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     }));
   });
 
-  afterEach(() => {
-    process.env.LLM_TASK_TABLE = envSnapshot.LLM_TASK_TABLE ?? "politopics-llm-tasks-local";
-    process.env.LLM_TASK_STATUS_INDEX = envSnapshot.LLM_TASK_STATUS_INDEX ?? "StatusIndex";
-    process.env.PROMPT_BUCKET_NAME = envSnapshot.PROMPT_BUCKET_NAME ?? "politopics-prompts";
-    process.env.ARTICLE_ASSET_BUCKET_NAME = envSnapshot.ARTICLE_ASSET_BUCKET_NAME ?? "politopics-articles";
-    process.env.ARTICLE_TABLE_NAME = envSnapshot.ARTICLE_TABLE_NAME ?? "politopics-local";
-  });
-
   test("polling lambda_handler every minute eventually stores a recap in PoliTopics", async () => {
-    const bucket = process.env.PROMPT_BUCKET_NAME!;
-    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
-    const tableName = process.env.LLM_TASK_TABLE!;
-    const articleTableName = process.env.ARTICLE_TABLE_NAME!;
+    const bucket = appConfig.promptBucketName;
+    const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
+    const tableName = appConfig.taskTableName;
+    const articleTableName = appConfig.articleTableName;
 
     await cleanupBucket(bucket);
     await cleanupBucket(articleAssetBucket);
@@ -138,7 +114,8 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     const resultKey = `results/${issueID}_minute_reduce.json`;
     await putPrompt(promptKey, reduce_prompt(buildTestReduceInput(issueID)));
 
-    const now = new Date().toISOString();
+    const createdAt = new Date().toISOString();
+    const updatedAt = createdAt.slice(0, 10);
     await dynamoDoc.send(
       new PutCommand({
         TableName: tableName,
@@ -148,8 +125,8 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
           llm: "gemini",
           llmModel: "gemini-2.5-flash",
           retryAttempts: 0,
-          createdAt: now,
-          updatedAt: now,
+          createdAt,
+          updatedAt,
           processingMode: "single_chunk",
           prompt_url: `s3://${bucket}/${promptKey}`,
           result_url: `s3://${bucket}/${resultKey}`,
@@ -262,7 +239,7 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
   }
 
   async function putPrompt(key: string, body: string) {
-    const bucket = process.env.PROMPT_BUCKET_NAME!;
+    const bucket = appConfig.promptBucketName;
     await s3Client.send(
       new PutObjectCommand({
         Bucket: bucket,
@@ -288,10 +265,10 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
   }
 
   test("chunked processing completes after sequential minute polls", async () => {
-    const bucket = process.env.PROMPT_BUCKET_NAME!;
-    const articleAssetBucket = process.env.ARTICLE_ASSET_BUCKET_NAME ?? bucket;
-    const tableName = process.env.LLM_TASK_TABLE!;
-    const articleTableName = process.env.ARTICLE_TABLE_NAME!;
+    const bucket = appConfig.promptBucketName;
+    const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
+    const tableName = appConfig.taskTableName;
+    const articleTableName = appConfig.articleTableName;
 
     await cleanupBucket(bucket);
     await cleanupBucket(articleAssetBucket);
@@ -335,7 +312,8 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     const reduceResultKey = `results/${issueID}_chunked_reduce.json`;
     await putPrompt(reducePromptKey, reduce_prompt(buildTestReduceInput(issueID)));
 
-    const now = new Date().toISOString();
+    const createdAt = new Date().toISOString();
+    const updatedAt = createdAt.slice(0, 10);
     await dynamoDoc.send(
       new PutCommand({
         TableName: tableName,
@@ -345,8 +323,8 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
           llm: "gemini",
           llmModel: "gemini-2.5-flash",
           retryAttempts: 0,
-          createdAt: now,
-          updatedAt: now,
+          createdAt,
+          updatedAt,
           processingMode: "chunked",
           prompt_url: `s3://${bucket}/${reducePromptKey}`,
           result_url: `s3://${bucket}/${reduceResultKey}`,
