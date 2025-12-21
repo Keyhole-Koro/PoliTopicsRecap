@@ -12,6 +12,9 @@ export type Dialog = {
   summary: string;
   soft_language: string;
   speaker?: string;
+  speakerYomi?: string | null;
+  speakerGroup?: string | null;
+  speakerPosition?: string | null;
   position?: string;
 };
 

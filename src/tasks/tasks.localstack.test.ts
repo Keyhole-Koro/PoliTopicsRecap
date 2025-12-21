@@ -116,6 +116,15 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       await putJson(promptKey, {
         mode: "single_chunk",
         prompt: "Summarize the speeches.",
+        speeches: [
+          {
+            speechOrder: 1,
+            speaker: "架空太郎",
+            speakerYomi: "かくうたろう",
+            speakerGroup: "架空党・無所属",
+            speakerPosition: null,
+          },
+        ],
       });
 
 
@@ -155,6 +164,12 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       const articleItem = await getArticle(articleTableName, issueID);
       expect(articleItem?.title).toContain("Test Committee");
       expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
+
+      const payload = await readArticlePayload(articleItem?.payload_url);
+      expect(payload?.dialogs?.[0]?.speaker).toBe("架空太郎");
+      expect(payload?.dialogs?.[0]?.speakerYomi).toBe("かくうたろう");
+      expect(payload?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
+      expect(payload?.dialogs?.[0]?.speakerPosition).toBeNull();
     } finally {
       // await cleanupTestRun(tableName);
     }
@@ -179,6 +194,15 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       await putJson(chunkPromptKey, {
         mode: "chunk",
         prompt: "Chunk prompt body",
+        speeches: [
+          {
+            speechOrder: 1,
+            speaker: "架空太郎",
+            speakerYomi: "かくうたろう",
+            speakerGroup: "架空党・無所属",
+            speakerPosition: null,
+          },
+        ],
       });
       await putJson(reducePromptKey, {
         mode: "chunked",
@@ -238,6 +262,12 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       const articleItem = await getArticle(articleTableName, issueID);
       expect(articleItem?.title).toContain("Test Committee");
       expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
+
+      const payload = await readArticlePayload(articleItem?.payload_url);
+      expect(payload?.dialogs?.[0]?.speaker).toBe("架空太郎");
+      expect(payload?.dialogs?.[0]?.speakerYomi).toBe("かくうたろう");
+      expect(payload?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
+      expect(payload?.dialogs?.[0]?.speakerPosition).toBeNull();
     } finally {
       // await cleanupTestRun(tableName);
     }
@@ -336,6 +366,22 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
     return streamToString(res.Body as any);
   }
 
+  function parseS3Uri(uri: string): { bucket: string; key: string } {
+    const trimmed = uri.replace("s3://", "");
+    const [bucket, ...rest] = trimmed.split("/");
+    if (!bucket || rest.length === 0) {
+      throw new Error(`Invalid s3 uri: ${uri}`);
+    }
+    return { bucket, key: rest.join("/") };
+  }
+
+  async function readArticlePayload(payloadUrl?: string) {
+    if (!payloadUrl) return null;
+    const { bucket, key } = parseS3Uri(payloadUrl);
+    const raw = await readObjectText(bucket, key);
+    return JSON.parse(raw);
+  }
+
   function streamToString(stream: any): Promise<string> {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -384,7 +430,6 @@ function buildArticle(issueID: string) {
       order: 1,
       summary: "Chairが開会宣言をした",
       soft_language: "委員長が落ちついて会議開始を伝えた",
-      speaker: "Chair",
     }],
     participants: [{
       name: "Member A",

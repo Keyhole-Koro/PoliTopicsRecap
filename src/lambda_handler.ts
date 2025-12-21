@@ -7,6 +7,7 @@ import {
   type TaskRepositoryConfig,
 } from "./tasks/taskRepository";
 import type { TaskItem } from "./tasks/types";
+import { assertTaskReadyForProcessing } from "./tasks/taskValidator";
 import { resolveConfig } from "@utils/config";
 import { getS3ClientConfig } from "@utils/aws";
 import { createDocumentClient } from "@utils/dynamo";
@@ -40,6 +41,7 @@ export async function handler(): Promise<void> {
       mode: task.processingMode,
       llm: task.llm,
     });
+    assertTaskReadyForProcessing(task);
 
     const llmClient = createLlmClient(task, config.geminiApiKey);
     if (!llmClient) {
