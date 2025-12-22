@@ -4,28 +4,30 @@ export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
 
 タスクは2モード:
-- chunk: 会議全体の一部（発言群）を処理し、reduce統合を見越した middle_summary を中心に出力。soft_summary は必須。
-- reduce: 全 chunk 出力（特に middle_summary と participants）を統合し、会議全体の最終 summary に加え、title / category / description / date / participants を生成。
+- chunk: 会議全体の一部（発言群）を処理し、reduce統合を見越した middle_summary を中心に出力。soft_language_summary と summary は必須。
+- reduce: 全 chunk 出力（特に middle_summary と participants）を統合し、会議全体の summary / soft_language_summary に加え、title / category / description / date / participants を生成。
 
 厳守:
 - middle_summary は「1トピック=1要点」。重複回避、結論/対立/未決/宿題/担当/期限/金額を明示できる範囲で。
 - すべての要点に based_on_orders（発言 order 配列）を付与。
 - 余談や定型挨拶は除外。推測や創作は禁止。
+- summary / soft_language_summary / middle_summary は Markdown の機能を自由に使ってよい。
 - すべての出力に prompt_version を含める（現在値: ${PROMPT_VERSION}）。`;
 
 const no_code_fence_warning = "出力は必ず純粋なJSON文字列のみ（バックティックやコードブロック禁止）。";
 
 export const instruction_chunk = `【chunkモードの出力指針】
 - middle_summary（必須）: reduce統合に最適化した最小要点の列。
-- soft_summary（必須）: このchunk範囲を一般読者向けにやさしく説明。
+- soft_language_summary（必須）: このchunk範囲を一般読者向けにやさしく説明。
+- summary（必須）: このchunk範囲の詳細要約。
 - dialogs/participants/terms/keywords: このchunkに現れた範囲で必要なもののみ。
-- title / category / description / summary / date は出力しない（reduceで決定）。
+- title / category / description / date は出力しない（reduceで決定）。
 - ${no_code_fence_warning}`;
 
 export const instruction_reduce = `【reduceモードの出力指針】
 - 全chunkの middle_summary を統合し、重複排除・矛盾解消・網羅性確保。
 - participants は chunk由来の重複/別表記を正規化し、一人につき要旨を統合。役職や所属は可能なら統合、曖昧なら空欄可。
-- 出力は title / category / description / date / summary / participants。
+- 出力は title / category / description / date / summary / soft_language_summary / participants。
 - summary 構成（推奨）: 決定事項 / 主要論点と立場 / 未決・宿題 / 次に起こること（担当・期限） / 重要数値。
 - based_on_orders は統合後に参照した order のユニオンまたは代表範囲。
 - dialogs / terms / keywords は出力しない。
@@ -44,9 +46,13 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
     }
   ],
 
-  "soft_summary": {
+  "soft_language_summary": {
     "based_on_orders": [1,2,3],
     "summary": "やさしい言葉での説明（このchunk範囲）"
+  },
+  "summary": {
+    "based_on_orders": [1,2,3],
+    "summary": "このchunk範囲の詳細要約"
   },
 
   "dialogs": [
@@ -85,6 +91,10 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
   "summary": {
     "based_on_orders": [1,2,3,4,5],
     "summary": "会議全体の最終要約（決定事項/主要論点/未決・宿題/次に起こること/重要数値を簡潔に）"
+  },
+  "soft_language_summary": {
+    "based_on_orders": [1,2,3,4,5],
+    "summary": "会議全体をやさしい言葉で説明した要約"
   },
 
   "participants": [

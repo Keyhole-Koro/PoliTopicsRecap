@@ -313,7 +313,7 @@ resource "aws_scheduler_schedule" "processor" {
 }
 
 resource "aws_lambda_permission" "allow_scheduler_invoke" {
-  for_each = (!var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? aws_scheduler_schedule.processor : {}
+  for_each = (!var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? local.scheduler_expressions : {}
 
   statement_id  = "AllowExecutionFromScheduler-${each.key}"
   action        = "lambda:InvokeFunction"
@@ -332,7 +332,7 @@ resource "aws_cloudwatch_event_rule" "scheduler" {
 }
 
 resource "aws_cloudwatch_event_target" "scheduler" {
-  for_each = aws_cloudwatch_event_rule.scheduler
+  for_each = (var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? local.scheduler_expressions : {}
 
   rule      = aws_cloudwatch_event_rule.scheduler[each.key].name
   target_id = "lambda-${each.key}"
@@ -344,7 +344,7 @@ resource "aws_cloudwatch_event_target" "scheduler" {
 }
 
 resource "aws_lambda_permission" "allow_cloudwatch_schedule" {
-  for_each = aws_cloudwatch_event_rule.scheduler
+  for_each = (var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? local.scheduler_expressions : {}
 
   statement_id  = "AllowEventBridgeSchedule-${each.key}"
   action        = "lambda:InvokeFunction"

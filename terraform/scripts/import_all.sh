@@ -94,6 +94,8 @@ keys = [
   "prompt_bucket_name",
   "article_asset_bucket_name",
   "politopics_table_name",
+  "task_table_name",
+  "create_task_table",
   "enable_scheduler",
   "scheduler_use_cloudwatch_events",
   "scheduler_use_processor_lambda_as_target",
@@ -112,7 +114,9 @@ lambda_name = values.get("lambda_name") or ""
 prompt_bucket = values.get("prompt_bucket_name") or ""
 article_asset_bucket = values.get("article_asset_bucket_name") or ""
 politopics_table = values.get("politopics_table_name") or ""
+task_table = values.get("task_table_name") or ""
 
+create_task_table = bool(values.get("create_task_table"))
 enable_scheduler = bool(values.get("enable_scheduler"))
 use_cloudwatch = bool(values.get("scheduler_use_cloudwatch_events"))
 use_processor_target = bool(values.get("scheduler_use_processor_lambda_as_target"))
@@ -235,6 +239,8 @@ emit("LAMBDA_NAME", lambda_name)
 emit("PROMPT_BUCKET_NAME", prompt_bucket)
 emit("ARTICLE_ASSET_BUCKET_NAME", article_asset_bucket)
 emit("POLITOPICS_TABLE_NAME", politopics_table)
+emit("TASK_TABLE_NAME", task_table)
+emit("CREATE_TASK_TABLE", "true" if create_task_table else "false")
 emit("ENABLE_SCHEDULER", "true" if enable_scheduler else "false")
 emit("SCHEDULER_BACKEND", backend)
 emit("SCHEDULER_KEYS", ",".join(expressions.keys()))
@@ -267,7 +273,20 @@ run_import() {
   fi
 
   echo "import -> $address :: $identifier"
-  "${TF_CMD[@]}" import "-var-file=$VAR_FILE" -no-color "$address" "$identifier"
+  set +e
+  import_output="$("${TF_CMD[@]}" import "-var-file=$VAR_FILE" -no-color "$address" "$identifier" 2>&1)"
+  import_status=$?
+  set -e
+
+  if [[ $import_status -ne 0 ]]; then
+    if echo "$import_output" | grep -q "Cannot import non-existent remote object"; then
+      echo "skip   -> $address (missing remote object)"
+      return
+    fi
+    echo "$import_output" >&2
+    exit "$import_status"
+  fi
+  echo "$import_output"
 }
 
 iam_role_exists() {
@@ -299,6 +318,14 @@ run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket_server_side_encryption_configurati
 run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket_public_access_block.this" "$ARTICLE_ASSET_BUCKET_NAME"
 
 run_import "module.service.module.dynamodb.aws_dynamodb_table.politopics" "$POLITOPICS_TABLE_NAME"
+
+if [[ "${CREATE_TASK_TABLE:-false}" == "true" ]]; then
+  if [[ -z "${TASK_TABLE_NAME:-}" ]]; then
+    echo "Missing TASK_TABLE_NAME but CREATE_TASK_TABLE is true." >&2
+    exit 1
+  fi
+  run_import "module.service.aws_dynamodb_table.llm_tasks[0]" "$TASK_TABLE_NAME"
+fi
 
 LAMBDA_RES="module.service.module.lambda"
 LAMBDA_ROLE_NAME="${LAMBDA_NAME}-role"

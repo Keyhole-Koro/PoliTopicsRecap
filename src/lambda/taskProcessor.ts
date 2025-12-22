@@ -122,18 +122,24 @@ async function persistArticleIfPossible(
 ): Promise<void> {
   try {
     const jsonText = sanitizeJsonPayload(payloadText);
-    const article = JSON.parse(jsonText) as Article;
-    if (typeof article !== "object" || article === null) {
+    const rawArticle = JSON.parse(jsonText) as Article;
+    if (typeof rawArticle !== "object" || rawArticle === null) {
       throw new Error("Reduced payload is not an object");
     }
+    if (!rawArticle.summary) {
+      throw new Error("Reduced payload is missing summary");
+    }
+    if (!rawArticle.soft_language_summary) {
+      throw new Error("Reduced payload is missing soft_language_summary");
+    }
     const withFallbacks: Article = {
-      ...article,
-      dialogs: attachSpeakerMetadata(article.dialogs ?? [], speakerMap),
-      date: article.date ?? meeting?.date,
-      month: article.month ?? (meeting?.date ? meeting.date.slice(0, 7) : article.month),
-      nameOfMeeting: article.nameOfMeeting ?? meeting?.nameOfMeeting ?? "",
-      nameOfHouse: article.nameOfHouse ?? meeting?.nameOfHouse ?? "",
-      session: article.session ?? meeting?.session ?? article.session,
+      ...rawArticle,
+      dialogs: attachSpeakerMetadata(rawArticle.dialogs ?? [], speakerMap),
+      date: rawArticle.date ?? meeting?.date,
+      month: rawArticle.month ?? (meeting?.date ? meeting.date.slice(0, 7) : rawArticle.month),
+      nameOfMeeting: rawArticle.nameOfMeeting ?? meeting?.nameOfMeeting ?? "",
+      nameOfHouse: rawArticle.nameOfHouse ?? meeting?.nameOfHouse ?? "",
+      session: rawArticle.session ?? meeting?.session ?? rawArticle.session,
     };
     await storeData({ doc: docClient, table_name: tableName, assets }, withFallbacks);
     console.log("[taskProcessor] article persisted", { tableName, meetingDate: withFallbacks.date });
@@ -156,6 +162,7 @@ type SpeakerMeta = {
   speakerYomi?: string | null;
   speakerGroup?: string | null;
   speakerPosition?: string | null;
+  originalText?: string;
 };
 
 type SpeakerMap = Map<number, SpeakerMeta>;
@@ -166,6 +173,7 @@ type PromptSpeech = {
   speakerYomi?: string | null;
   speakerGroup?: string | null;
   speakerPosition?: string | null;
+  speech?: string;
 };
 
 type PromptPayload = {
@@ -191,11 +199,14 @@ function extractSpeakerMapFromPrompt(promptText: string): SpeakerMap {
     const order = typeof speech.speechOrder === "number" ? speech.speechOrder : Number(speech.speechOrder);
     if (!Number.isFinite(order)) continue;
     const speaker = typeof speech.speaker === "string" ? speech.speaker.trim() : "";
+    const hasSpeechText = "speech" in speech;
+    const rawSpeechText = hasSpeechText && typeof speech.speech === "string" ? speech.speech.trim() : "";
     const meta: SpeakerMeta = {
-      speaker: speaker || undefined,
+      speaker: speaker,
       speakerYomi: "speakerYomi" in speech ? (speech.speakerYomi ?? null) : undefined,
       speakerGroup: "speakerGroup" in speech ? (speech.speakerGroup ?? null) : undefined,
       speakerPosition: "speakerPosition" in speech ? (speech.speakerPosition ?? null) : undefined,
+      originalText: hasSpeechText && rawSpeechText.length > 0 ? rawSpeechText : undefined,
     };
     map.set(order, meta);
   }
@@ -232,6 +243,7 @@ function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: SpeakerM
     return {
       ...dialog,
       speaker: speaker || dialog.speaker,
+      original_text: meta.originalText ?? dialog.original_text ?? dialog.summary,
       speakerYomi: meta.speakerYomi !== undefined ? meta.speakerYomi : dialog.speakerYomi,
       speakerGroup: meta.speakerGroup !== undefined ? meta.speakerGroup : dialog.speakerGroup,
       speakerPosition: meta.speakerPosition !== undefined ? meta.speakerPosition : dialog.speakerPosition,

@@ -2,37 +2,37 @@
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-  echo "Usage: $0 <stage|prod|local>"
+  echo "Usage: $0 <local|stage|prod>"
   exit 1
 fi
 
-ENV="$1"
+ENVIRONMENT="$1"
 REGION="ap-northeast-3"
 LOCALSTACK_ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localstack:4566}"
 AWS_ARGS=()
 
-case "$ENV" in
+case "$ENVIRONMENT" in
+  local)
+    BUCKET="politopics-recap-local-state"
+    AWS_ARGS+=(--endpoint-url "$LOCALSTACK_ENDPOINT")
+    ;;
   stage)
     BUCKET="politopics-recap-stage-state"
     ;;
   prod)
     BUCKET="politopics-recap-prod-state"
     ;;
-  local)
-    BUCKET="tf-state"
-    AWS_ARGS+=(--endpoint-url "$LOCALSTACK_ENDPOINT")
-    ;;
   *)
-    echo "Unknown environment: $ENV"
-    echo "Usage: $0 <stage|prod|local>"
+    echo "Unknown environment: $ENVIRONMENT"
+    echo "Usage: $0 <local|stage|prod>"
     exit 1
     ;;
 esac
 
-echo "Environment : $ENV"
+echo "Environment : $ENVIRONMENT"
 echo "Bucket      : $BUCKET"
 echo "Region      : $REGION"
-if [ "$ENV" = "local" ]; then
+if [ "$ENVIRONMENT" = "local" ]; then
   echo "Endpoint    : $LOCALSTACK_ENDPOINT"
 fi
 echo
@@ -63,6 +63,22 @@ else
   aws "${AWS_ARGS[@]}" s3api put-bucket-versioning \
     --bucket "$BUCKET" \
     --versioning-configuration Status=Enabled
+fi
+
+if [ "$ENVIRONMENT" = "local" ]; then
+  echo "==> Ensuring application buckets exist (local only)..."
+  APP_BUCKETS=("politopics-prompts" "politopics-articles-local")
+  for APP_BUCKET in "${APP_BUCKETS[@]}"; do
+    if aws "${AWS_ARGS[@]}" s3api head-bucket --bucket "$APP_BUCKET" 2>/dev/null; then
+      echo "App bucket already exists: $APP_BUCKET"
+    else
+      echo "Creating App bucket: $APP_BUCKET"
+      aws "${AWS_ARGS[@]}" s3api create-bucket \
+        --bucket "$APP_BUCKET" \
+        --region "$REGION" \
+        --create-bucket-configuration LocationConstraint="$REGION"
+    fi
+  done
 fi
 
 echo

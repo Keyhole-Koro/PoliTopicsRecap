@@ -424,12 +424,13 @@ function buildArticle(issueID: string) {
     categories: ["test"],
     description: "Automated test article",
     summary: { based_on_orders: [1], summary: "要約" },
-    soft_summary: { based_on_orders: [1], summary: "やわらか説明" },
+    soft_language_summary: { based_on_orders: [1], summary: "やわらか説明" },
     middle_summary: [{ based_on_orders: [1], summary: "main" }],
     dialogs: [{
       order: 1,
       summary: "Chairが開会宣言をした",
       soft_language: "委員長が落ちついて会議開始を伝えた",
+      original_text: "委員長が開会を宣言して、これから始めるよって感じだったよ。",
     }],
     participants: [{
       name: "Member A",

@@ -413,12 +413,14 @@ function buildChunkOutput(issueID: string) {
     prompt_version: PROMPT_VERSION,
     id: issueID,
     middle_summary: [{ based_on_orders: [1], summary: "chunk summary" }],
-    soft_summary: { based_on_orders: [1], summary: "chunk soft summary" },
+    soft_language_summary: { based_on_orders: [1], summary: "chunk soft summary" },
+    summary: { based_on_orders: [1], summary: "chunk summary detail" },
     dialogs: [
       {
         order: 1,
         summary: "chunk dialog",
         soft_language: "chunk dialog soft",
+        original_text: "chunkの原文っぽい感じだよ。",
       },
     ],
     participants: [{ name: "Member A", position: "委員", summary: "chunk participant" }],
@@ -441,13 +443,14 @@ function buildReduceArticle(issueID: string) {
     categories: ["test"],
     description: "Automated test article",
     summary: { based_on_orders: [1], summary: "summary" },
-    soft_summary: { based_on_orders: [1], summary: "soft summary" },
+    soft_language_summary: { based_on_orders: [1], summary: "soft summary" },
     middle_summary: [{ based_on_orders: [1], summary: "middle summary" }],
     dialogs: [
       {
         order: 1,
         summary: "Chairが開会宣言をした",
         soft_language: "委員長が落ちついて会議開始を伝えた",
+        original_text: "委員長が開会を宣言して、これから始めるよって感じだったよ。",
         speaker: "Chair",
       },
     ],

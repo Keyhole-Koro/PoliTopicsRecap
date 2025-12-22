@@ -1,5 +1,5 @@
-bucket                  = "tf-state"
-key                     = "local/state.tfstate"
+bucket                  = "politopics-recap-local-state"
+key                     = "politopics-recap/local.tfstate"
 region                  = "ap-northeast-3"
 endpoints                = {
     s3 = "http://localstack:4566"

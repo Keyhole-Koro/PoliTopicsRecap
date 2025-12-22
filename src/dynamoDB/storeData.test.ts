@@ -129,12 +129,13 @@ describe('storeData (mocked client)', () => {
     categories: ['budget'],
     description: 'Internal description',
     summary: { based_on_orders: [1, 2], summary: '審議の全体像を説明' },
-    soft_summary: { based_on_orders: [1], summary: '丁寧に要点を紹介' },
+    soft_language_summary: { based_on_orders: [1], summary: '丁寧に要点を紹介' },
     middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
     dialogs: [{
       order: 1,
       summary: 'Aliceが予算の遅れを指摘',
       soft_language: 'Aliceさんは落ち着いた口調で遅延を確認しました',
+      original_text: 'Aliceが予算の遅れを指摘して、対応が必要だよねって話だったよ。',
       speaker: 'Alice',
     }],
     participants: [{
@@ -184,7 +185,7 @@ describe('storeData (mocked client)', () => {
     expect(putItem.GSI1SK).toBe('2024-05-01');
     expect(putItem.GSI2SK).toBe('2024-05-01');
     expect(putItem.summary).toBeUndefined();
-    expect(putItem.soft_summary).toBeUndefined();
+    expect(putItem.soft_language_summary).toBeUndefined();
     expect(putItem.middle_summary).toBeUndefined();
     expect(putItem.dialogs).toBeUndefined();
     expect(putItem.payload_url).toBe('s3://article-assets/articles/article-123/payload.json');
@@ -255,12 +256,13 @@ function buildArticle(id: string): Article {
     categories: ['budget'],
     description: 'Internal description',
     summary: { based_on_orders: [1, 2], summary: '審議の全体像を説明' },
-    soft_summary: { based_on_orders: [1], summary: '丁寧に要点を紹介' },
+    soft_language_summary: { based_on_orders: [1], summary: '丁寧に要点を紹介' },
     middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
     dialogs: [{
       order: 1,
       summary: 'Aliceが予算の遅れを指摘',
       soft_language: 'Aliceさんは落ち着いた口調で遅延を確認しました',
+      original_text: 'Aliceが予算の遅れを指摘して、対応が必要だよねって話だったよ。',
       speaker: 'Alice',
     }],
     participants: [{

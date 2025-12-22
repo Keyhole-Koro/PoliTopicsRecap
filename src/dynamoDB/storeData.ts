@@ -190,7 +190,7 @@ async function batchPutAll(
   }
 }
 
-type ArticlePayload = Pick<Article, "summary" | "soft_summary" | "middle_summary" | "dialogs">;
+type ArticlePayload = Pick<Article, "summary" | "soft_language_summary" | "middle_summary" | "dialogs">;
 
 async function persistArticlePayload(
   assets: ArticleAssetStorage,
@@ -243,7 +243,7 @@ export default async function storeData(
 
   const {
     summary,
-    soft_summary,
+    soft_language_summary,
     middle_summary,
     dialogs,
     ...articleRest
@@ -251,7 +251,7 @@ export default async function storeData(
 
   const payloadUrl = await persistArticlePayload(assets, article.id, {
     summary,
-    soft_summary,
+    soft_language_summary,
     middle_summary,
     dialogs,
   });

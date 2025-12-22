@@ -4,13 +4,14 @@ export type BaseSummary = {
 };
 
 export type Summary = BaseSummary;
-export type SoftSummary = BaseSummary;
+export type SoftLanguageSummary = BaseSummary;
 export type MiddleSummary = BaseSummary;
 
 export type Dialog = {
   order: number;
   summary: string;
   soft_language: string;
+  original_text: string;
   speaker?: string;
   speakerYomi?: string | null;
   speakerGroup?: string | null;
@@ -50,7 +51,7 @@ export default interface Article {
   description: string;
 
   summary: Summary;
-  soft_summary: SoftSummary;
+  soft_language_summary: SoftLanguageSummary;
   middle_summary: MiddleSummary[];
   dialogs: Dialog[];
   participants: Participant[];
