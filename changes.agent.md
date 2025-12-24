@@ -19,3 +19,17 @@ Details:
   - `terraform/service/main.tf`
   - `terraform/scripts/create-state-bucket.sh`
   - `terraform/scripts/import_all.sh`
+
+Agent: Gemini
+Date/Time: 2025-12-23 00:00 UTC
+Keywords: payload, asset, naming convention
+Topic: Rename 'payload' to 'asset' in relevant contexts
+Details:
+- Renamed `readArticlePayload` to `readArticleAsset` and updated its usages in `src/tasks/tasks.localstack.test.ts`.
+- Changed `payload.json` to `asset.json` in two assertions in `src/lambda_handler.integration.test.ts`.
+- In `src/dynamoDB/storeData.ts`:
+    - Renamed type `ArticlePayload` to `ArticleAsset`.
+    - Renamed function `persistArticlePayload` to `persistArticleAsset` and updated its parameter.
+    - Changed `payload.json` to `asset.json` and `data: payload` to `data: asset` within the function.
+    - Updated the call to `persistArticlePayload` to `persistArticleAsset`.
+- In `src/dynamoDB/storeData.test.ts`, changed `payload.json` to `asset.json` in one assertion.

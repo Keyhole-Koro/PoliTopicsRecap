@@ -188,7 +188,7 @@ describe('storeData (mocked client)', () => {
     expect(putItem.soft_language_summary).toBeUndefined();
     expect(putItem.middle_summary).toBeUndefined();
     expect(putItem.dialogs).toBeUndefined();
-    expect(putItem.payload_url).toBe('s3://article-assets/articles/article-123/payload.json');
+    expect(putItem.asset_url).toBe('s3://article-assets/articles/article-123/asset.json');
 
     const batchCall = send.mock.calls.find(([cmd]) => cmd instanceof BatchWriteCommand);
     expect(batchCall).toBeDefined();

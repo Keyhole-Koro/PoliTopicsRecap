@@ -190,24 +190,24 @@ async function batchPutAll(
   }
 }
 
-type ArticlePayload = Pick<Article, "summary" | "soft_language_summary" | "middle_summary" | "dialogs">;
+type ArticleAsset = Pick<Article, "summary" | "soft_language_summary" | "middle_summary" | "dialogs">;
 
-async function persistArticlePayload(
-  assets: ArticleAssetStorage,
+async function persistArticleAsset(
+  s3Client: S3Client,
   articleId: string,
-  payload: ArticlePayload
+  asset: ArticleAsset
 ): Promise<string> {
   if (!assets?.client || !assets.bucket) {
     throw new Error("Article asset storage configuration is required");
   }
   const trimmedPrefix = trimSlashes(assets.prefix ?? DEFAULT_ASSET_PREFIX);
   const basePrefix = trimmedPrefix ? `${trimmedPrefix}/${articleId}` : articleId;
-  const key = `${basePrefix}/payload.json`;
-  await uploadJson({
-    client: assets.client,
-    bucket: assets.bucket,
+  const key = `${basePrefix}/asset.json`;
+  return await putJsonS3({
+    s3: s3Client,
+    bucket: assetBucket,
     key,
-    data: payload,
+    data: asset,
   });
   const buildUrl = assets.makeUrl ?? ((bucket: string, objectKey: string) => `s3://${bucket}/${objectKey}`);
   return buildUrl(assets.bucket, key);
@@ -249,7 +249,7 @@ export default async function storeData(
     ...articleRest
   } = article;
 
-  const payloadUrl = await persistArticlePayload(assets, article.id, {
+  const assetUrl = await persistArticleAsset(assets, article.id, {
     summary,
     soft_language_summary,
     middle_summary,
@@ -264,7 +264,7 @@ export default async function storeData(
     PK: artPK(article.id),
     SK: artSK,
     type: "ARTICLE",
-    payload_url: payloadUrl,
+    asset_url: assetUrl,
 
     // GSIs for global listings
     GSI1PK: "ARTICLE",

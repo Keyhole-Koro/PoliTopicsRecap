@@ -147,7 +147,7 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     expect(stored?.status).toBe("completed");
 
     const articleItem = await getArticle(articleTableName, issueID);
-    expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
+    expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
   });
 
   async function getTask(tableName: string, issueID: string) {
@@ -370,7 +370,7 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     expect(reduceOutput.id).toBe(issueID);
 
     const articleItem = await getArticle(articleTableName, issueID);
-    expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
+    expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
   });
 
   function stripCodeFence(payload: string): string {

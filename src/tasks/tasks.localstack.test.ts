@@ -163,13 +163,13 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
 
       const articleItem = await getArticle(articleTableName, issueID);
       expect(articleItem?.title).toContain("Test Committee");
-      expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
+      expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
 
-      const payload = await readArticlePayload(articleItem?.payload_url);
-      expect(payload?.dialogs?.[0]?.speaker).toBe("架空太郎");
-      expect(payload?.dialogs?.[0]?.speakerYomi).toBe("かくうたろう");
-      expect(payload?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
-      expect(payload?.dialogs?.[0]?.speakerPosition).toBeNull();
+      const asset = await readArticleAsset(articleItem?.asset_url);
+      expect(asset?.dialogs?.[0]?.speaker).toBe("架空太郎");
+      expect(asset?.dialogs?.[0]?.speakerYomi).toBe("かくうたろう");
+      expect(asset?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
+      expect(asset?.dialogs?.[0]?.speakerPosition).toBeNull();
     } finally {
       // await cleanupTestRun(tableName);
     }
@@ -261,13 +261,13 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
 
       const articleItem = await getArticle(articleTableName, issueID);
       expect(articleItem?.title).toContain("Test Committee");
-      expect(articleItem?.payload_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/payload.json`);
+      expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
 
-      const payload = await readArticlePayload(articleItem?.payload_url);
-      expect(payload?.dialogs?.[0]?.speaker).toBe("架空太郎");
-      expect(payload?.dialogs?.[0]?.speakerYomi).toBe("かくうたろう");
-      expect(payload?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
-      expect(payload?.dialogs?.[0]?.speakerPosition).toBeNull();
+      const asset = await readArticleAsset(articleItem?.asset_url);
+      expect(asset?.dialogs?.[0]?.speaker).toBe("架空太郎");
+      expect(asset?.dialogs?.[0]?.speakerYomi).toBe("かくうたろう");
+      expect(asset?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
+      expect(asset?.dialogs?.[0]?.speakerPosition).toBeNull();
     } finally {
       // await cleanupTestRun(tableName);
     }
@@ -375,9 +375,9 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
     return { bucket, key: rest.join("/") };
   }
 
-  async function readArticlePayload(payloadUrl?: string) {
-    if (!payloadUrl) return null;
-    const { bucket, key } = parseS3Uri(payloadUrl);
+  async function readArticleAsset(assetUrl?: string) {
+    if (!assetUrl) return null;
+    const { bucket, key } = parseS3Uri(assetUrl);
     const raw = await readObjectText(bucket, key);
     return JSON.parse(raw);
   }
