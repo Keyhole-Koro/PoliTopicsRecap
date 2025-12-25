@@ -33,3 +33,15 @@ Details:
     - Changed `payload.json` to `asset.json` and `data: payload` to `data: asset` within the function.
     - Updated the call to `persistArticlePayload` to `persistArticleAsset`.
 - In `src/dynamoDB/storeData.test.ts`, changed `payload.json` to `asset.json` in one assertion.
+
+Agent: Gemini
+Date/Time: 2025-12-24 12:00 JST
+Keywords: build-fix, typescript, s3, uploadJson
+Topic: Fix compilation errors in storeData.ts
+Details:
+- Fixed `persistArticleAsset` function signature to accept `ArticleAssetStorage` correctly.
+- Replaced undefined `putJsonS3` with `uploadJson` from `@utils/s3`.
+- Corrected property access on `assets` object.
+- Renamed `assets` parameter to `storageConfig` in `persistArticleAsset` for clarity.
+- Files changed:
+  - `src/dynamoDB/storeData.ts`

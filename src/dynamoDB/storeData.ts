@@ -193,24 +193,26 @@ async function batchPutAll(
 type ArticleAsset = Pick<Article, "summary" | "soft_language_summary" | "middle_summary" | "dialogs">;
 
 async function persistArticleAsset(
-  s3Client: S3Client,
+  storageConfig: ArticleAssetStorage,
   articleId: string,
   asset: ArticleAsset
 ): Promise<string> {
-  if (!assets?.client || !assets.bucket) {
+  if (!storageConfig?.client || !storageConfig.bucket) {
     throw new Error("Article asset storage configuration is required");
   }
-  const trimmedPrefix = trimSlashes(assets.prefix ?? DEFAULT_ASSET_PREFIX);
+  const trimmedPrefix = trimSlashes(storageConfig.prefix ?? DEFAULT_ASSET_PREFIX);
   const basePrefix = trimmedPrefix ? `${trimmedPrefix}/${articleId}` : articleId;
   const key = `${basePrefix}/asset.json`;
-  return await putJsonS3({
-    s3: s3Client,
-    bucket: assetBucket,
+  
+  await uploadJson({
+    client: storageConfig.client,
+    bucket: storageConfig.bucket,
     key,
     data: asset,
   });
-  const buildUrl = assets.makeUrl ?? ((bucket: string, objectKey: string) => `s3://${bucket}/${objectKey}`);
-  return buildUrl(assets.bucket, key);
+
+  const buildUrl = storageConfig.makeUrl ?? ((bucket: string, objectKey: string) => `s3://${bucket}/${objectKey}`);
+  return buildUrl(storageConfig.bucket, key);
 }
 
 function trimSlashes(input: string): string {
