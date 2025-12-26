@@ -45,3 +45,14 @@ Details:
 - Renamed `assets` parameter to `storageConfig` in `persistArticleAsset` for clarity.
 - Files changed:
   - `src/dynamoDB/storeData.ts`
+
+Agent: Codex
+Date/Time: 2025-12-26 10:03 JST
+Keywords: terraform, import, dynamodb
+Topic: Remove count-based gating and align imports
+Details:
+- Removed `count = ... ? 0 : 1` gating for the task table and always manage it as a resource.
+- Updated import logic to use non-indexed addresses and skip missing configuration/resources.
+- Files changed:
+  - `PoliTopicsRecap/terraform/service/main.tf`
+  - `PoliTopicsRecap/terraform/scripts/import_all.sh`

@@ -283,6 +283,14 @@ run_import() {
       echo "skip   -> $address (missing remote object)"
       return
     fi
+    if echo "$import_output" | grep -q "Configuration for import target does not exist"; then
+      echo "skip   -> $address (missing configuration)"
+      return
+    fi
+    if echo "$import_output" | grep -q "couldn't find resource"; then
+      echo "skip   -> $address (missing resource)"
+      return
+    fi
     echo "$import_output" >&2
     exit "$import_status"
   fi
@@ -319,13 +327,11 @@ run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket_public_access_block.this" "$ARTICL
 
 run_import "module.service.module.dynamodb.aws_dynamodb_table.politopics" "$POLITOPICS_TABLE_NAME"
 
-if [[ "${CREATE_TASK_TABLE:-false}" == "true" ]]; then
-  if [[ -z "${TASK_TABLE_NAME:-}" ]]; then
-    echo "Missing TASK_TABLE_NAME but CREATE_TASK_TABLE is true." >&2
-    exit 1
-  fi
-  run_import "module.service.aws_dynamodb_table.llm_tasks[0]" "$TASK_TABLE_NAME"
+if [[ -z "${TASK_TABLE_NAME:-}" ]]; then
+  echo "Missing TASK_TABLE_NAME (check tfvars)." >&2
+  exit 1
 fi
+run_import "module.service.aws_dynamodb_table.llm_tasks" "$TASK_TABLE_NAME"
 
 LAMBDA_RES="module.service.module.lambda"
 LAMBDA_ROLE_NAME="${LAMBDA_NAME}-role"

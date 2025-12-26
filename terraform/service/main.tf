@@ -12,13 +12,7 @@ locals {
   )
 }
 
-data "aws_dynamodb_table" "llm_tasks" {
-  count = var.create_task_table ? 0 : 1
-  name  = var.task_table_name
-}
-
 resource "aws_dynamodb_table" "llm_tasks" {
-  count        = var.create_task_table ? 1 : 0
   name         = var.task_table_name
   billing_mode = "PAY_PER_REQUEST"
 
@@ -48,8 +42,8 @@ resource "aws_dynamodb_table" "llm_tasks" {
 }
 
 locals {
-  llm_task_table_name = var.create_task_table ? aws_dynamodb_table.llm_tasks[0].name : data.aws_dynamodb_table.llm_tasks[0].name
-  llm_task_table_arn  = var.create_task_table ? aws_dynamodb_table.llm_tasks[0].arn : data.aws_dynamodb_table.llm_tasks[0].arn
+  llm_task_table_name = aws_dynamodb_table.llm_tasks.name
+  llm_task_table_arn  = aws_dynamodb_table.llm_tasks.arn
 }
 
 module "s3" {
