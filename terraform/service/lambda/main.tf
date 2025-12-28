@@ -125,6 +125,7 @@ resource "aws_lambda_function" "this" {
       PROMPT_BUCKET_NAME    = var.prompt_bucket_name
       ARTICLE_ASSET_BUCKET_NAME = var.article_asset_bucket_name
       GEMINI_API_KEY        = var.gemini_api_key
+      APP_ENVIRONMENT       = var.app_environment
       NODE_PATH             = "/opt/nodejs/node_modules"
     }
   }

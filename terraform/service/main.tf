@@ -77,6 +77,7 @@ module "lambda" {
   lambda_max_attempts       = var.lambda_max_attempts
   lambda_api_timeout_ms     = var.lambda_api_timeout_ms
   lambda_overall_timeout_ms = var.lambda_overall_timeout_ms
+  app_environment           = var.app_environment
   prompt_bucket_name        = module.s3.bucket_name
   article_asset_bucket_name = module.article_asset_bucket.bucket_name
   task_table_name           = local.llm_task_table_name

@@ -38,6 +38,11 @@ variable "lambda_overall_timeout_ms" {
   description = "Overall timeout per message (ms)"
 }
 
+variable "app_environment" {
+  type        = string
+  description = "Application environment identifier (local, stage, prod)"
+}
+
 variable "prompt_bucket_name" {
   type        = string
   description = "Prompt storage bucket name"

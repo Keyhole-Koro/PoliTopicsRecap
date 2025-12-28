@@ -40,6 +40,12 @@ variable "environment" {
   default     = "dev"
 }
 
+variable "app_environment" {
+  description = "Application environment identifier (local, stage, prod)"
+  type        = string
+  default     = "local"
+}
+
 variable "tags" {
   description = "Additional resource tags to apply"
   type        = map(string)

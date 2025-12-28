@@ -3,6 +3,11 @@ variable "environment" {
   description = "Deployment environment identifier"
 }
 
+variable "app_environment" {
+  type        = string
+  description = "Application environment identifier (local, stage, prod)"
+}
+
 variable "tags" {
   type        = map(string)
   description = "Additional tags applied to service resources"

@@ -29,7 +29,7 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     promptBucketName: "politopics-prompts",
     articleTableName: "politopics-local",
     articleAssetBucketName: "politopics-articles-local",
-    geminiApiKey: "local-dev-key",
+    geminiApiKey: requireEnv("GEMINI_API_KEY"),
   },
   stage: {
     aws: {
@@ -40,7 +40,7 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     promptBucketName: "politopics-prompts",
     articleTableName: "politopics-stage",
     articleAssetBucketName: "politopics-articles-stage",
-    geminiApiKey: "REPLACE_ME",
+    geminiApiKey: requireEnv("GEMINI_API_KEY"),
   },
   prod: {
     aws: {
@@ -51,11 +51,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     promptBucketName: "politopics-prompts",
     articleTableName: "politopics-prod",
     articleAssetBucketName: "politopics-articles-prod",
-    geminiApiKey: "REPLACE_ME",
+    geminiApiKey: requireEnv("GEMINI_API_KEY"),
   },
 }
 
-const ACTIVE_ENVIRONMENT: AppEnvironment = "local"
+const ACTIVE_ENVIRONMENT: AppEnvironment = resolveEnvironment()
 
 export let appConfig: AppConfig = {
   environment: ACTIVE_ENVIRONMENT,
@@ -67,4 +67,26 @@ export function setAppEnvironment(environment: AppEnvironment) {
     environment,
     ...CONFIG_BY_ENV[environment],
   }
+}
+
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim() === "") {
+    throw new Error(`Environment variable ${name} is required`);
+  }
+  return value;
+}
+
+function resolveEnvironment(): AppEnvironment {
+  if (!process.env.APP_ENVIRONMENT) {
+    throw new Error("Environment variable APP_ENVIRONMENT is required");
+  
+  }
+  const value = process.env.APP_ENVIRONMENT;
+  if (value === "local" || value === "stage" || value === "prod") {
+    return value;
+  }
+  throw new Error(
+    `Environment variable APP_ENVIRONMENT must be one of local, stage, prod (received: ${value})`,
+  );
 }
