@@ -56,3 +56,19 @@ Details:
 - Files changed:
   - `PoliTopicsRecap/terraform/service/main.tf`
   - `PoliTopicsRecap/terraform/scripts/import_all.sh`
+
+Agent: Codex
+Date/Time: 2025-12-28 07:26 UTC
+Keywords: config, env, terraform, lambda, gemini
+Topic: Require Gemini key and propagate APP_ENVIRONMENT
+Details:
+- Switched `src/config.ts` to read `GEMINI_API_KEY` from environment and to resolve `APP_ENVIRONMENT` (local/stage/prod) at startup.
+- Passed `APP_ENVIRONMENT` into the Recap Lambda environment via Terraform using the existing `environment` variable (removed the extra `app_environment` input).
+- Files changed:
+  - `PoliTopicsRecap/src/config.ts`
+  - `PoliTopicsRecap/terraform/main.tf`
+  - `PoliTopicsRecap/terraform/variables.tf`
+  - `PoliTopicsRecap/terraform/service/main.tf`
+  - `PoliTopicsRecap/terraform/service/variables.tf`
+  - `PoliTopicsRecap/terraform/service/lambda/main.tf`
+  - `PoliTopicsRecap/terraform/service/lambda/variables.tf`

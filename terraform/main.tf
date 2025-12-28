@@ -33,8 +33,6 @@ module "service" {
   scheduler_minute_step                    = var.scheduler_minute_step
   enable_scheduler                         = var.enable_scheduler
   gemini_api_key                           = var.gemini_api_key
-  app_environment                          = var.app_environment
-
 }
 
 output "politopics_recap_lambda_arn" {

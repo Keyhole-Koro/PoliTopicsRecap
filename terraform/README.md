@@ -8,11 +8,8 @@ This module supports `stage`, `prod`, and `localstack` environments. The command
 export ENV=local
 export TF_VAR_gemini_api_key="fake"
 
-default_backend=backends/local.hcl
-vars=tfvars/localstack.tfvars
-
-terraform init -backend-config="$default_backend"
-terraform plan -var-file="$vars" -out=tfplan
+terraform init -backend-config="backends/local.hcl"
+terraform plan -var-file="tfvars/localstack.tfvars" -out=tfplan
 terraform apply tfplan
 ```
 
@@ -22,11 +19,12 @@ terraform apply tfplan
 export ENV=stage
 export TF_VAR_gemini_api_key="<your-key>"
 
-default_backend=backends/stage.hcl
-vars=tfvars/stage.tfvars
+# when terraform init reference to localstack
+# unset AWS_ENDPOINT_URL
+# aws configure
 
-terraform init -backend-config="$default_backend"
-terraform plan -var-file="$vars" -out=tfplan
+terraform init -backend-config="backends/stage.hcl"
+terraform plan -var-file="tfvars/stage.tfvars" -out=tfplan
 terraform apply tfplan
 ```
 
@@ -36,11 +34,12 @@ terraform apply tfplan
 export ENV=prod
 export TF_VAR_gemini_api_key="<your-key>"
 
-default_backend=backends/prod.hcl
-vars=tfvars/prod.tfvars
+# when terraform init reference to localstack
+# unset AWS_ENDPOINT_URL
+# aws configure
 
-terraform init -backend-config="$default_backend"
-terraform plan -var-file="$vars" -out=tfplan
+terraform init -backend-config="backends/prod.hcl"
+terraform plan -var-file="tfvars/prod.tfvars" -out=tfplan
 terraform apply tfplan
 ```
 
