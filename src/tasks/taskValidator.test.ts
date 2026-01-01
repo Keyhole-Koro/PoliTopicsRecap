@@ -13,6 +13,9 @@ function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
     processingMode: "single_chunk",
     prompt_url: "s3://bucket/prompts/reduce/ISSUE-test.json",
     result_url: "s3://bucket/results/ISSUE-test_reduce.json",
+    attachedAssets: {
+      speakerMetadataUrl: "s3://bucket/attachedAssets/ISSUE-test.json",
+    },
     meeting: {
       issueID: "ISSUE-test",
       nameOfMeeting: "Test Meeting",

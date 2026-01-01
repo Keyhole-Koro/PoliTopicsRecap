@@ -68,10 +68,11 @@ const endpoint =
   process.env.LOCALSTACK_ENDPOINT;
 const persistentTableName =
   process.env.STORE_DATA_TEST_TABLE ?? process.env.ARTICLE_TABLE_NAME ?? 'politopics-local';
+const shouldRunLocalstack = process.env.RUN_LOCALSTACK_TESTS === 'true' && Boolean(endpoint);
 
 describe('storeData (LocalStack integration)', () => {
-  if (!endpoint) {
-    it('skips when no LocalStack endpoint is set', () => {
+  if (!shouldRunLocalstack) {
+    it('skips when LocalStack tests are disabled', () => {
       expect(true).toBe(true);
     });
     return;

@@ -25,8 +25,13 @@ import {
 import { handler } from "../lambda_handler";
 import { appConfig } from "../config";
 
-const region = appConfig.aws.region;
-const endpoint = appConfig.aws.endpoint ?? "http://localstack:4566";
+const region = process.env.AWS_REGION ?? appConfig.aws.region;
+const endpoint =
+  process.env.LOCALSTACK_ENDPOINT_URL ??
+  process.env.AWS_ENDPOINT_URL ??
+  process.env.LOCALSTACK_URL ??
+  process.env.LOCALSTACK_ENDPOINT ??
+  "";
 const credentials = appConfig.aws.credentials ?? {
   accessKeyId: "test",
   secretAccessKey: "test",
@@ -40,7 +45,8 @@ const generateContentMock = jest.fn();
 const getGenerativeModelMock = jest.fn();
 
 const STATUS_INDEX_NAME = "StatusIndex";
-const describeIfEndpoint = endpoint ? describe : describe.skip;
+const shouldRunLocalstack = process.env.RUN_LOCALSTACK_TESTS === "true" && Boolean(endpoint);
+const describeIfEndpoint = shouldRunLocalstack ? describe : describe.skip;
 
 describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
   if (!endpoint) {
@@ -112,6 +118,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       const issueID = uniqueIssue();
       const promptKey = `prompts/reduce/${issueID}_single_chunk.json`;
       const resultKey = `results/${issueID}_reduce.json`;
+      const attachedKey = `attachedAssets/${issueID}.json`;
 
       await putJson(promptKey, {
         mode: "single_chunk",
@@ -123,6 +130,18 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
             speakerYomi: "かくうたろう",
             speakerGroup: "架空党・無所属",
             speakerPosition: null,
+          },
+        ],
+      });
+      await putJson(attachedKey, {
+        speeches: [
+          {
+            order: 1,
+            speaker: "架空太郎",
+            speakerYomi: "かくうたろう",
+            speakerGroup: "架空党・無所属",
+            speakerPosition: null,
+            originalText: "Original text 1",
           },
         ],
       });
@@ -145,6 +164,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
             prompt_url: `s3://${bucket}/${promptKey}`,
             result_url: `s3://${bucket}/${resultKey}`,
             meeting: makeMeeting(issueID),
+            attachedAssets: { speakerMetadataUrl: `s3://${bucket}/${attachedKey}` },
           },
         }),
       );
@@ -190,6 +210,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       const chunkResultKey = `results/${issueID}_0-1_result.json`;
       const reducePromptKey = `prompts/reduce/${issueID}.json`;
       const reduceResultKey = `results/${issueID}_reduce.json`;
+      const attachedKey = `attachedAssets/${issueID}.json`;
 
       await putJson(chunkPromptKey, {
         mode: "chunk",
@@ -207,6 +228,18 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       await putJson(reducePromptKey, {
         mode: "chunked",
         chunks: [chunkResultKey],
+      });
+      await putJson(attachedKey, {
+        speeches: [
+          {
+            order: 1,
+            speaker: "架空太郎",
+            speakerYomi: "かくうたろう",
+            speakerGroup: "架空党・無所属",
+            speakerPosition: null,
+            originalText: "Original text 1",
+          },
+        ],
       });
 
       const createdAt = new Date().toISOString();
@@ -226,6 +259,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
             prompt_url: `s3://${bucket}/${reducePromptKey}`,
             result_url: `s3://${bucket}/${reduceResultKey}`,
             meeting: makeMeeting(issueID),
+            attachedAssets: { speakerMetadataUrl: `s3://${bucket}/${attachedKey}` },
             chunks: [
               {
                 id: "CHUNK#0",

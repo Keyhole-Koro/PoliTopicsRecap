@@ -12,6 +12,13 @@ import type { ArticleAssetStorage } from "../dynamoDB/storeData";
 import storeData from "../dynamoDB/storeData";
 import type Article from "../dynamoDB/article";
 import { fetchObjectText, parseS3Uri, uploadObject } from "@utils/s3";
+import {
+  attachSpeakerMetadata,
+  assertAttachedAssets,
+  assertNonEmptySpeakerMap,
+  loadSpeakerMapFromAttachedAssets,
+  type SpeakerMap,
+} from "./speakerMetadata";
 
 export type TaskProcessorArgs = {
   task: TaskItem;
@@ -27,8 +34,10 @@ export type TaskProcessorArgs = {
 export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
   const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets, meeting } = args;
   console.log("[taskProcessor] single_chunk task start", { taskId: task.pk });
+  assertAttachedAssets(task);
   const promptText = await readS3Text(s3Client, task.prompt_url);
-  const speakerMap = extractSpeakerMapFromPrompt(promptText);
+  const attachedMap = await loadSpeakerMapFromAttachedAssets(s3Client, task.attachedAssets.speakerMetadataUrl);
+  assertNonEmptySpeakerMap(attachedMap, "attached assets");
   console.log("[taskProcessor] prompt fetched", { taskId: task.pk, promptUrl: task.prompt_url });
   const llmResult = await llmClient.generate({
     messages: [{ role: "user", content: promptText }],
@@ -42,7 +51,7 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
     llmResult.text,
     articleAssets,
     meeting,
-    speakerMap,
+    attachedMap,
   );
   await markTaskSucceeded(docClient, repoConfig, task);
   console.log("[taskProcessor] single_chunk task done", { taskId: task.pk });
@@ -51,6 +60,7 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
 export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> {
   const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets, meeting } = args;
   console.log("[taskProcessor] chunked task start", { taskId: task.pk });
+  assertAttachedAssets(task);
   if (!task.chunks || task.chunks.length === 0) {
     console.warn("Chunked task missing chunk definitions", { taskId: task.pk });
     await markTaskSucceeded(docClient, repoConfig, task);
@@ -75,13 +85,16 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
   console.log("[taskProcessor] all chunks ready, running reduce", { taskId: task.pk });
   const reducePrompt = await readS3Text(s3Client, task.prompt_url);
   console.log("[taskProcessor] reduce prompt fetched", { taskId: task.pk, promptUrl: task.prompt_url });
+  const attachedMap = await loadSpeakerMapFromAttachedAssets(s3Client, task.attachedAssets.speakerMetadataUrl);
+  assertNonEmptySpeakerMap(attachedMap, "attached assets");
+  const speakerMap = attachedMap;
+
   const reduceResult = await llmClient.generate({
     messages: [{ role: "user", content: reducePrompt }],
   });
 
   await writeS3Text(s3Client, task.result_url, reduceResult.text);
   console.log("[taskProcessor] reduce result uploaded", { taskId: task.pk, resultUrl: task.result_url });
-  const speakerMap = await loadSpeakerMapFromChunks(s3Client, task.chunks);
   await persistArticleIfPossible(
     docClient,
     articleTableName,
@@ -157,99 +170,8 @@ function sanitizeJsonPayload(payloadText: string): string {
   return trimmed;
 }
 
-type SpeakerMeta = {
-  speaker?: string;
-  speakerYomi?: string | null;
-  speakerGroup?: string | null;
-  speakerPosition?: string | null;
-  originalText?: string;
-};
-
-type SpeakerMap = Map<number, SpeakerMeta>;
-
-type PromptSpeech = {
-  speechOrder?: number;
-  speaker?: string;
-  speakerYomi?: string | null;
-  speakerGroup?: string | null;
-  speakerPosition?: string | null;
-  speech?: string;
-};
-
-type PromptPayload = {
-  speeches?: PromptSpeech[];
-};
-
-function extractSpeakerMapFromPrompt(promptText: string): SpeakerMap {
-  const map: SpeakerMap = new Map();
-  let payload: PromptPayload | null = null;
-  try {
-    payload = JSON.parse(promptText) as PromptPayload;
-  } catch (error) {
-    console.warn("[taskProcessor] Failed to parse prompt JSON for speakers", { error });
-    return map;
-  }
-
-  if (!payload?.speeches || !Array.isArray(payload.speeches)) {
-    return map;
-  }
-
-  for (const speech of payload.speeches) {
-    if (!speech || typeof speech !== "object") continue;
-    const order = typeof speech.speechOrder === "number" ? speech.speechOrder : Number(speech.speechOrder);
-    if (!Number.isFinite(order)) continue;
-    const speaker = typeof speech.speaker === "string" ? speech.speaker.trim() : "";
-    const hasSpeechText = "speech" in speech;
-    const rawSpeechText = hasSpeechText && typeof speech.speech === "string" ? speech.speech.trim() : "";
-    const meta: SpeakerMeta = {
-      speaker: speaker,
-      speakerYomi: "speakerYomi" in speech ? (speech.speakerYomi ?? null) : undefined,
-      speakerGroup: "speakerGroup" in speech ? (speech.speakerGroup ?? null) : undefined,
-      speakerPosition: "speakerPosition" in speech ? (speech.speakerPosition ?? null) : undefined,
-      originalText: hasSpeechText && rawSpeechText.length > 0 ? rawSpeechText : undefined,
-    };
-    map.set(order, meta);
-  }
-  return map;
-}
-
-async function loadSpeakerMapFromChunks(s3Client: S3Client, chunks: TaskItem["chunks"]): Promise<SpeakerMap> {
-  const merged: SpeakerMap = new Map();
-  if (!chunks?.length) return merged;
-
-  for (const chunk of chunks) {
-    if (!chunk?.prompt_url) continue;
-    const chunkPrompt = await readS3Text(s3Client, chunk.prompt_url);
-    const chunkMap = extractSpeakerMapFromPrompt(chunkPrompt);
-    for (const [order, meta] of chunkMap.entries()) {
-      if (!merged.has(order)) {
-        merged.set(order, meta);
-      }
-    }
-  }
-  return merged;
-}
-
-function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: SpeakerMap): Article["dialogs"] {
-  if (!Array.isArray(dialogs) || speakerMap.size === 0) {
-    return dialogs ?? [];
-  }
-
-  return dialogs.map((dialog) => {
-    const order = dialog?.order;
-    const meta = typeof order === "number" ? speakerMap.get(order) : undefined;
-    if (!meta) return dialog;
-    const speaker = dialog.speaker?.trim() || meta.speaker;
-    return {
-      ...dialog,
-      speaker: speaker || dialog.speaker,
-      original_text: meta.originalText ?? dialog.original_text ?? dialog.summary,
-      speakerYomi: meta.speakerYomi !== undefined ? meta.speakerYomi : dialog.speakerYomi,
-      speakerGroup: meta.speakerGroup !== undefined ? meta.speakerGroup : dialog.speakerGroup,
-      speakerPosition: meta.speakerPosition !== undefined ? meta.speakerPosition : dialog.speakerPosition,
-      position:
-        dialog.position ??
-        (typeof meta.speakerPosition === "string" ? meta.speakerPosition : dialog.position),
-    };
-  });
-}
+export {
+  attachSpeakerMetadata,
+  extractSpeakerMapFromAttachedAssetsPayload,
+  extractSpeakerMapFromPrompt,
+} from "./speakerMetadata";

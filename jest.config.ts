@@ -1,8 +1,13 @@
 import type { Config } from 'jest';
+import fs from 'fs';
+import path from 'path';
+
+const localstackSetup = path.join(__dirname, 'tests/setup/localstack.ts');
+const testEnvSetup = path.join(__dirname, 'tests/setup/testEnv.ts');
 
 const config: Config = {
   preset: 'ts-jest',
-  setupFiles: ['<rootDir>/tests/setup/localstack.ts'],
+  setupFiles: [testEnvSetup, ...(fs.existsSync(localstackSetup) ? [localstackSetup] : [])],
   testEnvironment: 'node',
   roots: ['<rootDir>/tests', '<rootDir>/src'],
   testMatch: ['**/?(*.)+(spec|test).[tj]s?(x)'],

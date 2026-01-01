@@ -23,14 +23,20 @@ import {
 } from "./prompts.for.llmtest";
 import { appConfig } from "./config";
 
-const region = appConfig.aws.region;
-const endpoint = appConfig.aws.endpoint ?? "http://localstack:4566";
+const region = process.env.AWS_REGION ?? appConfig.aws.region;
+const endpoint =
+  process.env.LOCALSTACK_ENDPOINT_URL ??
+  process.env.AWS_ENDPOINT_URL ??
+  process.env.LOCALSTACK_URL ??
+  process.env.LOCALSTACK_ENDPOINT ??
+  "";
 const credentials = appConfig.aws.credentials ?? {
   accessKeyId: "test",
   secretAccessKey: "test",
 };
 
-const describeIfEndpoint = endpoint ? describe : describe.skip;
+const shouldRunLocalstack = process.env.RUN_LOCALSTACK_TESTS === "true" && Boolean(endpoint);
+const describeIfEndpoint = shouldRunLocalstack ? describe : describe.skip;
 
 jest.setTimeout(120000);
 
@@ -113,6 +119,9 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     const promptKey = `prompts/reduce/${issueID}_minute.txt`;
     const resultKey = `results/${issueID}_minute_reduce.json`;
     await putPrompt(promptKey, reduce_prompt(buildTestReduceInput(issueID)));
+    const attachedAssetsUrl = await putAttachedAssets(issueID, [
+      { order: 1, speaker: "Chair", originalText: "Original speech text" },
+    ]);
 
     const createdAt = new Date().toISOString();
     const updatedAt = createdAt.slice(0, 10);
@@ -131,6 +140,7 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
           prompt_url: `s3://${bucket}/${promptKey}`,
           result_url: `s3://${bucket}/${resultKey}`,
           meeting: makeMeeting(issueID),
+          attachedAssets: { speakerMetadataUrl: attachedAssetsUrl },
         },
       }),
     );
@@ -250,6 +260,20 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     );
   }
 
+  async function putAttachedAssets(issueID: string, speeches: any[]) {
+    const bucket = appConfig.promptBucketName;
+    const key = `attachedAssets/${issueID}.json`;
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: JSON.stringify({ speeches }, null, 2),
+        ContentType: "application/json; charset=utf-8",
+      }),
+    );
+    return `s3://${bucket}/${key}`;
+  }
+
   async function readObjectText(bucket: string, key: string): Promise<string> {
     const res = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
     return streamToString(res.Body as any);
@@ -311,6 +335,15 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
     const reducePromptKey = `prompts/reduce/${issueID}_chunked.txt`;
     const reduceResultKey = `results/${issueID}_chunked_reduce.json`;
     await putPrompt(reducePromptKey, reduce_prompt(buildTestReduceInput(issueID)));
+    const attachedAssetsUrl = await putAttachedAssets(issueID, [
+      { order: 1, speaker: "Chair 1", originalText: "Chunk 1 text" },
+      { order: 2, speaker: "Member 2", originalText: "Chunk 2 text" },
+      { order: 3, speaker: "Member 3", originalText: "Chunk 3 text" },
+      { order: 4, speaker: "Member 4", originalText: "Chunk 4 text" },
+      { order: 5, speaker: "Member 5", originalText: "Chunk 5 text" },
+      { order: 6, speaker: "Member 6", originalText: "Chunk 6 text" },
+      { order: 7, speaker: "Member 7", originalText: "Chunk 7 text" },
+    ]);
 
     const createdAt = new Date().toISOString();
     const updatedAt = createdAt.slice(0, 10);
@@ -329,6 +362,7 @@ describeIfEndpoint("lambda_handler LocalStack integration", () => {
           prompt_url: `s3://${bucket}/${reducePromptKey}`,
           result_url: `s3://${bucket}/${reduceResultKey}`,
           meeting: makeMeeting(issueID),
+          attachedAssets: { speakerMetadataUrl: attachedAssetsUrl },
           chunks: chunkDefinitions.map((chunk) => ({
             id: chunk.id,
             prompt_key: chunk.promptKey,

@@ -19,6 +19,10 @@ export type ChunkItem = {
   status: ChunkStatus;
 };
 
+export type AttachedAssets = {
+  speakerMetadataUrl: string;
+};
+
 export type TaskItem = {
   pk: string;
   status: TaskStatus;
@@ -32,4 +36,5 @@ export type TaskItem = {
   meeting: Meeting;
   result_url: string;
   chunks?: ChunkItem[];
+  attachedAssets: AttachedAssets;
 };

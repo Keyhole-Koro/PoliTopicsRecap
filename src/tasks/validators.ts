@@ -5,42 +5,46 @@ const CHUNK_STATUSES: ChunkStatus[] = ["notReady", "ready"];
 const PROCESSING_MODES: ProcessingMode[] = ["single_chunk", "chunked"];
 
 export function asTaskItem(raw: unknown): TaskItem | null {
-  const fail = (path: string, message: string): null => {
-    console.warn(`[TaskItem] validation failed at ${path}: ${message}`);
-    return null;
-  };
+  const issues: { path: string; message: string }[] = [];
+  const pushIssue = (path: string, message: string) => issues.push({ path, message });
 
-  if (!isRecord(raw)) return fail("root", "expected object");
-  if (!isString(raw.pk)) return fail("pk", "expected string");
-  if (!isTaskStatus(raw.status)) return fail("status", `unexpected value: ${String(raw.status)}`);
-  if (!isProcessingMode(raw.processingMode)) {
-    return fail("processingMode", `unexpected value: ${String(raw.processingMode)}`);
-  }
-  if (!isString(raw.llm)) return fail("llm", "expected string");
-  if (!isString(raw.llmModel)) return fail("llmModel", "expected string");
-  if (!isFiniteNumber(raw.retryAttempts)) return fail("retryAttempts", "expected finite number");
-  if (!isIsoDateString(raw.createdAt)) return fail("createdAt", "expected ISO date string");
-  if (!isIsoDateString(raw.updatedAt)) return fail("updatedAt", "expected ISO date string");
-  if (!isString(raw.prompt_url) || !raw.prompt_url.startsWith("s3://")) {
-    return fail("prompt_url", "expected s3:// URL string");
-  }
-  if (!isString(raw.result_url) || !raw.result_url.startsWith("s3://")) {
-    return fail("result_url", "expected s3:// URL string");
-  }
-
-  const meetingError = validateMeeting(raw.meeting);
-  if (meetingError) return fail(`meeting.${meetingError.path}`, meetingError.message);
-
-  if (raw.processingMode === "chunked") {
-    if (!Array.isArray(raw.chunks) || raw.chunks.length === 0) {
-      return fail("chunks", "expected non-empty array for chunked mode");
+  if (!isRecord(raw)) {
+    pushIssue("root", "expected object");
+  } else {
+    if (!isString(raw.pk)) pushIssue("pk", "expected string");
+    if (!isTaskStatus(raw.status)) pushIssue("status", `unexpected value: ${String(raw.status)}`);
+    if (!isProcessingMode(raw.processingMode)) {
+      pushIssue("processingMode", `unexpected value: ${String(raw.processingMode)}`);
     }
-    for (let i = 0; i < raw.chunks.length; i += 1) {
-      const chunkError = validateChunkItem(raw.chunks[i], i);
-      if (chunkError) {
-        return fail(chunkError.path, chunkError.message);
+    if (!isString(raw.llm)) pushIssue("llm", "expected string");
+    if (!isString(raw.llmModel)) pushIssue("llmModel", "expected string");
+    if (!isFiniteNumber(raw.retryAttempts)) pushIssue("retryAttempts", "expected finite number");
+    if (!isIsoDateString(raw.createdAt)) pushIssue("createdAt", "expected ISO date string");
+    if (!isIsoDateString(raw.updatedAt)) pushIssue("updatedAt", "expected ISO date string");
+    if (!isString(raw.prompt_url) || !raw.prompt_url.startsWith("s3://")) {
+      pushIssue("prompt_url", "expected s3:// URL string");
+    }
+    if (!isString(raw.result_url) || !raw.result_url.startsWith("s3://")) {
+      pushIssue("result_url", "expected s3:// URL string");
+    }
+
+    validateAttachedAssets(raw.attachedAssets, pushIssue);
+    validateMeeting(raw.meeting, pushIssue);
+
+    if (raw.processingMode === "chunked") {
+      if (!Array.isArray(raw.chunks) || raw.chunks.length === 0) {
+        pushIssue("chunks", "expected non-empty array for chunked mode");
+      } else {
+        for (let i = 0; i < raw.chunks.length; i += 1) {
+          validateChunkItem(raw.chunks[i], i, pushIssue);
+        }
       }
     }
+  }
+
+  if (issues.length > 0) {
+    console.warn("[TaskItem] validation failed", { issues });
+    return null;
   }
 
   return raw as TaskItem;
@@ -70,34 +74,48 @@ function isIsoDateString(value: unknown): value is string {
   return typeof value === "string" && value.length >= 10;
 }
 
-function validateMeeting(value: unknown): { path: string; message: string } | null {
-  if (!isRecord(value)) return { path: "", message: "expected object" };
-  if (!isString(value.issueID)) return { path: "issueID", message: "expected string" };
-  if (!isString(value.nameOfMeeting)) return { path: "nameOfMeeting", message: "expected string" };
-  if (!isString(value.nameOfHouse)) return { path: "nameOfHouse", message: "expected string" };
-  if (!isString(value.date)) return { path: "date", message: "expected string" };
-  if (!isFiniteNumber(value.numberOfSpeeches)) {
-    return { path: "numberOfSpeeches", message: "expected finite number" };
+function validateMeeting(value: unknown, push: (path: string, message: string) => void): void {
+  if (!isRecord(value)) {
+    push("meeting", "expected object");
+    return;
   }
-  if (!isFiniteNumber(value.session)) return { path: "session", message: "expected finite number" };
-  return null;
+  if (!isString(value.issueID)) push("meeting.issueID", "expected string");
+  if (!isString(value.nameOfMeeting)) push("meeting.nameOfMeeting", "expected string");
+  if (!isString(value.nameOfHouse)) push("meeting.nameOfHouse", "expected string");
+  if (!isString(value.date)) push("meeting.date", "expected string");
+  if (!isFiniteNumber(value.numberOfSpeeches)) {
+    push("meeting.numberOfSpeeches", "expected finite number");
+  }
+  if (!isFiniteNumber(value.session)) push("meeting.session", "expected finite number");
 }
 
-function validateChunkItem(value: unknown, index: number): { path: string; message: string } | null {
+function validateAttachedAssets(value: unknown, push: (path: string, message: string) => void): void {
+  if (!isRecord(value)) {
+    push("attachedAssets", "expected object");
+    return;
+  }
+  if (!isString(value.speakerMetadataUrl) || !value.speakerMetadataUrl.startsWith("s3://")) {
+    push("attachedAssets.speakerMetadataUrl", "expected s3:// URL string");
+  }
+}
+
+function validateChunkItem(value: unknown, index: number, push: (path: string, message: string) => void): void {
   const basePath = `chunks[${index}]`;
-  if (!isRecord(value)) return { path: basePath, message: "expected object" };
-  if (!isString(value.id)) return { path: `${basePath}.id`, message: "expected string" };
-  if (!isString(value.prompt_key)) return { path: `${basePath}.prompt_key`, message: "expected string" };
+  if (!isRecord(value)) {
+    push(basePath, "expected object");
+    return;
+  }
+  if (!isString(value.id)) push(`${basePath}.id`, "expected string");
+  if (!isString(value.prompt_key)) push(`${basePath}.prompt_key`, "expected string");
   if (!isString(value.prompt_url) || !value.prompt_url.startsWith("s3://")) {
-    return { path: `${basePath}.prompt_url`, message: "expected s3:// URL string" };
+    push(`${basePath}.prompt_url`, "expected s3:// URL string");
   }
   if (!isString(value.result_url) || !value.result_url.startsWith("s3://")) {
-    return { path: `${basePath}.result_url`, message: "expected s3:// URL string" };
+    push(`${basePath}.result_url`, "expected s3:// URL string");
   }
   if (!isChunkStatus(value.status)) {
-    return { path: `${basePath}.status`, message: `unexpected value: ${String(value.status)}` };
+    push(`${basePath}.status`, `unexpected value: ${String(value.status)}`);
   }
-  return null;
 }
 
 function isChunkStatus(value: unknown): value is ChunkStatus {

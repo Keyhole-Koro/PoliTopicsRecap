@@ -3,7 +3,7 @@ import type { TaskItem } from "./types";
 export function assertTaskReadyForProcessing(task: TaskItem): void {
   const issues: string[] = [];
   const requireString = (value: unknown, label: string) => {
-    if (typeof value !== "string" || value.trim().length === 0) {
+    if (typeof value !== "string" || value.length === 0) {
       issues.push(`${label} is required`);
     }
   };
@@ -17,12 +17,21 @@ export function assertTaskReadyForProcessing(task: TaskItem): void {
       issues.push(`${label} must be an s3:// URL`);
     }
   };
+  const requireAttachedAssets = (value: unknown) => {
+    if (typeof value !== "object" || value === null) {
+      issues.push("attachedAssets is required");
+      return;
+    }
+    const url = (value as any).speakerMetadataUrl;
+    requireS3Url(url, "attachedAssets.speakerMetadataUrl");
+  };
 
   requireString(task.pk, "pk");
   requireString(task.llm, "llm");
   requireString(task.llmModel, "llmModel");
   requireS3Url(task.prompt_url, "prompt_url");
   requireS3Url(task.result_url, "result_url");
+  requireAttachedAssets(task.attachedAssets);
 
   if (!task.meeting) {
     issues.push("meeting is required");
@@ -49,6 +58,7 @@ export function assertTaskReadyForProcessing(task: TaskItem): void {
 
   if (issues.length > 0) {
     console.error("[handler] task validation failed", { taskId: task.pk, issues });
-    throw new Error(`Task ${task.pk} missing required data`);
+    const detail = issues.join("; ");
+    throw new Error(detail ? `Task ${task.pk} missing required data: ${detail}` : `Task ${task.pk} missing required data`);
   }
 }
