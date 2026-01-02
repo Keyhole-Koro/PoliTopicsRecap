@@ -28,7 +28,7 @@ jobs:
       TF_VARS_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'prod.tfvars' || 'stage.tfvars' }}
       TF_BACKEND_FILE: ${{ startsWith(github.ref, 'refs/heads/prod') && 'prod.hcl' || 'stage.hcl' }}
       TF_VAR_gemini_api_key: ${{ startsWith(github.ref, 'refs/heads/prod') && secrets.PROD_GEMINI_API_KEY || secrets.STAGE_GEMINI_API_KEY }}
-      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
