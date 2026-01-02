@@ -1,7 +1,7 @@
+import { DISCORD_COLORS, sendNotification, type DiscordField } from "@keyhole-koro/politopics-notification";
 import { appConfig } from "../config";
 import type Article from "../dynamoDB/article";
 import type { TaskItem } from "../tasks/types";
-import { DISCORD_COLORS, sendNotification, type DiscordField } from "@common/discord/notifications";
 
 function baseFields(task?: TaskItem): DiscordField[] {
   const fields: DiscordField[] = [];
