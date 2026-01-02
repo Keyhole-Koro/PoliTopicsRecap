@@ -127,6 +127,9 @@ resource "aws_lambda_function" "this" {
       GEMINI_API_KEY        = var.gemini_api_key
       APP_ENVIRONMENT       = var.environment
       NODE_PATH             = "/opt/nodejs/node_modules"
+      DISCORD_WEBHOOK_ERROR = var.discord_webhook_error
+      DISCORD_WEBHOOK_WARN  = var.discord_webhook_warn
+      DISCORD_WEBHOOK_BATCH = var.discord_webhook_batch
     }
   }
 

@@ -12,6 +12,7 @@ import { resolveConfig } from "@utils/config";
 import { getS3ClientConfig } from "@utils/aws";
 import { createDocumentClient } from "@utils/dynamo";
 import { createLlmClient } from "./lambda/llmFactory";
+import { notifyTaskError, notifyTaskWarning } from "./lambda/notifications";
 import {
   handleDirectTask,
   handleChunkedTask,
@@ -47,6 +48,7 @@ export async function handler(): Promise<void> {
     if (!llmClient) {
       console.error("Unsupported LLM provider", { taskId: task.pk, llm: task.llm });
       await bumpRetryAttempts(docClient, repoConfig, task);
+      await notifyTaskWarning(task, "Unsupported LLM provider");
       return;
     }
     console.log("[handler] llm client ready", { taskId: task.pk, llm: task.llm, model: task.llmModel });
@@ -85,6 +87,7 @@ export async function handler(): Promise<void> {
       error,
     });
     if (task) {
+      await notifyTaskError(task, error);
       await bumpRetryAttempts(docClient, repoConfig, task);
     }
   }

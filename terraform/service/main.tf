@@ -87,6 +87,9 @@ module "lambda" {
   article_table_arn         = module.dynamodb.politopics_table_arn
   tags                      = local.tags
   gemini_api_key            = var.gemini_api_key
+  discord_webhook_error     = var.discord_webhook_error
+  discord_webhook_warn      = var.discord_webhook_warn
+  discord_webhook_batch     = var.discord_webhook_batch
 }
 
 #############################################

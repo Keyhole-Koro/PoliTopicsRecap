@@ -139,3 +139,24 @@ variable "gemini_api_key" {
   type        = string
   default     = ""
 }
+
+variable "discord_webhook_error" {
+  description = "Discord webhook URL for #error notifications"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "discord_webhook_warn" {
+  description = "Discord webhook URL for #warn notifications"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "discord_webhook_batch" {
+  description = "Discord webhook URL for #batch notifications"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

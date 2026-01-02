@@ -33,6 +33,9 @@ module "service" {
   scheduler_minute_step                    = var.scheduler_minute_step
   enable_scheduler                         = var.enable_scheduler
   gemini_api_key                           = var.gemini_api_key
+  discord_webhook_error                    = var.discord_webhook_error
+  discord_webhook_warn                     = var.discord_webhook_warn
+  discord_webhook_batch                    = var.discord_webhook_batch
 }
 
 output "politopics_recap_lambda_arn" {

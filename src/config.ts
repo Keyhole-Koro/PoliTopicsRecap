@@ -14,6 +14,11 @@ export type AppConfig = {
   articleTableName: string
   articleAssetBucketName: string
   geminiApiKey: string
+  notifications: {
+    errorWebhook?: string
+    warnWebhook?: string
+    batchWebhook?: string
+  }
 }
 
 const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
@@ -30,6 +35,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     articleTableName: "politopics-local",
     articleAssetBucketName: "politopics-articles-local",
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
+    notifications: {
+      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+    },
   },
   stage: {
     aws: {
@@ -41,6 +51,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     articleTableName: "politopics-stage",
     articleAssetBucketName: "politopics-articles-stage",
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
+    notifications: {
+      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+    },
   },
   prod: {
     aws: {
@@ -52,6 +67,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     articleTableName: "politopics-prod",
     articleAssetBucketName: "politopics-articles-prod",
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
+    notifications: {
+      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+    },
   },
 }
 
@@ -74,6 +94,12 @@ function requireEnv(name: string): string {
   if (!value || value.trim() === "") {
     throw new Error(`Environment variable ${name} is required`);
   }
+  return value;
+}
+
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name];
+  if (!value || value.trim() === "") return undefined;
   return value;
 }
 

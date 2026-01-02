@@ -9,7 +9,7 @@ const config: Config = {
   preset: 'ts-jest',
   setupFiles: [testEnvSetup, ...(fs.existsSync(localstackSetup) ? [localstackSetup] : [])],
   testEnvironment: 'node',
-  roots: ['<rootDir>/tests', '<rootDir>/src'],
+  roots: ['<rootDir>/tests', '<rootDir>/src', '<rootDir>/../common/tests'],
   testMatch: ['**/?(*.)+(spec|test).[tj]s?(x)'],
   moduleNameMapper: {
     '^@interfaces/(.*)$': '<rootDir>/src/interfaces/$1',

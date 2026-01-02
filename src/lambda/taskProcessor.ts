@@ -19,6 +19,11 @@ import {
   loadSpeakerMapFromAttachedAssets,
   type SpeakerMap,
 } from "./speakerMetadata";
+import {
+  notifyArticlePersisted,
+  notifyArticlePersistenceSkipped,
+  notifyTaskWarning,
+} from "./notifications";
 
 export type TaskProcessorArgs = {
   task: TaskItem;
@@ -45,7 +50,7 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
   console.log("[taskProcessor] llm response received", { taskId: task.pk, llm: task.llm, model: task.llmModel });
   await writeS3Text(s3Client, task.result_url, llmResult.text);
   console.log("[taskProcessor] result uploaded", { taskId: task.pk, resultUrl: task.result_url });
-  await persistArticleIfPossible(
+  const persistResult = await persistArticleIfPossible(
     docClient,
     articleTableName,
     llmResult.text,
@@ -53,6 +58,11 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
     meeting,
     attachedMap,
   );
+  if (persistResult.persisted) {
+    await notifyArticlePersisted(task, persistResult.article);
+  } else {
+    await notifyArticlePersistenceSkipped(task, persistResult.reason);
+  }
   await markTaskSucceeded(docClient, repoConfig, task);
   console.log("[taskProcessor] single_chunk task done", { taskId: task.pk });
 }
@@ -63,6 +73,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
   assertAttachedAssets(task);
   if (!task.chunks || task.chunks.length === 0) {
     console.warn("Chunked task missing chunk definitions", { taskId: task.pk });
+    await notifyTaskWarning(task, "Chunked task missing chunk definitions");
     await markTaskSucceeded(docClient, repoConfig, task);
     return;
   }
@@ -95,7 +106,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
 
   await writeS3Text(s3Client, task.result_url, reduceResult.text);
   console.log("[taskProcessor] reduce result uploaded", { taskId: task.pk, resultUrl: task.result_url });
-  await persistArticleIfPossible(
+  const persistResult = await persistArticleIfPossible(
     docClient,
     articleTableName,
     reduceResult.text,
@@ -103,6 +114,11 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
     meeting,
     speakerMap,
   );
+  if (persistResult.persisted) {
+    await notifyArticlePersisted(task, persistResult.article);
+  } else {
+    await notifyArticlePersistenceSkipped(task, persistResult.reason);
+  }
   await markTaskSucceeded(docClient, repoConfig, task);
   console.log("[taskProcessor] chunked task done", { taskId: task.pk });
 }
@@ -125,6 +141,10 @@ async function writeS3Text(client: S3Client, uri: string, body: string): Promise
   });
 }
 
+type PersistResult =
+  | { persisted: true; article: Article }
+  | { persisted: false; reason: string };
+
 async function persistArticleIfPossible(
   docClient: DynamoDBDocumentClient,
   tableName: string,
@@ -132,7 +152,7 @@ async function persistArticleIfPossible(
   assets: ArticleAssetStorage,
   meeting: TaskItem["meeting"],
   speakerMap: SpeakerMap,
-): Promise<void> {
+): Promise<PersistResult> {
   try {
     const jsonText = sanitizeJsonPayload(payloadText);
     const rawArticle = JSON.parse(jsonText) as Article;
@@ -156,8 +176,11 @@ async function persistArticleIfPossible(
     };
     await storeData({ doc: docClient, table_name: tableName, assets }, withFallbacks);
     console.log("[taskProcessor] article persisted", { tableName, meetingDate: withFallbacks.date });
+    return { persisted: true, article: withFallbacks };
   } catch (error) {
-    console.warn("[handler] Skipping article persistence", { error });
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn("[handler] Skipping article persistence", { error: reason });
+    return { persisted: false, reason };
   }
 }
 
