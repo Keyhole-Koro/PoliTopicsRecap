@@ -1,6 +1,29 @@
 import { assertTaskReadyForProcessing } from "./taskValidator";
 import type { TaskItem } from "./types";
 
+/*
+ * accepts a valid single_chunk task
+ * [Contract] Well-formed single_chunk tasks must pass validation.
+ * [Reason] Baseline sanity for workers before processing.
+ * [Accident] Without this, valid tasks might be rejected unexpectedly.
+ * [Odd] Uses attachedAssets with speakerMetadataUrl to mirror real tasks.
+ * [History] None.
+ *
+ * throws when required fields are missing
+ * [Contract] Missing prompt_url or meeting must throw.
+ * [Reason] Prevents processing incomplete tasks.
+ * [Accident] Without this, reducers would crash mid-run.
+ * [Odd] prompt_url set empty; meeting undefined.
+ * [History] None.
+ *
+ * throws when chunked task has no chunks
+ * [Contract] Chunked tasks require chunk definitions.
+ * [Reason] Reduce cannot proceed without chunk outputs.
+ * [Accident] Without this, chunked tasks would be impossible to complete.
+ * [Odd] processingMode=chunked with chunks=[] triggers the guard.
+ * [History] None.
+ */
+
 function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
   return {
     pk: "ISSUE-test",

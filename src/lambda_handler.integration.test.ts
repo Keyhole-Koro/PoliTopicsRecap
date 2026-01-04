@@ -47,6 +47,22 @@ const { GoogleGenerativeAI: googleGenerativeAiCtorMock } = jest.requireMock("@go
 const generateContentMock = jest.fn();
 const getGenerativeModelMock = jest.fn();
 
+/*
+ * polling lambda_handler every minute eventually stores a recap in PoliTopics
+ * [Contract] Minute-based polls must move a pending single_chunk task to completed and persist article metadata/asset_url.
+ * [Reason] Mirrors scheduled poller behavior to ensure recaps appear after periodic runs.
+ * [Accident] Without this, cron-style execution could loop forever without publishing recaps.
+ * [Odd] Uses three handler invocations with `_minute` prompt/result keys and mocked Gemini reduce JSON.
+ * [History] No known bug; regression guardrail.
+ *
+ * chunked processing completes after sequential minute polls
+ * [Contract] Chunked tasks must advance to ready chunks, write chunk outputs, then reduce into a completed article after enough polls.
+ * [Reason] Validates chunk progression when driven by scheduled polling rather than a single run.
+ * [Accident] Without this, chunked recaps could linger pending and never emit reduce output.
+ * [Odd] Two chunk prompts assert PROMPT_VERSION and use stripCodeFence to handle fenced LLM replies; minutePolls=chunkCount+2.
+ * [History] No known bug; preventive coverage.
+ */
+
 describeIfEndpoint("lambda_handler LocalStack integration", () => {
   if (!endpoint) {
     it("skipped because no LocalStack endpoint is configured", () => {

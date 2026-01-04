@@ -19,6 +19,64 @@ import storeData, {
 
 import type Article from './article';
 
+/*
+ * normalizes ISO date inputs
+ * [Contract] toIsoUtc must return canonical ISO strings.
+ * [Reason] Date normalization keeps Dynamo keys consistent.
+ * [Accident] Without this, GSIs could mis-sort by variant timestamps.
+ * [Odd] Tests date-only and full ISO inputs.
+ * [History] None.
+ *
+ * normalizes date-like inputs to date-only strings
+ * [Contract] toDateOnly strips time components.
+ * [Reason] Date-based partitioning depends on date-only keys.
+ * [Accident] Without this, PK/SK ordering drifts.
+ * [Odd] Includes ISO with time.
+ * [History] None.
+ *
+ * computes JST-aligned month from ISO timestamps
+ * [Contract] monthFromIsoUsingJST shifts +9h before truncation.
+ * [Reason] Month buckets must follow JST calendar days.
+ * [Accident] Without this, edge-of-month data lands in wrong buckets.
+ * [Odd] 2024-01-31T16:00:00Z crosses month boundary.
+ * [History] None.
+ *
+ * derives YYYY-MM strings from loose inputs
+ * [Contract] toYYYYMM accepts numeric-ish strings with a base date.
+ * [Reason] Supports user month filters.
+ * [Accident] Without this, reports could mis-label months.
+ * [Odd] Inputs "4" and "11" with base date fixture.
+ * [History] None.
+ *
+ * computes lastNDaysRange windows
+ * [Contract] lastNDaysRange returns ISO start/end anchored to provided now.
+ * [Reason] Recent-article queries rely on accurate windows.
+ * [Accident] Without this, dashboards would show wrong ranges.
+ * [Odd] n=3 with fixed now 2024-04-10Z.
+ * [History] None.
+ *
+ * writes to the shared PoliTopics table so records can be inspected manually (LocalStack)
+ * [Contract] storeData must write META and index items to the shared table and upload assets.
+ * [Reason] Validates real Dynamo wiring for QA inspection.
+ * [Accident] Without this, recaps might never reach the shared table.
+ * [Odd] Uses buildArticle fixture and queries CATEGORY index.
+ * [History] None.
+ *
+ * writes the primary item and thin indexes (mocked client)
+ * [Contract] storeData must send a META Put, BatchWrite thin indexes, strip heavy blobs, and upload asset JSON.
+ * [Reason] Keeps Dynamo lean while preserving discoverability.
+ * [Accident] Without this, Dynamo bloat or missing indexes would break feeds.
+ * [Odd] Expects 8 batch items including CATEGORY/PERSON/KEYWORD indexes and asset_url; summary fields removed.
+ * [History] None.
+ *
+ * creates base thin indexes even without optional facets
+ * [Contract] Even minimal articles must emit base indexes (imageKind/session).
+ * [Reason] Sparse records still need to appear in listings.
+ * [Accident] Without this, minimal articles vanish from GSIs.
+ * [Odd] Empty categories/participants/keywords and blank house/meeting.
+ * [History] None.
+ */
+
 function createAssetStorageMock(bucket = 'article-assets'): { storage: ArticleAssetStorage; send: jest.Mock } {
   const send = jest.fn(async () => ({}));
   return {

@@ -65,21 +65,5 @@ else
     --versioning-configuration Status=Enabled
 fi
 
-if [ "$ENVIRONMENT" = "local" ]; then
-  echo "==> Ensuring application buckets exist (local only)..."
-  APP_BUCKETS=("politopics-prompts" "politopics-articles-local")
-  for APP_BUCKET in "${APP_BUCKETS[@]}"; do
-    if aws "${AWS_ARGS[@]}" s3api head-bucket --bucket "$APP_BUCKET" 2>/dev/null; then
-      echo "App bucket already exists: $APP_BUCKET"
-    else
-      echo "Creating App bucket: $APP_BUCKET"
-      aws "${AWS_ARGS[@]}" s3api create-bucket \
-        --bucket "$APP_BUCKET" \
-        --region "$REGION" \
-        --create-bucket-configuration LocationConstraint="$REGION"
-    fi
-  done
-fi
-
 echo
 echo "✅ S3 bucket setup completed."

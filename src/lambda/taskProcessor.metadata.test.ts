@@ -4,6 +4,29 @@ import {
   extractSpeakerMapFromAttachedAssetsPayload,
 } from "./speakerMetadata";
 
+/*
+ * attaches speaker and original_text from prompt metadata
+ * [Contract] Dialogs must inherit speaker/original_text/yomi/group/position from prompt metadata, overwriting hallucinated fields.
+ * [Reason] LLM outputs often omit or alter speaker details; metadata restores ground truth.
+ * [Accident] Without this, assets would misattribute speakers and source text.
+ * [Odd] Order 3 includes prefilled yomi/group to verify overwrite; prompt carries speakerPosition.
+ * [History] No recorded incident.
+ *
+ * throws when metadata is missing for a dialog order
+ * [Contract] Missing metadata for any dialog order must throw.
+ * [Reason] Prevents emitting partial assets when prompt and output diverge.
+ * [Accident] Without this, missing speakers could slip into production.
+ * [Odd] Order 2 intentionally absent from metadata.
+ * [History] No recorded incident.
+ *
+ * prefers attached originalText and order fields
+ * [Contract] Attached assets take precedence over prompt speechOrder when extracting speaker/originalText.
+ * [Reason] Attached assets contain the authoritative text.
+ * [Accident] Without this, stale prompt text could overwrite curated assets.
+ * [Odd] Mixes order and speechOrder to prove precedence; keeps speakerGroup from attached payload.
+ * [History] No recorded incident.
+ */
+
 describe("attachSpeakerMetadata", () => {
   it("attaches speaker and original_text from prompt metadata", () => {
     // 1. Mock Prompt (JSON format as expected by extractSpeakerMapFromPrompt)

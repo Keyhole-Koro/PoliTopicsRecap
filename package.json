@@ -5,9 +5,9 @@
   "type": "commonjs",
   "packageManager": "pnpm@10.18.2",
   "scripts": {
-    "test": "jest --config jest.config.ts --runInBand",
+    "test": "ENABLE_NOTIFICATION=false jest --config jest.config.ts",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
-    "local:test:e2e": "jest --config jest.config.ts --runTestsByPath tests/integration/fullFlow.test.ts",
+    "local:test:e2e": "ENABLE_NOTIFICATION=false jest --config jest.config.ts --runTestsByPath tests/integration/fullFlow.test.ts",
     "build:local": "node scripts/build-local-lambda.js",
     "build": "node scripts/build-lambda.js",
     "enqueue-mock": "ts-node -r tsconfig-paths/register scripts/enqueue-mock-prompts.ts"

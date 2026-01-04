@@ -15,9 +15,9 @@ export type AppConfig = {
   articleAssetBucketName: string
   geminiApiKey: string
   notifications: {
-    errorWebhook?: string
-    warnWebhook?: string
-    batchWebhook?: string
+    errorWebhook: string
+    warnWebhook: string
+    batchWebhook: string
   }
 }
 
@@ -36,9 +36,9 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     articleAssetBucketName: "politopics-articles-local",
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
-      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
-      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
-      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+      errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
     },
   },
   stage: {
@@ -52,9 +52,9 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     articleAssetBucketName: "politopics-articles-stage",
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
-      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
-      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
-      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+      errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
     },
   },
   prod: {
@@ -68,9 +68,9 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
     articleAssetBucketName: "politopics-articles-prod",
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
-      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
-      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
-      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+      errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
     },
   },
 }
@@ -97,16 +97,9 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function optionalEnv(name: string): string | undefined {
-  const value = process.env[name];
-  if (!value || value.trim() === "") return undefined;
-  return value;
-}
-
 function resolveEnvironment(): AppEnvironment {
   if (!process.env.APP_ENVIRONMENT) {
     throw new Error("Environment variable APP_ENVIRONMENT is required");
-  
   }
   const value = process.env.APP_ENVIRONMENT;
   if (value === "local" || value === "stage" || value === "prod") {

@@ -14,6 +14,15 @@ import {
   parseS3Uri,
 } from './s3';
 
+/*
+ * uploads text and JSON then reads them via utils
+ * [Contract] parseS3Uri/ensureObjectExists/fetchObjectText/fetchJsonObject must work end-to-end against S3.
+ * [Reason] Prompt/result IO relies on these helpers for LocalStack and production parity.
+ * [Accident] Without this, workers could misread objects or miss existence checks.
+ * [Odd] Random bucket name, text and JSON objects { hello: 'world', count: 3 }; forcePathStyle enabled.
+ * [History] None.
+ */
+
 const region = process.env.AWS_REGION!;
 const endpoint =
   process.env.LOCALSTACK_ENDPOINT_URL ??

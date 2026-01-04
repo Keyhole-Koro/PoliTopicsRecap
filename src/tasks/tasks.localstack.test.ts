@@ -9,8 +9,6 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import {
-  CreateTableCommand,
-  DeleteTableCommand,
   DescribeTableCommand,
   DynamoDBClient,
 } from "@aws-sdk/client-dynamodb";
@@ -22,8 +20,26 @@ import {
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 
+jest.mock("@google/generative-ai");
+
 import { handler } from "../lambda_handler";
 import { appConfig } from "../config";
+
+/*
+ * processes a single_chunk task, stores reduce result, and marks it completed
+ * [Contract] Pending single_chunk tasks must invoke Gemini, write reduce output, persist article/meta, and finish with status=completed.
+ * [Reason] Single-chunk meetings skip chunk orchestration but still need recap persistence.
+ * [Accident] Without this, single-chunk tasks could stay pending or miss asset writes and drop articles.
+ * [Odd] Uses Japanese speaker fixtures and updatedAt truncated to YYYY-MM-DD to mimic real data; S3 keys live under prompts/reduce/results.
+ * [History] No recorded incident; regression guardrail.
+ *
+ * processes a chunked task, marks chunks ready, and writes reduce output
+ * [Contract] Chunked tasks must progress notReady→ready→completed across handler invocations and emit reduce output plus article assets.
+ * [Reason] Normal long-meeting flow depends on chunk readiness before reduce.
+ * [Accident] Without this, chunked tasks could stall pending and never publish recaps.
+ * [Odd] Single CHUNK#0 definition with sequential handler calls and mocked Gemini responses for chunk then reduce.
+ * [History] No recorded incident; preventive coverage.
+ */
 
 const region = process.env.AWS_REGION ?? appConfig.aws.region;
 const endpoint =
@@ -86,6 +102,23 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
     const articleAssetBucket = appConfig.articleAssetBucketName || promptBucket;
     await ensureBucketExists(promptBucket);
     await ensureBucketExists(articleAssetBucket);
+
+    // Clear tasks table
+    const tableName = appConfig.taskTableName;
+    const scan = await dynamoDoc.send(new ScanCommand({ TableName: tableName, ProjectionExpression: "pk" }));
+    if (scan.Items && scan.Items.length > 0) {
+      const deleteRequests = scan.Items.map((it) => ({
+        DeleteRequest: { Key: { pk: it.pk } },
+      }));
+      // BatchWriteItem limit is 25
+      for (let i = 0; i < deleteRequests.length; i += 25) {
+        await dynamoDoc.send(
+          new BatchWriteCommand({
+            RequestItems: { [tableName]: deleteRequests.slice(i, i + 25) },
+          }),
+        );
+      }
+    }
   });
 
   afterAll(async () => {
@@ -156,7 +189,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
             pk: issueID,
             status: "pending",
             llm: "gemini",
-            llmModel: "gemini-pro",
+            llmModel: "gemini-2.5-flash",
             retryAttempts: 0,
             createdAt,
             updatedAt,
@@ -179,6 +212,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       expect(stored?.status).toBe("completed");
 
       const reduceOutput = await readObjectText(bucket, resultKey);
+      console.log("Reduce output:", reduceOutput);
       expect(JSON.parse(reduceOutput).id).toBe(issueID);
 
       const articleItem = await getArticle(articleTableName, issueID);
@@ -189,7 +223,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       expect(asset?.dialogs?.[0]?.speaker).toBe("架空太郎");
       expect(asset?.dialogs?.[0]?.speakerYomi).toBe("かくうたろう");
       expect(asset?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
-      expect(asset?.dialogs?.[0]?.speakerPosition).toBeNull();
+      expect(asset?.dialogs?.[0]?.speakerPosition).toBeUndefined();
     } finally {
       // await cleanupTestRun(tableName);
     }
@@ -251,7 +285,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
             pk: issueID,
             status: "pending",
             llm: "gemini",
-            llmModel: "gemini-pro",
+            llmModel: "gemini-2.5-flash",
             retryAttempts: 0,
             createdAt,
             updatedAt,
@@ -301,7 +335,7 @@ describeIfEndpoint("PoliTopics task consumer (LocalStack)", () => {
       expect(asset?.dialogs?.[0]?.speaker).toBe("架空太郎");
       expect(asset?.dialogs?.[0]?.speakerYomi).toBe("かくうたろう");
       expect(asset?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
-      expect(asset?.dialogs?.[0]?.speakerPosition).toBeNull();
+      expect(asset?.dialogs?.[0]?.speakerPosition).toBeUndefined();
     } finally {
       // await cleanupTestRun(tableName);
     }

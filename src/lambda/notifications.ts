@@ -1,10 +1,17 @@
-import { DISCORD_COLORS, sendNotification, type DiscordField } from "@keyhole-koro/politopics-notification";
+import { DISCORD_COLORS, sendNotification as _sendNotification, type DiscordField } from "@keyhole-koro/politopics-notification";
 import { appConfig } from "../config";
 import type Article from "../dynamoDB/article";
 import type { TaskItem } from "../tasks/types";
 
+const enableNotification = process.env.ENABLE_NOTIFICATION !== "false"
+
+const sendNotification = async (...args: Parameters<typeof _sendNotification>) => {
+  if (!enableNotification) return
+  return _sendNotification(...args)
+}
+
 function baseFields(task?: TaskItem): DiscordField[] {
-  const fields: DiscordField[] = [];
+  const fields: DiscordField[] = [{ name: "Environment", value: appConfig.environment, inline: true }];
   if (task) {
     fields.push(
       { name: "Task ID", value: task.pk, inline: true },
