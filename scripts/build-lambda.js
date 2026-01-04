@@ -12,9 +12,6 @@ const layerStagingDir = path.join(buildDir, "lambda-layer");
 const layerNodejsDir = path.join(layerStagingDir, "nodejs");
 const functionStagingDir = path.join(buildDir, "lambda-function");
 
-const functionZipPath = path.join(distDir, "lambda_handler.zip");
-const layerZipPath = path.join(distDir, "lambda_layer.zip");
-
 function runCommand(command, args, options) {
   const result = spawnSync(command, args, { stdio: "inherit", shell: false, ...options });
   if (result.status !== 0) {
@@ -42,7 +39,7 @@ async function cleanDirectory(directoryPath) {
 
 async function compileTypescript(packageManager) {
   console.log("[build-lambda] Compiling TypeScript sources");
-  const aliasTargets = [path.join(distDir, "src")];
+  const aliasTargets = [distDir];
 
   if (packageManager === "pnpm") {
     runCommand("pnpm", ["exec", "tsc", "--project", tsconfigPath], { cwd: rootDir });
@@ -106,7 +103,7 @@ async function installProdDependencies(destinationDir, packageManager) {
 }
 
 async function copyFunctionSources() {
-  const compiledSrcDir = path.join(distDir, "src");
+  const compiledSrcDir = distDir;
   if (!(await fs.pathExists(compiledSrcDir))) {
     throw new Error("Compiled sources not found. Did the TypeScript compilation step complete successfully?");
   }

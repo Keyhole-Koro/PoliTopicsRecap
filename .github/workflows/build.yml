@@ -1,0 +1,46 @@
+name: Build and Validate (Recap)
+
+on:
+  push:
+    branches:
+      - stage
+      - prod
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "22"
+
+defaults:
+  run:
+    working-directory: ./PoliTopicsRecap
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: PoliTopicsRecap/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Lambda bundle
+        run: pnpm run build
+
+      - name: Assert lambda_handler.js exists
+        run: test -f dist/lambda_handler.js
+
+      - name: Smoke test compiled handler
+        run: node -e "require('./dist/lambda_handler.js')"

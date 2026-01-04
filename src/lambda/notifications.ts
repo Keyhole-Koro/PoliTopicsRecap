@@ -4,9 +4,16 @@ import type Article from "../dynamoDB/article";
 import type { TaskItem } from "../tasks/types";
 
 const enableNotification = process.env.ENABLE_NOTIFICATION !== "false"
+const parsedDelay = Number(process.env.NOTIFICATION_DELAY_MS ?? "1000")
+const notificationDelayMs = Number.isFinite(parsedDelay) && parsedDelay > 0 ? parsedDelay : 0
+const shouldSkipTaskNotification = (task?: TaskItem | null): boolean => Boolean(task && task.retryAttempts >= 2)
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 const sendNotification = async (...args: Parameters<typeof _sendNotification>) => {
   if (!enableNotification) return
+  if (notificationDelayMs > 0) {
+    await delay(notificationDelayMs)
+  }
   return _sendNotification(...args)
 }
 
@@ -36,6 +43,7 @@ function formatError(error: unknown): string {
 }
 
 export async function notifyTaskError(task: TaskItem | null, error: unknown): Promise<void> {
+  if (shouldSkipTaskNotification(task)) return
   const fields = baseFields(task ?? undefined);
   fields.push({ name: "Retry attempts", value: String(task?.retryAttempts ?? 0), inline: true });
   fields.push({ name: "Error", value: formatError(error) });
@@ -52,6 +60,7 @@ export async function notifyTaskError(task: TaskItem | null, error: unknown): Pr
 }
 
 export async function notifyTaskWarning(task: TaskItem, message: string): Promise<void> {
+  if (shouldSkipTaskNotification(task)) return
   const fields = baseFields(task);
   fields.push({ name: "Retry attempts", value: String(task.retryAttempts ?? 0), inline: true });
 
@@ -68,6 +77,7 @@ export async function notifyTaskWarning(task: TaskItem, message: string): Promis
 }
 
 export async function notifyArticlePersisted(task: TaskItem, article: Article): Promise<void> {
+  if (shouldSkipTaskNotification(task)) return
   const fields = baseFields(task);
   fields.push(
     { name: "Article ID", value: article.id, inline: true },
@@ -89,6 +99,7 @@ export async function notifyArticlePersisted(task: TaskItem, article: Article): 
 }
 
 export async function notifyArticlePersistenceSkipped(task: TaskItem, reason: string): Promise<void> {
+  if (shouldSkipTaskNotification(task)) return
   const fields = baseFields(task);
   fields.push({ name: "Reason", value: reason.slice(0, 900) });
 
