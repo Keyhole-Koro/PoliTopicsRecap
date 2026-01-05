@@ -18,7 +18,7 @@ const sendNotification = async (...args: Parameters<typeof _sendNotification>) =
 }
 
 function baseFields(task?: TaskItem): DiscordField[] {
-  const fields: DiscordField[] = [{ name: "Environment", value: appConfig.environment, inline: true }];
+  const fields: DiscordField[] = [];
   if (task) {
     fields.push(
       { name: "Task ID", value: task.pk, inline: true },
@@ -98,10 +98,17 @@ export async function notifyArticlePersisted(task: TaskItem, article: Article): 
   });
 }
 
-export async function notifyArticlePersistenceSkipped(task: TaskItem, reason: string): Promise<void> {
+export async function notifyArticlePersistenceSkipped(
+  task: TaskItem,
+  reason: string,
+  payloadDumpUri?: string,
+): Promise<void> {
   if (shouldSkipTaskNotification(task)) return
   const fields = baseFields(task);
   fields.push({ name: "Reason", value: reason.slice(0, 900) });
+  if (payloadDumpUri) {
+    fields.push({ name: "Payload dump", value: payloadDumpUri, inline: false });
+  }
 
   await sendNotification({
     environment: appConfig.environment,

@@ -12,6 +12,7 @@ import type { ArticleAssetStorage } from "../dynamoDB/storeData";
 import storeData from "../dynamoDB/storeData";
 import type Article from "../dynamoDB/article";
 import { fetchObjectText, parseS3Uri, uploadObject } from "@utils/s3";
+import { appConfig } from "../config";
 import {
   attachSpeakerMetadata,
   assertAttachedAssets,
@@ -57,11 +58,12 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
     articleAssets,
     meeting,
     attachedMap,
+    task,
   );
   if (persistResult.persisted) {
     await notifyArticlePersisted(task, persistResult.article);
   } else {
-    await notifyArticlePersistenceSkipped(task, persistResult.reason);
+    await notifyArticlePersistenceSkipped(task, persistResult.reason, persistResult.payloadDumpUri);
   }
   await markTaskSucceeded(docClient, repoConfig, task);
   console.log("[taskProcessor] single_chunk task done", { taskId: task.pk });
@@ -113,11 +115,12 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
     articleAssets,
     meeting,
     speakerMap,
+    task,
   );
   if (persistResult.persisted) {
     await notifyArticlePersisted(task, persistResult.article);
   } else {
-    await notifyArticlePersistenceSkipped(task, persistResult.reason);
+    await notifyArticlePersistenceSkipped(task, persistResult.reason, persistResult.payloadDumpUri);
   }
   await markTaskSucceeded(docClient, repoConfig, task);
   console.log("[taskProcessor] chunked task done", { taskId: task.pk });
@@ -143,7 +146,7 @@ async function writeS3Text(client: S3Client, uri: string, body: string): Promise
 
 type PersistResult =
   | { persisted: true; article: Article }
-  | { persisted: false; reason: string };
+  | { persisted: false; reason: string; payloadDumpUri?: string };
 
 async function persistArticleIfPossible(
   docClient: DynamoDBDocumentClient,
@@ -152,6 +155,7 @@ async function persistArticleIfPossible(
   assets: ArticleAssetStorage,
   meeting: TaskItem["meeting"],
   speakerMap: SpeakerMap,
+  task: TaskItem,
 ): Promise<PersistResult> {
   try {
     const jsonText = sanitizeJsonPayload(payloadText);
@@ -179,8 +183,19 @@ async function persistArticleIfPossible(
     return { persisted: true, article: withFallbacks };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    console.warn("[handler] Skipping article persistence", { error: reason });
-    return { persisted: false, reason };
+    let payloadDumpUri: string | undefined;
+    try {
+      payloadDumpUri = await storeInvalidPayload(assets, task.pk, payloadText, reason);
+      console.warn("[handler] Skipping article persistence", { error: reason, payloadDumpUri, taskId: task.pk });
+    } catch (uploadError) {
+      const uploadReason = uploadError instanceof Error ? uploadError.message : String(uploadError);
+      console.warn("[handler] Skipping article persistence (payload dump failed)", {
+        error: reason,
+        uploadError: uploadReason,
+        taskId: task.pk,
+      });
+    }
+    return { persisted: false, reason, payloadDumpUri };
   }
 }
 
@@ -191,6 +206,29 @@ function sanitizeJsonPayload(payloadText: string): string {
     return fenceMatch[1].trim();
   }
   return trimmed;
+}
+
+async function storeInvalidPayload(
+  assets: ArticleAssetStorage,
+  taskId: string,
+  payloadText: string,
+  reason: string,
+): Promise<string> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const key = `invalid-payloads/${appConfig.environment}/${taskId}/${timestamp}.txt`;
+  await uploadObject({
+    client: assets.client,
+    bucket: assets.bucket,
+    key,
+    body: payloadText,
+    opts: {
+      contentType: "text/plain; charset=utf-8",
+      metadata: {
+        error: reason.slice(0, 200),
+      },
+    },
+  });
+  return `s3://${assets.bucket}/${key}`;
 }
 
 export {

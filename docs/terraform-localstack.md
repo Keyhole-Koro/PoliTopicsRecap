@@ -73,6 +73,10 @@ aws --endpoint-url http://localstack:4566   s3 ls s3://politopics-prompts/demo/<
    --summarize
 ```
 
+- Recap now dumps invalid reduce outputs to S3 for debugging. Look under  
+  `s3://<article-asset-bucket>/invalid-payloads/<taskId>/<timestamp>.txt`  
+  (the Discord notification includes the exact URI).
+
 ### download layer
 
 ```bash

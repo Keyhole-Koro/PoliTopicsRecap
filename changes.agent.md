@@ -72,3 +72,16 @@ Details:
   - `PoliTopicsRecap/terraform/service/variables.tf`
   - `PoliTopicsRecap/terraform/service/lambda/main.tf`
   - `PoliTopicsRecap/terraform/service/lambda/variables.tf`
+
+Agent: Codex
+Date/Time: 2025-12-28 12:45 UTC
+Keywords: recap, s3, invalid-payload, notification
+Topic: Dump invalid reduce payloads to S3 and link in alerts
+Details:
+- When article persistence fails (e.g., JSON parse errors), the raw reduce payload is uploaded to S3 under `invalid-payloads/<env>/<taskId>/<timestamp>.txt`, logged to stdout, and linked in the warning notification.
+- Added a payload dump field to the Recap notification for skipped persistence.
+- Documented the S3 dump path in `docs/terraform-localstack.md`.
+- Files changed:
+  - `src/lambda/taskProcessor.ts`
+  - `src/lambda/notifications.ts`
+  - `docs/terraform-localstack.md`
