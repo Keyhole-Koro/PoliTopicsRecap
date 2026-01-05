@@ -12,10 +12,6 @@ env:
   TERRAFORM_VERSION: "1.9.5"
   TF_WORKING_DIR: terraform
 
-defaults:
-  run:
-    working-directory: ./PoliTopicsRecap
-
 jobs:
   deploy:
     name: Deploy
