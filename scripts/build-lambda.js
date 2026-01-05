@@ -7,6 +7,8 @@ const rootDir = path.resolve(__dirname, "..");
 const tsconfigPath = path.join(rootDir, "tsconfig.json");
 const buildDir = path.join(rootDir, "build");
 const distDir = path.join(rootDir, "dist");
+const functionZipPath = path.join(distDir, "lambda_handler.zip");
+const layerZipPath = path.join(distDir, "lambda_layer.zip");
 
 const layerStagingDir = path.join(buildDir, "lambda-layer");
 const layerNodejsDir = path.join(layerStagingDir, "nodejs");
