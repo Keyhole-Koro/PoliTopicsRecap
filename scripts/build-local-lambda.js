@@ -42,7 +42,7 @@ async function cleanDirectory(directoryPath) {
 
 async function compileTypescript(packageManager) {
   console.log("[build-lambda] Compiling TypeScript sources");
-  const aliasTargets = [path.join(distDir, "src")];
+  const aliasTargets = [distDir];
 
   if (packageManager === "pnpm") {
     runCommand("pnpm", ["exec", "tsc", "--project", tsconfigPath], { cwd: rootDir });
@@ -86,7 +86,7 @@ async function installProdDependencies(destinationDir, packageManager) {
 }
 
 async function copyFunctionSources() {
-  const compiledSrcDir = path.join(distDir, "src");
+  const compiledSrcDir = distDir;
   if (!(await fs.pathExists(compiledSrcDir))) {
     throw new Error("Compiled sources not found. Did the TypeScript compilation step complete successfully?");
   }

@@ -248,6 +248,7 @@ describe('storeData (mocked client)', () => {
     expect(putItem.middle_summary).toBeUndefined();
     expect(putItem.dialogs).toBeUndefined();
     expect(putItem.asset_url).toBe('s3://article-assets/articles/article-123/asset.json');
+    expect(putItem.asset_key).toBe('articles/article-123/asset.json');
 
     const batchCall = send.mock.calls.find(([cmd]) => cmd instanceof BatchWriteCommand);
     expect(batchCall).toBeDefined();
@@ -259,7 +260,22 @@ describe('storeData (mocked client)', () => {
       expect.arrayContaining([
         expect.objectContaining({ PK: 'CATEGORY#budget', kind: 'CATEGORY_INDEX' }),
         expect.objectContaining({ PK: 'PERSON#Alice', kind: 'PERSON_INDEX' }),
-        expect.objectContaining({ PK: 'KEYWORD#finance', kind: 'KEYWORD_INDEX' }),
+        expect.objectContaining({
+          PK: 'KEYWORD#finance',
+          kind: 'KEYWORD_INDEX',
+          categories: ['budget'],
+          keywords: [{ keyword: 'finance', priority: 'high' }],
+          participants: [
+            {
+              name: 'Alice',
+              position: '議員',
+              summary: '執行遅れを質した',
+              based_on_orders: [1],
+            },
+          ],
+          asset_key: 'articles/article-123/asset.json',
+          asset_url: 's3://article-assets/articles/article-123/asset.json',
+        }),
         expect.objectContaining({ PK: 'KEYWORD_RECENT', kind: 'KEYWORD_OCCURRENCE', SK: 'D#2024-05-01#KW#finance#A#article-123' }),
         expect.objectContaining({ PK: 'IMAGEKIND#会議録', kind: 'IMAGEKIND_INDEX' }),
         expect.objectContaining({ PK: 'SESSION#0012', kind: 'SESSION_INDEX' }),

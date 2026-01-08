@@ -97,3 +97,56 @@ Details:
   - `PoliTopicsRecap/src/lambda_handler.ts`
   - `PoliTopicsRecap/src/retryAttempts.test.ts`
   - `PoliTopicsRecap/changes.agent.md`
+
+Agent: Codex
+Date/Time: 2026-01-05 18:45 JST
+Keywords: dynamodb, thin-index, asset-key, recap, tests
+Topic: Include card metadata on recap thin index items for frontend queries
+Details:
+- Persisted both asset key and URL when uploading article assets and stored them on the main item.
+- Expanded thin index items (CATEGORY/KEYWORD/PERSON/etc.) to include description, categories, keywords, participants, and asset pointers needed for frontend cards.
+- Updated storeData tests to assert asset key/url propagation on index items and main records.
+- Files changed:
+  - `PoliTopicsRecap/src/dynamoDB/storeData.ts`
+  - `PoliTopicsRecap/src/dynamoDB/storeData.test.ts`
+
+Agent: Codex
+Date/Time: 2026-01-05 19:20 JST
+Keywords: tests, env, localstack, integration
+Topic: Require explicit test env export instead of dummy fallbacks
+Details:
+- Removed dummy environment fallbacks from LocalStack integration tests and added guidance to source `scripts/export_test_env.sh` when required vars are missing.
+- Made config/handler imports lazy and skip suites when env prerequisites are absent, preventing circular JSON errors from missing LocalStack setup.
+- Files changed:
+  - `PoliTopicsRecap/src/lambda_handler.integration.test.ts`
+  - `PoliTopicsRecap/src/tasks/tasks.localstack.test.ts`
+
+Agent: Codex
+Date/Time: 2026-01-05 19:40 JST
+Keywords: jest, reporter, columns, setup
+Topic: Stabilize Jest reporter width to avoid RangeError
+Details:
+- Added a test setup file to normalize stdout/stderr columns and prevent negative padding in Jest’s summary reporter.
+- Registered the setup file in Jest config.
+- Files changed:
+  - `PoliTopicsRecap/jest.config.ts`
+  - `PoliTopicsRecap/src/testSetup.ts`
+
+Agent: Codex
+Date/Time: 2026-01-06 10:05 JST
+Keywords: lambda-build, dist-path, tsc-alias, pnpm
+Topic: Fix recap lambda build to pick compiled outputs
+Details:
+- Updated the local lambda build script to point tsc-alias at `dist` and copy compiled sources from `dist` (not `dist/src`), fixing “Compiled sources not found” during build.
+- Files changed:
+  - `PoliTopicsRecap/scripts/build-local-lambda.js`
+
+Agent: Codex
+Date/Time: 2026-01-06 11:05 JST
+Keywords: tests, gemini, mock, integration
+Topic: Make recap integration tests use mocked Gemini responses
+Details:
+- Mocked the Gemini client with a response queue and reset between tests to avoid real API calls and 400 errors.
+- Queued canned JSON outputs for single/chunked flows in the LocalStack integration test.
+- Files changed:
+  - `PoliTopicsRecap/src/lambda_handler.integration.test.ts`

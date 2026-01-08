@@ -196,7 +196,7 @@ async function persistArticleAsset(
   storageConfig: ArticleAssetStorage,
   articleId: string,
   asset: ArticleAsset
-): Promise<string> {
+): Promise<{ key: string; url: string }> {
   if (!storageConfig?.client || !storageConfig.bucket) {
     throw new Error("Article asset storage configuration is required");
   }
@@ -212,7 +212,7 @@ async function persistArticleAsset(
   });
 
   const buildUrl = storageConfig.makeUrl ?? ((bucket: string, objectKey: string) => `s3://${bucket}/${objectKey}`);
-  return buildUrl(storageConfig.bucket, key);
+  return { key, url: buildUrl(storageConfig.bucket, key) };
 }
 
 function trimSlashes(input: string): string {
@@ -251,7 +251,7 @@ export default async function storeData(
     ...articleRest
   } = article;
 
-  const assetUrl = await persistArticleAsset(assets, article.id, {
+  const { key: assetKey, url: assetUrl } = await persistArticleAsset(assets, article.id, {
     summary,
     soft_language_summary,
     middle_summary,
@@ -267,6 +267,7 @@ export default async function storeData(
     SK: artSK,
     type: "ARTICLE",
     asset_url: assetUrl,
+    asset_key: assetKey,
 
     // GSIs for global listings
     GSI1PK: "ARTICLE",
@@ -282,12 +283,18 @@ export default async function storeData(
     type: "THIN_INDEX",
     articleId: article.id,
     title: article.title,
+    description: article.description,
+    categories: article.categories ?? [],
+    keywords: article.keywords ?? [],
+    participants: article.participants ?? [],
     date: isoDate,         // date-only
     month: monthNorm,      // aligned to date
     imageKind: article.imageKind,
     nameOfMeeting: article.nameOfMeeting,
     session: article.session,
     nameOfHouse: article.nameOfHouse,
+    asset_key: assetKey,
+    asset_url: assetUrl,
     // Add description if your list UI needs it (trade-off: storage + write cost).
     // description: article.description,
   };

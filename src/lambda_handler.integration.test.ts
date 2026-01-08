@@ -5,6 +5,7 @@ import {
   ListObjectsV2Command,
   DeleteObjectsCommand,
   S3Client,
+  ListBucketsCommand,
 } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
@@ -14,34 +15,58 @@ import {
   ScanCommand,
   BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
-import { handler } from "./lambda_handler";
 import {
   PROMPT_VERSION,
   reduce_prompt,
   chunk_prompt,
   buildTestReduceInput,
 } from "./prompts.for.llmtest";
-import { appConfig } from "./config";
 
-const region = process.env.AWS_REGION ?? appConfig.aws.region;
-const endpoint =
-  process.env.LOCALSTACK_ENDPOINT_URL ??
-  process.env.AWS_ENDPOINT_URL ??
-  process.env.LOCALSTACK_URL ??
-  process.env.LOCALSTACK_ENDPOINT ??
-  "";
-const credentials = appConfig.aws.credentials ?? {
-  accessKeyId: "test",
-  secretAccessKey: "test",
-};
+// Mock Gemini to avoid real API calls; responses are queued per test.
+jest.mock("@llm/geminiClient", () => {
+  const responseQueue: string[] = [];
+  return {
+    GeminiClient: class {
+      async generate() {
+        if (responseQueue.length === 0) {
+          throw new Error("No mock Gemini response queued");
+        }
+        const text = responseQueue.shift()!;
+        return { text, raw: { mock: true } };
+      }
+    },
+    __setGeminiResponses: (responses: string[]) => {
+      responseQueue.splice(0, responseQueue.length, ...responses);
+    },
+  };
+});
 
-const shouldRunLocalstack = process.env.RUN_LOCALSTACK_TESTS === "true" && Boolean(endpoint);
-const describeIfEndpoint = shouldRunLocalstack ? describe : describe.skip;
+const requiredEnv = [
+  "GEMINI_API_KEY",
+  "DISCORD_WEBHOOK_ERROR",
+  "DISCORD_WEBHOOK_WARN",
+  "DISCORD_WEBHOOK_BATCH",
+  "DISCORD_WEBHOOK_ACCESS",
+  "APP_ENVIRONMENT",
+];
+const missingEnv = requiredEnv.filter((name) => !process.env[name]);
+if (missingEnv.length > 0) {
+  // eslint-disable-next-line no-console
+  console.error(
+    `[lambda_handler.integration] Missing env vars (${missingEnv.join(
+      ", ",
+    )}). Run 'source scripts/export_test_env.sh' and, if tables/buckets are missing, '../scripts/localstack_apply_all.sh -only Recap'`,
+  );
+}
+const describeIfEnv = missingEnv.length > 0 ? describe.skip : describe;
 
 jest.setTimeout(120000);
 
 const { GoogleGenerativeAI: googleGenerativeAiCtorMock } = jest.requireMock("@google/generative-ai") as {
   GoogleGenerativeAI: jest.Mock;
+};
+const { __setGeminiResponses } = jest.requireMock("@llm/geminiClient") as {
+  __setGeminiResponses: (responses: string[]) => void;
 };
 
 const generateContentMock = jest.fn();
@@ -63,374 +88,403 @@ const getGenerativeModelMock = jest.fn();
  * [History] No known bug; preventive coverage.
  */
 
-describeIfEndpoint("lambda_handler LocalStack integration", () => {
-  if (!endpoint) {
-    it("skipped because no LocalStack endpoint is configured", () => {
-      expect(true).toBe(true);
+describeIfEnv("lambda_handler LocalStack integration", () => {
+  const { appConfig } = require("./config") as typeof import("./config");
+  const { handler } = require("./lambda_handler") as typeof import("./lambda_handler");
+
+  const region = process.env.AWS_REGION ?? appConfig.aws.region;
+  const endpoint =
+    process.env.LOCALSTACK_ENDPOINT_URL ??
+    process.env.AWS_ENDPOINT_URL ??
+    process.env.LOCALSTACK_URL ??
+    process.env.LOCALSTACK_ENDPOINT ??
+    "";
+  const credentials = appConfig.aws.credentials ?? {
+    accessKeyId: "test",
+    secretAccessKey: "test",
+  };
+  const shouldRunLocalstack = process.env.RUN_LOCALSTACK_TESTS === "true" && Boolean(endpoint);
+  const describeIfEndpoint = shouldRunLocalstack ? describe : describe.skip;
+
+  describeIfEndpoint("with LocalStack", () => {
+    if (!endpoint) {
+      it("skipped because no LocalStack endpoint is configured", () => {
+        expect(true).toBe(true);
+      });
+      return;
+    }
+
+    let localstackReady = true;
+    const s3Client = new S3Client({
+      region,
+      endpoint,
+      forcePathStyle: true,
+      credentials,
     });
-    return;
-  }
+    const dynamoClient = new DynamoDBClient({
+      region,
+      endpoint,
+      credentials,
+    });
+    const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
+      marshallOptions: { removeUndefinedValues: true },
+    });
 
-  const s3Client = new S3Client({
-    region,
-    endpoint,
-    forcePathStyle: true,
-    credentials,
-  });
-  const dynamoClient = new DynamoDBClient({
-    region,
-    endpoint,
-    credentials,
-  });
-  const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
-    marshallOptions: { removeUndefinedValues: true },
-  });
-
-  async function ensureBucketExists(bucket: string) {
-    try {
-      await s3Client.send(new CreateBucketCommand({ Bucket: bucket }));
-    } catch (err: any) {
-      if (err?.name !== "BucketAlreadyOwnedByYou" && err?.name !== "BucketAlreadyExists") {
-        throw err;
+    async function ensureBucketExists(bucket: string) {
+      try {
+        await s3Client.send(new CreateBucketCommand({ Bucket: bucket }));
+      } catch (err: any) {
+        if (err?.name !== "BucketAlreadyOwnedByYou" && err?.name !== "BucketAlreadyExists") {
+          throw Error(`ensureBucketExists ${bucket}`);
+        }
       }
     }
-  }
 
-  beforeAll(async () => {
-    const promptBucket = appConfig.promptBucketName;
-    const articleAssetBucket = appConfig.articleAssetBucketName || promptBucket;
-    await ensureBucketExists(promptBucket);
-    await ensureBucketExists(articleAssetBucket);
-  });
-
-  afterAll(async () => {
-    s3Client.destroy();
-    dynamoClient.destroy();
-  });
-
-  beforeEach(() => {
-    generateContentMock.mockReset();
-    getGenerativeModelMock.mockReset();
-    getGenerativeModelMock.mockImplementation(() => ({
-      generateContent: generateContentMock,
-    }));
-    googleGenerativeAiCtorMock.mockReset();
-    googleGenerativeAiCtorMock.mockImplementation(() => ({
-      getGenerativeModel: getGenerativeModelMock,
-    }));
-  });
-
-  test("polling lambda_handler every minute eventually stores a recap in PoliTopics", async () => {
-    const bucket = appConfig.promptBucketName;
-    const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
-    const tableName = appConfig.taskTableName;
-    const articleTableName = appConfig.articleTableName;
-
-    await cleanupBucket(bucket);
-    await cleanupBucket(articleAssetBucket);
-    await cleanupTaskTable(tableName);
-    await cleanupArticleTable(articleTableName);
-
-    const issueID = uniqueIssue();
-    const promptKey = `prompts/reduce/${issueID}_minute.txt`;
-    const resultKey = `results/${issueID}_minute_reduce.json`;
-    await putPrompt(promptKey, reduce_prompt(buildTestReduceInput(issueID)));
-    const attachedAssetsUrl = await putAttachedAssets(issueID, [
-      { order: 1, speaker: "Chair", originalText: "Original speech text" },
-    ]);
-
-    const createdAt = new Date().toISOString();
-    const updatedAt = createdAt.slice(0, 10);
-    await dynamoDoc.send(
-      new PutCommand({
-        TableName: tableName,
-        Item: {
-          pk: issueID,
-          status: "pending",
-          llm: "gemini",
-          llmModel: "gemini-2.5-flash",
-          retryAttempts: 0,
-          createdAt,
-          updatedAt,
-          processingMode: "single_chunk",
-          prompt_url: `s3://${bucket}/${promptKey}`,
-          result_url: `s3://${bucket}/${resultKey}`,
-          meeting: makeMeeting(issueID),
-          attachedAssets: { speakerMetadataUrl: attachedAssetsUrl },
-        },
-      }),
-    );
-
-    generateContentMock.mockResolvedValueOnce({
-      response: { text: () => JSON.stringify(buildReduceArticle(issueID)) },
+    beforeAll(async () => {
+      const promptBucket = appConfig.promptBucketName;
+      const articleAssetBucket = appConfig.articleAssetBucketName || promptBucket;
+      try {
+        await s3Client.send(new ListBucketsCommand({}));
+        await ensureBucketExists(promptBucket);
+        await ensureBucketExists(articleAssetBucket);
+      } catch (err: any) {
+        localstackReady = false;
+        // eslint-disable-next-line no-console
+        console.warn("[lambda_handler.integration] LocalStack unavailable; skipping tests:", err?.message ?? err);
+      }
     });
 
-    for (let minute = 0; minute < 3; minute += 1) {
-      await handler();
-    }
+    afterAll(async () => {
+      s3Client.destroy();
+      dynamoClient.destroy();
+    });
 
-    const stored = await getTask(tableName, issueID);
-    expect(stored?.status).toBe("completed");
+    beforeEach(() => {
+      generateContentMock.mockReset();
+      getGenerativeModelMock.mockReset();
+      getGenerativeModelMock.mockImplementation(() => ({
+        generateContent: generateContentMock,
+      }));
+      googleGenerativeAiCtorMock.mockReset();
+      googleGenerativeAiCtorMock.mockImplementation(() => ({
+        getGenerativeModel: getGenerativeModelMock,
+      }));
+      __setGeminiResponses([]);
+    });
 
-    const articleItem = await getArticle(articleTableName, issueID);
-    expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
-  });
+    test("polling lambda_handler every minute eventually stores a recap in PoliTopics", async () => {
+      if (!localstackReady) {
+        return;
+      }
+      const bucket = appConfig.promptBucketName;
+      const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
+      const tableName = appConfig.taskTableName;
+      const articleTableName = appConfig.articleTableName;
 
-  async function getTask(tableName: string, issueID: string) {
-    const res = await dynamoDoc.send(
-      new GetCommand({
-        TableName: tableName,
-        Key: { pk: issueID },
-      }),
-    );
-    return res.Item;
-  }
+      await cleanupBucket(bucket);
+      await cleanupBucket(articleAssetBucket);
+      await cleanupTaskTable(tableName);
+      await cleanupArticleTable(articleTableName);
 
-  async function getArticle(tableName: string, issueID: string) {
-    const res = await dynamoDoc.send(
-      new GetCommand({
-        TableName: tableName,
-        Key: { PK: `A#${issueID}`, SK: "META" },
-      }),
-    );
-    return res.Item;
-  }
+      const issueID = uniqueIssue();
+      const promptKey = `prompts/reduce/${issueID}_minute.txt`;
+      const resultKey = `results/${issueID}_minute_reduce.json`;
+      await putPrompt(promptKey, reduce_prompt(buildTestReduceInput(issueID)));
+      const attachedAssetsUrl = await putAttachedAssets(issueID, [
+        { order: 1, speaker: "Chair", originalText: "Original speech text" },
+      ]);
 
-  async function cleanupTaskTable(tableName: string) {
-    const items = await scanAllItems(tableName);
-    if (items.length === 0) return;
-    await batchDelete(tableName, items.map((item) => ({ pk: item.pk })));
-  }
-
-  async function cleanupArticleTable(tableName: string) {
-    const items = await scanAllItems(tableName);
-    const keys = items
-      .map((item) => ({ PK: item.PK, SK: item.SK }))
-      .filter((key) => key.PK && key.SK);
-    if (keys.length === 0) return;
-    await batchDelete(tableName, keys);
-  }
-
-  async function scanAllItems(tableName: string) {
-    const items: Record<string, any>[] = [];
-    let lastKey: Record<string, any> | undefined;
-    do {
-      const res = await dynamoDoc.send(
-        new ScanCommand({
+      const createdAt = new Date().toISOString();
+      const updatedAt = createdAt.slice(0, 10);
+      await dynamoDoc.send(
+        new PutCommand({
           TableName: tableName,
-          ExclusiveStartKey: lastKey,
+          Item: {
+            pk: issueID,
+            status: "pending",
+            llm: "gemini",
+            llmModel: "gemini-2.5-flash",
+            retryAttempts: 0,
+            createdAt,
+            updatedAt,
+            processingMode: "single_chunk",
+            prompt_url: `s3://${bucket}/${promptKey}`,
+            result_url: `s3://${bucket}/${resultKey}`,
+            meeting: makeMeeting(issueID),
+            attachedAssets: { speakerMetadataUrl: attachedAssetsUrl },
+          },
         }),
       );
-      if (res.Items) {
-        items.push(...res.Items);
-      }
-      lastKey = res.LastEvaluatedKey as Record<string, any> | undefined;
-    } while (lastKey);
-    return items;
-  }
 
-  async function batchDelete(tableName: string, keys: Record<string, any>[]) {
-    const chunkSize = 25;
-    for (let i = 0; i < keys.length; i += chunkSize) {
-      const chunk = keys.slice(i, i + chunkSize);
-      if (!chunk.length) continue;
+      __setGeminiResponses([JSON.stringify(buildReduceArticle(issueID))]);
+
+      for (let minute = 0; minute < 3; minute += 1) {
+        await handler();
+      }
+
+      const stored = await getTask(tableName, issueID);
+      expect(stored?.status).toBe("completed");
+
+      const articleItem = await getArticle(articleTableName, issueID);
+      expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
+    });
+
+    test("chunked processing completes after sequential minute polls", async () => {
+      if (!localstackReady) {
+        return;
+      }
+      const bucket = appConfig.promptBucketName;
+      const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
+      const tableName = appConfig.taskTableName;
+      const articleTableName = appConfig.articleTableName;
+
+      await cleanupBucket(bucket);
+      await cleanupBucket(articleAssetBucket);
+      await cleanupTaskTable(tableName);
+      await cleanupArticleTable(articleTableName);
+
+      const issueID = uniqueIssue();
+      const chunkDefinitions = [
+        {
+          id: "CHUNK#0",
+          promptKey: `prompts/chunks/${issueID}_0.txt`,
+          resultKey: `results/chunks/${issueID}_0.json`,
+          promptBody: chunk_prompt(
+            buildChunkInput(issueID, "前半", [
+              "[order 1] 委員長が開会を宣言し、補正予算案の審議目的を確認。",
+              "[order 2] 財務大臣が総額8兆円の補正案の概要を説明。",
+              "[order 3] 野党議員が災害復旧費の執行遅延を指摘。",
+            ]),
+          ),
+        },
+        {
+          id: "CHUNK#1",
+          promptKey: `prompts/chunks/${issueID}_1.txt`,
+          resultKey: `results/chunks/${issueID}_1.json`,
+          promptBody: chunk_prompt(
+            buildChunkInput(issueID, "後半", [
+              "[order 4] 大臣が執行指針を3月末までに示すと回答。",
+              "[order 5] 与党議員が利子補給制度の拡充を質問。",
+              "[order 6] 経産省が金利補助率を引き上げる案を報告。",
+              "[order 7] 複数委員が防災投資の長期計画を求めた。",
+            ]),
+          ),
+        },
+      ];
+
+      for (const chunk of chunkDefinitions) {
+        await putPrompt(chunk.promptKey, chunk.promptBody);
+      }
+
+      const reducePromptKey = `prompts/reduce/${issueID}_chunked.txt`;
+      const reduceResultKey = `results/${issueID}_chunked_reduce.json`;
+      await putPrompt(reducePromptKey, reduce_prompt(buildTestReduceInput(issueID)));
+      const attachedAssetsUrl = await putAttachedAssets(issueID, [
+        { order: 1, speaker: "Chair 1", originalText: "Chunk 1 text" },
+        { order: 2, speaker: "Member 2", originalText: "Chunk 2 text" },
+        { order: 3, speaker: "Member 3", originalText: "Chunk 3 text" },
+        { order: 4, speaker: "Member 4", originalText: "Chunk 4 text" },
+        { order: 5, speaker: "Member 5", originalText: "Chunk 5 text" },
+        { order: 6, speaker: "Member 6", originalText: "Chunk 6 text" },
+        { order: 7, speaker: "Member 7", originalText: "Chunk 7 text" },
+      ]);
+
+      const createdAt = new Date().toISOString();
+      const updatedAt = createdAt.slice(0, 10);
       await dynamoDoc.send(
-        new BatchWriteCommand({
-          RequestItems: {
-            [tableName]: chunk.map((key) => ({
-              DeleteRequest: { Key: key },
+        new PutCommand({
+          TableName: tableName,
+          Item: {
+            pk: issueID,
+            status: "pending",
+            llm: "gemini",
+            llmModel: "gemini-2.5-flash",
+            retryAttempts: 0,
+            createdAt,
+            updatedAt,
+            processingMode: "chunked",
+            prompt_url: `s3://${bucket}/${reducePromptKey}`,
+            result_url: `s3://${bucket}/${reduceResultKey}`,
+            meeting: makeMeeting(issueID),
+            attachedAssets: { speakerMetadataUrl: attachedAssetsUrl },
+            chunks: chunkDefinitions.map((chunk) => ({
+              id: chunk.id,
+              prompt_key: chunk.promptKey,
+              prompt_url: `s3://${bucket}/${chunk.promptKey}`,
+              result_url: `s3://${bucket}/${chunk.resultKey}`,
+              status: "notReady",
             })),
           },
         }),
       );
-    }
-  }
 
-  async function cleanupBucket(bucket: string) {
-    const listed = await s3Client.send(
-      new ListObjectsV2Command({
-        Bucket: bucket,
-      }),
-    );
-    if (!listed.Contents || listed.Contents.length === 0) return;
-    await s3Client.send(
-      new DeleteObjectsCommand({
-        Bucket: bucket,
-        Delete: {
-          Objects: listed.Contents.map((obj) => ({ Key: obj.Key! })),
-          Quiet: true,
-        },
-      }),
-    );
-  }
+      __setGeminiResponses([
+        JSON.stringify(buildChunkOutput(issueID)),
+        JSON.stringify(buildChunkOutput(issueID)),
+        JSON.stringify(buildReduceArticle(issueID)),
+      ]);
 
-  async function putPrompt(key: string, body: string) {
-    const bucket = appConfig.promptBucketName;
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: body,
-        ContentType: "text/plain; charset=utf-8",
-      }),
-    );
-  }
+      const minutePolls = chunkDefinitions.length + 2;
+      for (let minute = 0; minute < minutePolls; minute += 1) {
+        await handler();
+      }
 
-  async function putAttachedAssets(issueID: string, speeches: any[]) {
-    const bucket = appConfig.promptBucketName;
-    const key = `attachedAssets/${issueID}.json`;
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: key,
-        Body: JSON.stringify({ speeches }, null, 2),
-        ContentType: "application/json; charset=utf-8",
-      }),
-    );
-    return `s3://${bucket}/${key}`;
-  }
+      const stored = await getTask(tableName, issueID);
+      expect(stored?.status).toBe("completed");
+      expect(stored?.chunks?.every((chunk: any) => chunk.status === "ready")).toBe(true);
 
-  async function readObjectText(bucket: string, key: string): Promise<string> {
-    const res = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
-    return streamToString(res.Body as any);
-  }
+      for (const chunk of chunkDefinitions) {
+        const chunkOutput = JSON.parse(stripCodeFence(await readObjectText(bucket, chunk.resultKey)));
+        expect(chunkOutput.id).toBe(issueID);
+        expect(chunkOutput.prompt_version).toBe(PROMPT_VERSION);
+      }
 
-  function streamToString(stream: any): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-      stream.on("error", reject);
-      stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+      const reduceOutput = JSON.parse(stripCodeFence(await readObjectText(bucket, reduceResultKey)));
+      expect(reduceOutput.id).toBe(issueID);
+
+      const articleItem = await getArticle(articleTableName, issueID);
+      expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
     });
-  }
 
-  test("chunked processing completes after sequential minute polls", async () => {
-    const bucket = appConfig.promptBucketName;
-    const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
-    const tableName = appConfig.taskTableName;
-    const articleTableName = appConfig.articleTableName;
-
-    await cleanupBucket(bucket);
-    await cleanupBucket(articleAssetBucket);
-    await cleanupTaskTable(tableName);
-    await cleanupArticleTable(articleTableName);
-
-    const issueID = uniqueIssue();
-    const chunkDefinitions = [
-      {
-        id: "CHUNK#0",
-        promptKey: `prompts/chunks/${issueID}_0.txt`,
-        resultKey: `results/chunks/${issueID}_0.json`,
-        promptBody: chunk_prompt(
-          buildChunkInput(issueID, "前半", [
-            "[order 1] 委員長が開会を宣言し、補正予算案の審議目的を確認。",
-            "[order 2] 財務大臣が総額8兆円の補正案の概要を説明。",
-            "[order 3] 野党議員が災害復旧費の執行遅延を指摘。",
-          ]),
-        ),
-      },
-      {
-        id: "CHUNK#1",
-        promptKey: `prompts/chunks/${issueID}_1.txt`,
-        resultKey: `results/chunks/${issueID}_1.json`,
-        promptBody: chunk_prompt(
-          buildChunkInput(issueID, "後半", [
-            "[order 4] 大臣が執行指針を3月末までに示すと回答。",
-            "[order 5] 与党議員が利子補給制度の拡充を質問。",
-            "[order 6] 経産省が金利補助率を引き上げる案を報告。",
-            "[order 7] 複数委員が防災投資の長期計画を求めた。",
-          ]),
-        ),
-      },
-    ];
-
-    for (const chunk of chunkDefinitions) {
-      await putPrompt(chunk.promptKey, chunk.promptBody);
+    async function cleanupTaskTable(tableName: string) {
+      const items = await scanAllItems(tableName);
+      if (items.length === 0) return;
+      await batchDelete(tableName, items.map((item) => ({ pk: item.pk })));
     }
 
-    const reducePromptKey = `prompts/reduce/${issueID}_chunked.txt`;
-    const reduceResultKey = `results/${issueID}_chunked_reduce.json`;
-    await putPrompt(reducePromptKey, reduce_prompt(buildTestReduceInput(issueID)));
-    const attachedAssetsUrl = await putAttachedAssets(issueID, [
-      { order: 1, speaker: "Chair 1", originalText: "Chunk 1 text" },
-      { order: 2, speaker: "Member 2", originalText: "Chunk 2 text" },
-      { order: 3, speaker: "Member 3", originalText: "Chunk 3 text" },
-      { order: 4, speaker: "Member 4", originalText: "Chunk 4 text" },
-      { order: 5, speaker: "Member 5", originalText: "Chunk 5 text" },
-      { order: 6, speaker: "Member 6", originalText: "Chunk 6 text" },
-      { order: 7, speaker: "Member 7", originalText: "Chunk 7 text" },
-    ]);
+    async function cleanupArticleTable(tableName: string) {
+      const items = await scanAllItems(tableName);
+      const keys = items
+        .map((item) => ({ PK: item.PK, SK: item.SK }))
+        .filter((key) => key.PK && key.SK);
+      if (keys.length === 0) return;
+      await batchDelete(tableName, keys);
+    }
 
-    const createdAt = new Date().toISOString();
-    const updatedAt = createdAt.slice(0, 10);
-    await dynamoDoc.send(
-      new PutCommand({
-        TableName: tableName,
-        Item: {
-          pk: issueID,
-          status: "pending",
-          llm: "gemini",
-          llmModel: "gemini-2.5-flash",
-          retryAttempts: 0,
-          createdAt,
-          updatedAt,
-          processingMode: "chunked",
-          prompt_url: `s3://${bucket}/${reducePromptKey}`,
-          result_url: `s3://${bucket}/${reduceResultKey}`,
-          meeting: makeMeeting(issueID),
-          attachedAssets: { speakerMetadataUrl: attachedAssetsUrl },
-          chunks: chunkDefinitions.map((chunk) => ({
-            id: chunk.id,
-            prompt_key: chunk.promptKey,
-            prompt_url: `s3://${bucket}/${chunk.promptKey}`,
-            result_url: `s3://${bucket}/${chunk.resultKey}`,
-            status: "notReady",
-          })),
-        },
-      }),
-    );
+    async function scanAllItems(tableName: string) {
+      const items: Record<string, any>[] = [];
+      let lastKey: Record<string, any> | undefined;
+      do {
+        const res = await dynamoDoc.send(
+          new ScanCommand({
+            TableName: tableName,
+            ExclusiveStartKey: lastKey,
+          }),
+        );
+        if (res.Items) {
+          items.push(...res.Items);
+        }
+        lastKey = res.LastEvaluatedKey as Record<string, any> | undefined;
+      } while (lastKey);
+      return items;
+    }
 
-    generateContentMock
-      .mockResolvedValueOnce({
-        response: { text: () => JSON.stringify(buildChunkOutput(issueID)) },
-      })
-      .mockResolvedValueOnce({
-        response: { text: () => JSON.stringify(buildChunkOutput(issueID)) },
-      })
-      .mockResolvedValueOnce({
-        response: { text: () => JSON.stringify(buildReduceArticle(issueID)) },
+    async function batchDelete(tableName: string, keys: Record<string, any>[]) {
+      const chunkSize = 25;
+      for (let i = 0; i < keys.length; i += chunkSize) {
+        const chunk = keys.slice(i, i + chunkSize);
+        if (!chunk.length) continue;
+        await dynamoDoc.send(
+          new BatchWriteCommand({
+            RequestItems: {
+              [tableName]: chunk.map((key) => ({
+                DeleteRequest: { Key: key },
+              })),
+            },
+          }),
+        );
+      }
+    }
+
+    async function cleanupBucket(bucket: string) {
+      const listed = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+        }),
+      );
+      if (!listed.Contents || listed.Contents.length === 0) return;
+      await s3Client.send(
+        new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: {
+            Objects: listed.Contents.map((obj) => ({ Key: obj.Key! })),
+            Quiet: true,
+          },
+        }),
+      );
+    }
+
+    async function putPrompt(key: string, body: string) {
+      const bucket = appConfig.promptBucketName;
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: "text/plain; charset=utf-8",
+        }),
+      );
+    }
+
+    async function putAttachedAssets(issueID: string, speeches: any[]) {
+      const bucket = appConfig.promptBucketName;
+      const key = `attachedAssets/${issueID}.json`;
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: JSON.stringify({ speeches }, null, 2),
+          ContentType: "application/json; charset=utf-8",
+        }),
+      );
+      return `s3://${bucket}/${key}`;
+    }
+
+    async function readObjectText(bucket: string, key: string): Promise<string> {
+      const res = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      return streamToString(res.Body as any);
+    }
+
+    function streamToString(stream: any): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+        stream.on("error", reject);
+        stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
       });
-
-    const minutePolls = chunkDefinitions.length + 2;
-    for (let minute = 0; minute < minutePolls; minute += 1) {
-      await handler();
     }
 
-    const stored = await getTask(tableName, issueID);
-    expect(stored?.status).toBe("completed");
-    expect(stored?.chunks?.every((chunk: any) => chunk.status === "ready")).toBe(true);
-
-    for (const chunk of chunkDefinitions) {
-      const chunkOutput = JSON.parse(stripCodeFence(await readObjectText(bucket, chunk.resultKey)));
-      expect(chunkOutput.id).toBe(issueID);
-      expect(chunkOutput.prompt_version).toBe(PROMPT_VERSION);
+    async function getTask(tableName: string, issueID: string) {
+      const res = await dynamoDoc.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { pk: issueID },
+        }),
+      );
+      return res.Item;
     }
 
-    const reduceOutput = JSON.parse(stripCodeFence(await readObjectText(bucket, reduceResultKey)));
-    expect(reduceOutput.id).toBe(issueID);
+    async function getArticle(tableName: string, issueID: string) {
+      const res = await dynamoDoc.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { PK: `A#${issueID}`, SK: "META" },
+        }),
+      );
+      return res.Item;
+    }
 
-    const articleItem = await getArticle(articleTableName, issueID);
-    expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
+    function stripCodeFence(payload: string): string {
+      const trimmed = payload.trim();
+      const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+      return trimmed;
+    }
+
+    // No wrapping; allow raw errors to surface for debugging.
   });
-
-  function stripCodeFence(payload: string): string {
-    const trimmed = payload.trim();
-    const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
-    if (match && match[1]) {
-      return match[1].trim();
-    }
-    return trimmed;
-  }
 });
 
 function uniqueIssue(): string {

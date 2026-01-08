@@ -25,6 +25,7 @@ const config: Config = {
       },
     ],
   },
+  setupFilesAfterEnv: ['<rootDir>/src/testSetup.ts'],
   clearMocks: true,
   testTimeout: 45000,
   verbose: false,
