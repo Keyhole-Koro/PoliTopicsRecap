@@ -87,8 +87,22 @@ export async function handler(): Promise<void> {
       error,
     });
     if (task) {
-      await notifyTaskError(task, error);
-      await bumpRetryAttempts(docClient, repoConfig, task);
+      const [notifyResult, retryResult] = await Promise.allSettled([
+        notifyTaskError(task, error),
+        bumpRetryAttempts(docClient, repoConfig, task),
+      ]);
+      if (notifyResult.status === "rejected") {
+        console.error("[handler] Failed to notify task error", {
+          taskId: task.pk,
+          error: notifyResult.reason,
+        });
+      }
+      if (retryResult.status === "rejected") {
+        console.error("[handler] Failed to bump retry attempts", {
+          taskId: task.pk,
+          error: retryResult.reason,
+        });
+      }
     }
   }
 }

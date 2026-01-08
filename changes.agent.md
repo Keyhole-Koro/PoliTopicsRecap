@@ -85,3 +85,15 @@ Details:
   - `src/lambda/taskProcessor.ts`
   - `src/lambda/notifications.ts`
   - `docs/terraform-localstack.md`
+
+Agent: Codex
+Date/Time: 2026-01-05 13:54 JST
+Keywords: recap, retryAttempts, error-handling, tests
+Topic: Increment retryAttempts on recap task failures
+Details:
+- Ensured retryAttempts increments even when task error notifications fail by attempting notification and retry updates independently.
+- Added unit coverage for retryAttempts increment when a task processing failure occurs and notifications error out.
+- Files changed:
+  - `PoliTopicsRecap/src/lambda_handler.ts`
+  - `PoliTopicsRecap/src/retryAttempts.test.ts`
+  - `PoliTopicsRecap/changes.agent.md`
