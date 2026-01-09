@@ -27,10 +27,11 @@ export const instruction_chunk = `【chunkモードの出力指針】
 export const instruction_reduce = `【reduceモードの出力指針】
 - 全chunkの middle_summary を統合し、重複排除・矛盾解消・網羅性確保。
 - participants は chunk由来の重複/別表記を正規化し、一人につき要旨を統合。役職や所属は可能なら統合、曖昧なら空欄可。
-- 出力は title / category / description / date / summary / soft_language_summary / participants。
+- keywords は会議全体の主要テーマ/論点/政策ワードを重複排除し、priority を high/medium/low で付与。
+- 出力は title / category / description / date / summary / soft_language_summary / participants / keywords。
 - summary 構成（推奨）: 決定事項 / 主要論点と立場 / 未決・宿題 / 次に起こること（担当・期限） / 重要数値。
 - based_on_orders は統合後に参照した order のユニオンまたは代表範囲。
-- dialogs / terms / keywords は出力しない。
+- dialogs / terms は出力しない。
 - ${no_code_fence_warning}`;
 
 export const output_format_chunk = `### 出力フォーマット（chunk）
@@ -104,6 +105,10 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
       "summary": "この人の発言要旨（会議全体を統合）",
       "based_on_orders": [10,14,29]
     }
+  ],
+
+  "keywords": [
+    { "keyword": "代表表記", "priority": "high | medium | low" }
   ]
 }
 `;

@@ -150,3 +150,12 @@ Details:
 - Queued canned JSON outputs for single/chunked flows in the LocalStack integration test.
 - Files changed:
   - `PoliTopicsRecap/src/lambda_handler.integration.test.ts`
+
+Agent: Codex
+Date/Time: 2026-01-06 11:20 JST
+Keywords: prompts, keywords, reduce, recap
+Topic: Ensure reduce prompts emit keywords
+Details:
+- Updated reduce-mode prompt instructions/output format to require keywords (with priority) alongside participants and summaries.
+- Files changed:
+  - `PoliTopicsRecap/src/prompts.for.llmtest.ts`
