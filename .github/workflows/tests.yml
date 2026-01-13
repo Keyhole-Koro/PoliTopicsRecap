@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: PoliTopicsRecap/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Start LocalStack
         run: docker compose -f docker-compose.yml up -d localstack
@@ -49,14 +49,12 @@ jobs:
           exit 1
 
       - name: Ensure LocalStack resources
-        run: ./scripts/verify_localstack_resources.sh --ensure
+        run: bash scripts/ensure-localstack.sh
 
       - name: Install dependencies
-        working-directory: PoliTopicsRecap
         run: pnpm install --frozen-lockfile
 
       - name: Test Recap
-        working-directory: PoliTopicsRecap
         run: pnpm test -- --runInBand
 
       - name: Teardown
