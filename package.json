@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.18.2",
   "scripts": {
     "pretest": "bash scripts/ensure-localstack.sh",
-    "test": "APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false jest --config jest.config.ts",
+    "test": "APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false jest --config jest.config.ts --runInBand",
     "ensure:localstack": "bash scripts/ensure-localstack.sh",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
     "local:test:e2e": "ENABLE_NOTIFICATION=false jest --config jest.config.ts --runTestsByPath tests/integration/fullFlow.test.ts",

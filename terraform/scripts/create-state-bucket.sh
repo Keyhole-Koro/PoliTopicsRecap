@@ -8,13 +8,13 @@ fi
 
 ENVIRONMENT="$1"
 REGION="ap-northeast-3"
-LOCALSTACK_ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localstack:4566}"
+LOCALSTACK_URL="${LOCALSTACK_URL:-http://localstack:4566}"
 AWS_ARGS=()
 
 case "$ENVIRONMENT" in
   local)
     BUCKET="politopics-recap-local-state"
-    AWS_ARGS+=(--endpoint-url "$LOCALSTACK_ENDPOINT")
+    AWS_ARGS+=(--endpoint-url "$LOCALSTACK_URL")
     ;;
   stage)
     BUCKET="politopics-recap-stage-state"
@@ -33,7 +33,7 @@ echo "Environment : $ENVIRONMENT"
 echo "Bucket      : $BUCKET"
 echo "Region      : $REGION"
 if [ "$ENVIRONMENT" = "local" ]; then
-  echo "Endpoint    : $LOCALSTACK_ENDPOINT"
+  echo "Endpoint    : $LOCALSTACK_URL"
 fi
 echo
 

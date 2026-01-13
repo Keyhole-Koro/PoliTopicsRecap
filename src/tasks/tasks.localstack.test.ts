@@ -131,7 +131,17 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       dynamoClient.destroy();
     });
 
-    beforeEach(() => {
+    async function cleanupEnvironment() {
+      await deleteKeys(appConfig.promptBucketName, await listAllKeys(appConfig.promptBucketName));
+      if (appConfig.articleAssetBucketName) {
+        await deleteKeys(appConfig.articleAssetBucketName, await listAllKeys(appConfig.articleAssetBucketName));
+      }
+      await deleteTableItems(appConfig.taskTableName, "pk");
+      await deleteTableItems(appConfig.articleTableName, "PK", "SK");
+    }
+
+    beforeEach(async () => {
+      await cleanupEnvironment();
       generateContentMock.mockReset();
       getGenerativeModelMock.mockReset();
       getGenerativeModelMock.mockImplementation(() => ({
@@ -356,6 +366,64 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         }),
         `DeleteObjects ${bucket}`,
       );
+    }
+
+    async function listAllKeys(bucket: string): Promise<string[]> {
+      const keys: string[] = [];
+      let continuationToken: string | undefined;
+      do {
+        const res = await safeS3Send(
+          new (require("@aws-sdk/client-s3").ListObjectsV2Command)({
+            Bucket: bucket,
+            ContinuationToken: continuationToken,
+          }),
+          `ListObjectsV2 ${bucket}`,
+        );
+        const contents = res.Contents ?? [];
+        keys.push(...(contents.map((c: any) => c.Key).filter(Boolean) as string[]));
+        continuationToken = res.NextContinuationToken;
+      } while (continuationToken);
+      return keys;
+    }
+
+    async function deleteTableItems(tableName: string, partitionKey: string, sortKey?: string) {
+      let lastKey: Record<string, any> | undefined;
+      do {
+        const res = await safeDynamoSend(
+          new (require("@aws-sdk/lib-dynamodb").ScanCommand)({
+            TableName: tableName,
+            ProjectionExpression: sortKey ? `${partitionKey}, ${sortKey}` : partitionKey,
+            ExclusiveStartKey: lastKey,
+          }),
+          `Scan ${tableName}`,
+        );
+        const items = res.Items ?? [];
+        if (items.length > 0) {
+          const keys = items.map((item: any) =>
+            sortKey ? { [partitionKey]: item[partitionKey], [sortKey]: item[sortKey] } : { [partitionKey]: item[partitionKey] },
+          );
+          await batchDelete(tableName, keys);
+        }
+        lastKey = res.LastEvaluatedKey as Record<string, any> | undefined;
+      } while (lastKey);
+    }
+
+    async function batchDelete(tableName: string, keys: Record<string, any>[]) {
+      const chunkSize = 25;
+      for (let i = 0; i < keys.length; i += chunkSize) {
+        const chunk = keys.slice(i, i + chunkSize);
+        if (!chunk.length) continue;
+        await safeDynamoSend(
+          new (require("@aws-sdk/lib-dynamodb").BatchWriteCommand)({
+            RequestItems: {
+              [tableName]: chunk.map((key) => ({
+                DeleteRequest: { Key: key },
+              })),
+            },
+          }),
+          `BatchDelete ${tableName}`,
+        );
+      }
     }
 
     async function readObjectText(bucket: string, key: string): Promise<string> {
