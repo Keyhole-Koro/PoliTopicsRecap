@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  recap-jest:
+  jest-test:
     runs-on: ubuntu-latest
     env:
       LOCALSTACK_URL: http://localhost:4566
@@ -46,6 +46,11 @@ jobs:
           echo "LocalStack failed to start" >&2
           docker compose -f docker-compose.yml logs localstack || true
           exit 1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Ensure LocalStack resources
         run: bash scripts/ensure-localstack.sh

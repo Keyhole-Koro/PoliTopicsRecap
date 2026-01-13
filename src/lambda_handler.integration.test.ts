@@ -1,6 +1,20 @@
-import { PutObjectCommand, GetObjectCommand, S3Client, ListBucketsCommand, HeadBucketCommand } from "@aws-sdk/client-s3";
+import {
+  PutObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+  S3Client,
+  ListBucketsCommand,
+  HeadBucketCommand,
+} from "@aws-sdk/client-s3";
 import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  GetCommand,
+  ScanCommand,
+  BatchWriteCommand,
+} from "@aws-sdk/lib-dynamodb";
 import {
   PROMPT_VERSION,
   reduce_prompt,
@@ -158,6 +172,10 @@ describe("lambda_handler LocalStack integration", () => {
       const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
+      await cleanupBucket(bucket);
+      await cleanupBucket(articleAssetBucket);
+      await cleanupTaskTable(tableName);
+      await cleanupArticleTable(articleTableName);
 
       const issueID = uniqueIssue();
       const promptKey = `prompts/reduce/${issueID}_minute.txt`;
@@ -209,6 +227,10 @@ describe("lambda_handler LocalStack integration", () => {
       const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
+      await cleanupBucket(bucket);
+      await cleanupBucket(articleAssetBucket);
+      await cleanupTaskTable(tableName);
+      await cleanupArticleTable(articleTableName);
 
       const issueID = uniqueIssue();
       const chunkDefinitions = [
@@ -390,6 +412,90 @@ describe("lambda_handler LocalStack integration", () => {
     // No wrapping; allow raw errors to surface for debugging.
   });
 });
+
+function cleanupClientConfig() {
+  const endpoint =
+    process.env.AWS_ENDPOINT_URL ??
+    process.env.LOCALSTACK_ENDPOINT_URL ??
+    process.env.LOCALSTACK_URL ??
+    "http://localhost:4566";
+  const region = process.env.AWS_REGION || "ap-northeast-3";
+  const credentials = {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "test",
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "test",
+  };
+  return { endpoint, region, credentials };
+}
+
+async function cleanupTaskTable(tableName: string) {
+  const { endpoint, region, credentials } = cleanupClientConfig();
+  const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({ endpoint, region, credentials }));
+  try {
+    const items = await docClient.send(
+      new ScanCommand({
+        TableName: tableName,
+        ProjectionExpression: "pk",
+      }),
+    );
+    const keys = items.Items?.map((item) => ({ pk: item.pk })) ?? [];
+    await batchDelete(docClient, tableName, keys);
+  } finally {
+    docClient.destroy();
+  }
+}
+
+async function cleanupArticleTable(tableName: string) {
+  const { endpoint, region, credentials } = cleanupClientConfig();
+  const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({ endpoint, region, credentials }));
+  try {
+    const items = await docClient.send(
+      new ScanCommand({
+        TableName: tableName,
+        ProjectionExpression: "PK, SK",
+      }),
+    );
+    const keys =
+      items.Items?.map((item) => ({ PK: item.PK, SK: item.SK })).filter((k) => k.PK && k.SK) ?? [];
+    await batchDelete(docClient, tableName, keys);
+  } finally {
+    docClient.destroy();
+  }
+}
+
+async function batchDelete(docClient: DynamoDBDocumentClient, tableName: string, keys: Record<string, any>[]) {
+  const chunkSize = 25;
+  for (let i = 0; i < keys.length; i += chunkSize) {
+    const chunk = keys.slice(i, i + chunkSize);
+    if (!chunk.length) continue;
+    await docClient.send(
+      new BatchWriteCommand({
+        RequestItems: {
+          [tableName]: chunk.map((key) => ({
+            DeleteRequest: { Key: key },
+          })),
+        },
+      }),
+    );
+  }
+}
+
+async function cleanupBucket(bucket: string) {
+  const { endpoint, region, credentials } = cleanupClientConfig();
+  const s3 = new S3Client({ endpoint, region, credentials, forcePathStyle: true });
+  try {
+    const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucket }));
+    const objects = listed.Contents?.map((obj) => ({ Key: obj.Key! })) ?? [];
+    if (objects.length === 0) return;
+    await s3.send(
+      new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: { Objects: objects, Quiet: true },
+      }),
+    );
+  } finally {
+    s3.destroy();
+  }
+}
 
 function uniqueIssue(): string {
   return `ISSUE-${Math.random().toString(36).slice(2, 10)}`;
