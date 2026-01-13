@@ -53,7 +53,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Ensure LocalStack resources
-        run: bash scripts/ensure-localstack.sh
+        run: bash scripts/ensure-localstack.sh localstackTest
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

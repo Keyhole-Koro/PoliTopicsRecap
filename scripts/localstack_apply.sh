@@ -28,8 +28,13 @@ echo "==> Recap: build"
 echo "==> Recap: create state bucket"
 "$STATE_SCRIPT" "$ENVIRONMENT"
 
+BACKEND_CONFIG="backends/local.hcl"
+if [ "$ENVIRONMENT" == "localstackTest" ]; then
+  BACKEND_CONFIG="backends/ghaTest.hcl"
+fi
+
 echo "==> Recap: terraform init"
-terraform -chdir="$TF_DIR" init -input=false -reconfigure -backend-config="backends/local.hcl"
+terraform -chdir="$TF_DIR" init -input=false -reconfigure -backend-config="$BACKEND_CONFIG"
 
 echo "==> Recap: terraform import"
 "$IMPORT_SCRIPT" "$ENVIRONMENT"
