@@ -1,18 +1,17 @@
-name: Recap Tests
+name: Jest Tests
 
 on:
   push:
     branches:
       - main
-      - develop
   pull_request:
 
 jobs:
   recap-jest:
     runs-on: ubuntu-latest
     env:
-      LOCALSTACK_URL: http://localhost:4570
-      AWS_ENDPOINT_URL: http://localhost:4570
+      LOCALSTACK_URL: http://localhost:4566
+      AWS_ENDPOINT_URL: http://localhost:4566
       AWS_REGION: ap-northeast-3
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
@@ -54,7 +53,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test Recap
+      - name: Test
         run: pnpm test -- --runInBand
 
       - name: Teardown
