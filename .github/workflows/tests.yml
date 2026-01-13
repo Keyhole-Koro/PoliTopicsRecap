@@ -18,6 +18,7 @@ jobs:
       AWS_SECRET_ACCESS_KEY: test
       ENABLE_NOTIFICATION: "false"
       GEMINI_API_KEY: dummy
+      NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
