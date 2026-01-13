@@ -5,7 +5,9 @@
   "type": "commonjs",
   "packageManager": "pnpm@10.18.2",
   "scripts": {
-    "test": "ENABLE_NOTIFICATION=false jest --config jest.config.ts",
+    "pretest": "bash scripts/ensure-localstack.sh",
+    "test": "APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false jest --config jest.config.ts",
+    "ensure:localstack": "bash scripts/ensure-localstack.sh",
     "dev": "npx ts-node -r tsconfig-paths/register src/local_invoke.ts",
     "local:test:e2e": "ENABLE_NOTIFICATION=false jest --config jest.config.ts --runTestsByPath tests/integration/fullFlow.test.ts",
     "build:local": "node scripts/build-local-lambda.js",

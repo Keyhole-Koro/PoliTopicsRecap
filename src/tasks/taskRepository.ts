@@ -2,6 +2,7 @@ import {
   DynamoDBDocumentClient,
   GetCommand,
   QueryCommand,
+  type QueryCommandOutput,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 
@@ -17,20 +18,34 @@ export async function fetchOldestPendingTask(
   doc: DynamoDBDocumentClient,
   cfg: TaskRepositoryConfig,
 ): Promise<TaskItem | null> {
-  const res = await doc.send(
-    new QueryCommand({
-      TableName: cfg.tableName,
-      IndexName: cfg.statusIndexName,
-      KeyConditionExpression: "#status = :pending",
-      ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: { ":pending": "pending" },
-      ScanIndexForward: true,
-      Limit: 1,
-    }),
-  );
+  let startKey: Record<string, any> | undefined = undefined;
+  const exprNames = { "#status": "status" };
+  const exprValues = { ":pending": "pending", ":maxAttempts": 3 };
 
-  const [raw] = res.Items ?? [];
-  return asTaskItem(raw);
+  while (true) {
+    const res: QueryCommandOutput = await doc.send(
+      new QueryCommand({
+        TableName: cfg.tableName,
+        IndexName: cfg.statusIndexName,
+        KeyConditionExpression: "#status = :pending",
+        FilterExpression: "attribute_not_exists(retryAttempts) OR retryAttempts < :maxAttempts",
+        ExpressionAttributeNames: exprNames,
+        ExpressionAttributeValues: exprValues,
+        ScanIndexForward: true,
+        Limit: 25,
+        ExclusiveStartKey: startKey,
+      }),
+    );
+
+    const [raw] = res.Items ?? [];
+    if (raw) {
+      const task = asTaskItem(raw);
+      if (task) return task;
+    }
+
+    if (!res.LastEvaluatedKey) return null;
+    startKey = res.LastEvaluatedKey;
+  }
 }
 
 export async function getTaskByIssue(

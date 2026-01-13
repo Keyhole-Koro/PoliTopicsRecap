@@ -1,44 +1,25 @@
 import {
-  CreateBucketCommand,
-  DeleteBucketCommand,
   DeleteObjectsCommand,
-  DeleteObjectCommand,
   GetObjectCommand,
-  ListObjectsV2Command,
+  HeadBucketCommand,
+  ListBucketsCommand,
   PutObjectCommand,
   S3Client,
-  ListBucketsCommand,
 } from "@aws-sdk/client-s3";
-import {
-  DescribeTableCommand,
-  DynamoDBClient,
-} from "@aws-sdk/client-dynamodb";
+import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
-  BatchWriteCommand,
+  DeleteCommand,
   GetCommand,
   PutCommand,
-  ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
 
-const requiredEnv = [
-  "GEMINI_API_KEY",
-  "DISCORD_WEBHOOK_ERROR",
-  "DISCORD_WEBHOOK_WARN",
-  "DISCORD_WEBHOOK_BATCH",
-  "DISCORD_WEBHOOK_ACCESS",
-  "APP_ENVIRONMENT",
-];
-const missingEnv = requiredEnv.filter((name) => !process.env[name]);
-if (missingEnv.length > 0) {
-  // eslint-disable-next-line no-console
-  console.error(
-    `[tasks.localstack] Missing env vars (${missingEnv.join(
-      ", ",
-    )}). Run 'source scripts/export_test_env.sh' and, if tables/buckets are missing, '../scripts/localstack_apply_all.sh -only Recap'`,
-  );
-}
-const describeIfEnv = missingEnv.length > 0 ? describe.skip : describe;
+process.env.GEMINI_API_KEY ??= "dummy-gemini-key";
+process.env.DISCORD_WEBHOOK_ERROR ??= "https://discord.invalid/error";
+process.env.DISCORD_WEBHOOK_WARN ??= "https://discord.invalid/warn";
+process.env.DISCORD_WEBHOOK_BATCH ??= "https://discord.invalid/batch";
+process.env.DISCORD_WEBHOOK_ACCESS ??= "https://discord.invalid/access";
+process.env.APP_ENVIRONMENT ??= "localstackTest";
 
 jest.mock("@google/generative-ai");
 
@@ -65,7 +46,7 @@ const getGenerativeModelMock = jest.fn();
  * [History] No recorded incident; preventive coverage.
  */
 
-describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
+describe("PoliTopics task consumer (LocalStack)", () => {
   const { handler } = require("../lambda_handler") as typeof import("../lambda_handler");
   const { appConfig } = require("../config") as typeof import("../config");
 
@@ -81,74 +62,68 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
     secretAccessKey: "test",
   };
 
-  const STATUS_INDEX_NAME = "StatusIndex";
-  const shouldRunLocalstack = process.env.RUN_LOCALSTACK_TESTS === "true" && Boolean(endpoint);
-  const describeIfEndpoint = shouldRunLocalstack ? describe : describe.skip;
+  const endpointValue = endpoint || "http://localhost:4566";
 
-  describeIfEndpoint("with LocalStack", () => {
-    if (!endpoint) {
-      it("skipped because no LocalStack endpoint is set", () => {
-        expect(true).toBe(true);
-      });
-      return;
-    }
-
-    let localstackReady = true;
-
+  describe("with LocalStack", () => {
     const s3Client = new S3Client({
       region,
-      endpoint,
+      endpoint: endpointValue,
       forcePathStyle: true,
       credentials,
     });
     const dynamoClient = new DynamoDBClient({
       region,
-      endpoint,
+      endpoint: endpointValue,
       credentials,
     });
     const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
       marshallOptions: { removeUndefinedValues: true },
     });
 
-    async function ensureBucketExists(bucket: string) {
+    const toSafeError = (err: any, context: string) => {
+      const parts = [context];
+      const code = err?.name || err?.code;
+      if (code) parts.push(String(code));
+      if (err?.message) parts.push(String(err.message));
+      const status = err?.$metadata?.httpStatusCode;
+      if (status) parts.push(`status=${status}`);
+      const host = err?.hostname || err?.address;
+      if (host) parts.push(`host=${host}`);
+      return new Error(parts.join(" | "));
+    };
+
+    const safeS3Send = async (command: any, context: string): Promise<any> => {
       try {
-        await s3Client.send(new CreateBucketCommand({ Bucket: bucket }));
+        return await s3Client.send(command);
       } catch (err: any) {
-        if (err?.name !== "BucketAlreadyOwnedByYou" && err?.name !== "BucketAlreadyExists") {
-          // ignore already-provisioned buckets
-        }
+        throw toSafeError(err, context);
       }
-    }
+    };
+
+    const safeDynamoSend = async (command: any, context: string): Promise<any> => {
+      try {
+        return await dynamoDoc.send(command);
+      } catch (err: any) {
+        throw toSafeError(err, context);
+      }
+    };
+
+    const assertBucketExists = async (bucket: string) => {
+      await safeS3Send(new HeadBucketCommand({ Bucket: bucket }), `HeadBucket ${bucket}`);
+    };
+
+    const assertTableExists = async (tableName: string) => {
+      await safeDynamoSend(new DescribeTableCommand({ TableName: tableName }), `DescribeTable ${tableName}`);
+    };
 
     beforeAll(async () => {
       const promptBucket = appConfig.promptBucketName;
       const articleAssetBucket = appConfig.articleAssetBucketName || promptBucket;
-      try {
-        await s3Client.send(new ListBucketsCommand({}));
-        await ensureBucketExists(promptBucket);
-        await ensureBucketExists(articleAssetBucket);
-
-        // Clear tasks table
-        const tableName = appConfig.taskTableName;
-        const scan = await dynamoDoc.send(new ScanCommand({ TableName: tableName, ProjectionExpression: "pk" }));
-        if (scan.Items && scan.Items.length > 0) {
-          const deleteRequests = scan.Items.map((it) => ({
-            DeleteRequest: { Key: { pk: it.pk } },
-          }));
-          // BatchWriteItem limit is 25
-          for (let i = 0; i < deleteRequests.length; i += 25) {
-            await dynamoDoc.send(
-              new BatchWriteCommand({
-                RequestItems: { [tableName]: deleteRequests.slice(i, i + 25) },
-              }),
-            );
-          }
-        }
-      } catch (err: any) {
-        localstackReady = false;
-        // eslint-disable-next-line no-console
-        console.warn("[tasks.localstack] LocalStack unavailable; skipping tests:", err?.message ?? err);
-      }
+      await safeS3Send(new ListBucketsCommand({}), "ListBuckets");
+      await assertBucketExists(promptBucket);
+      await assertBucketExists(articleAssetBucket);
+      await assertTableExists(appConfig.taskTableName);
+      await assertTableExists(appConfig.articleTableName);
     });
 
     afterAll(async () => {
@@ -169,36 +144,17 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
     });
 
     test("processes a single_chunk task, stores reduce result, and marks it completed", async () => {
-      if (!localstackReady) {
-        return;
-      }
       const bucket = appConfig.promptBucketName;
       const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
+      const issueID = uniqueIssue();
+      const promptKey = `prompts/reduce/${issueID}_minute.txt`;
+      const resultKey = `results/${issueID}_minute_reduce.json`;
+      const attachedKey = `attachedAssets/${issueID}.json`;
 
       try {
-        await cleanupBucket(bucket);
-        await cleanupBucket(articleAssetBucket);
-
-        const issueID = uniqueIssue();
-        const promptKey = `prompts/reduce/${issueID}_single_chunk.json`;
-        const resultKey = `results/${issueID}_reduce.json`;
-        const attachedKey = `attachedAssets/${issueID}.json`;
-
-        await putJson(promptKey, {
-          mode: "single_chunk",
-          prompt: "Summarize the speeches.",
-          speeches: [
-            {
-              speechOrder: 1,
-              speaker: "架空太郎",
-              speakerYomi: "かくうたろう",
-              speakerGroup: "架空党・無所属",
-              speakerPosition: null,
-            },
-          ],
-        });
+        await putPrompt(promptKey, "Summarize the speeches.");
         await putJson(attachedKey, {
           speeches: [
             {
@@ -212,9 +168,9 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
           ],
         });
 
-        const createdAt = new Date().toISOString();
+        const createdAt = new Date(0).toISOString();
         const updatedAt = createdAt.slice(0, 10);
-        await dynamoDoc.send(
+        await safeDynamoSend(
           new PutCommand({
             TableName: tableName,
             Item: {
@@ -232,6 +188,7 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
               attachedAssets: { speakerMetadataUrl: `s3://${bucket}/${attachedKey}` },
             },
           }),
+          `Put pending task ${issueID}`,
         );
 
         generateContentMock.mockResolvedValueOnce({
@@ -257,44 +214,35 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
         expect(asset?.dialogs?.[0]?.speakerGroup).toBe("架空党・無所属");
         expect(asset?.dialogs?.[0]?.speakerPosition).toBeUndefined();
       } finally {
-        // await cleanupTestRun(tableName);
+        await deleteKeys(bucket, [promptKey, resultKey, attachedKey]);
+        await deleteTask(tableName, issueID);
       }
     });
 
     test("processes a chunked task, marks chunks ready, and writes reduce output", async () => {
-      if (!localstackReady) {
-        return;
-      }
       const bucket = appConfig.promptBucketName;
       const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
+      const issueID = uniqueIssue();
+      const chunkDefinition = {
+        id: "CHUNK#0",
+        promptKey: `prompts/chunks/${issueID}_0.txt`,
+        resultKey: `results/chunks/${issueID}_0.json`,
+        promptBody: [
+          "[order 1] 内閣府が防災予算の増額を報告。",
+          "[order 2] 委員が進捗管理の仕組みを質問。",
+          "[order 3] 大臣が年度内に指針を示すと回答。",
+        ].join("\n"),
+      };
+      const reducePromptKey = `prompts/reduce/${issueID}_chunked.txt`;
+      const reduceResultKey = `results/${issueID}_chunked_reduce.json`;
+      const attachedKey = `attachedAssets/${issueID}.json`;
 
       try {
-        await cleanupBucket(bucket);
-        await cleanupBucket(articleAssetBucket);
+        await putPrompt(chunkDefinition.promptKey, chunkDefinition.promptBody);
 
-        const issueID = uniqueIssue();
-        const chunkDefinition = {
-          id: "CHUNK#0",
-          promptKey: `prompts/chunks/${issueID}_0.txt`,
-          resultKey: `results/chunks/${issueID}_0.json`,
-          promptBody: [
-            "[order 1] 内閣府が防災予算の増額を報告。",
-            "[order 2] 委員が進捗管理の仕組みを質問。",
-            "[order 3] 大臣が年度内に指針を示すと回答。",
-          ].join("\n"),
-        };
-        await putJson(chunkDefinition.promptKey, { prompt: chunkDefinition.promptBody });
-
-        const reducePromptKey = `prompts/reduce/${issueID}_chunked.json`;
-        const reduceResultKey = `results/${issueID}_chunked_reduce.json`;
-        const attachedKey = `attachedAssets/${issueID}.json`;
-
-        await putJson(reducePromptKey, {
-          mode: "chunked",
-          prompt: "Reduce chunked outputs.",
-        });
+        await putPrompt(reducePromptKey, "Reduce chunked outputs.");
         await putJson(attachedKey, {
           speeches: [
             {
@@ -308,9 +256,9 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
           ],
         });
 
-        const createdAt = new Date().toISOString();
+        const createdAt = new Date(0).toISOString();
         const updatedAt = createdAt.slice(0, 10);
-        await dynamoDoc.send(
+        await safeDynamoSend(
           new PutCommand({
             TableName: tableName,
             Item: {
@@ -337,6 +285,7 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
               ],
             },
           }),
+          `Put chunked task ${issueID}`,
         );
 
         generateContentMock
@@ -361,52 +310,56 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
         const articleItem = await getArticle(articleTableName, issueID);
         expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
       } finally {
-        // await cleanupTestRun(tableName);
+        await deleteKeys(bucket, [
+          chunkDefinition.promptKey,
+          chunkDefinition.resultKey,
+          reducePromptKey,
+          reduceResultKey,
+          attachedKey,
+        ]);
+        await deleteTask(tableName, issueID);
       }
     });
 
-    async function cleanupBucket(bucket: string) {
-      const listed = await s3Client.send(
-        new ListObjectsV2Command({
-          Bucket: bucket,
-        }),
-      ).catch((err: any) => {
-        throw wrapError(err, `cleanupBucket list ${bucket}`);
-      });
-      if (!listed.Contents || listed.Contents.length === 0) return;
-      await s3Client.send(
-        new DeleteObjectsCommand({
-          Bucket: bucket,
-          Delete: {
-            Objects: listed.Contents.map((obj) => ({ Key: obj.Key! })),
-            Quiet: true,
-          },
-        }),
-      ).catch((err: any) => {
-        throw wrapError(err, `cleanupBucket delete ${bucket}`);
-      });
-    }
-
     async function putJson(key: string, data: unknown) {
       const bucket = appConfig.promptBucketName;
-      await s3Client.send(
+      await safeS3Send(
         new PutObjectCommand({
           Bucket: bucket,
           Key: key,
           Body: JSON.stringify(data, null, 2),
           ContentType: "application/json; charset=utf-8",
         }),
-      ).catch((err: any) => {
-        throw wrapError(err, `putJson ${key}`);
-      });
+        `PutObject ${bucket}/${key}`,
+      );
+    }
+
+    async function putPrompt(key: string, body: string) {
+      const bucket = appConfig.promptBucketName;
+      await safeS3Send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: body,
+          ContentType: "text/plain; charset=utf-8",
+        }),
+        `PutObject ${bucket}/${key}`,
+      );
+    }
+
+    async function deleteKeys(bucket: string, keys: string[]) {
+      if (keys.length === 0) return;
+      await safeS3Send(
+        new DeleteObjectsCommand({
+          Bucket: bucket,
+          Delete: { Objects: keys.map((key) => ({ Key: key })), Quiet: true },
+        }),
+        `DeleteObjects ${bucket}`,
+      );
     }
 
     async function readObjectText(bucket: string, key: string): Promise<string> {
-      const res = await s3Client
-        .send(new GetObjectCommand({ Bucket: bucket, Key: key }))
-        .catch((err: any) => {
-          throw wrapError(err, `readObjectText ${bucket}/${key}`);
-        });
+      const res = await safeS3Send(new GetObjectCommand({ Bucket: bucket, Key: key }), `GetObject ${bucket}/${key}`);
       return streamToString(res.Body as any);
     }
 
@@ -420,26 +373,34 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
     }
 
     async function getTask(tableName: string, issueID: string) {
-      const res = await dynamoDoc.send(
+      const res = await safeDynamoSend(
         new GetCommand({
           TableName: tableName,
           Key: { pk: issueID },
         }),
-      ).catch((err: any) => {
-        throw wrapError(err, `getTask ${tableName}/${issueID}`);
-      });
+        `GetTask ${issueID}`,
+      );
       return res.Item;
     }
 
+    async function deleteTask(tableName: string, issueID: string) {
+      await safeDynamoSend(
+        new DeleteCommand({
+          TableName: tableName,
+          Key: { pk: issueID },
+        }),
+        `DeleteTask ${issueID}`,
+      );
+    }
+
     async function getArticle(tableName: string, issueID: string) {
-      const res = await dynamoDoc.send(
+      const res = await safeDynamoSend(
         new GetCommand({
           TableName: tableName,
           Key: { PK: `A#${issueID}`, SK: "META" },
         }),
-      ).catch((err: any) => {
-        throw wrapError(err, `getArticle ${tableName}/${issueID}`);
-      });
+        `GetArticle ${issueID}`,
+      );
       return res.Item;
     }
 
@@ -450,11 +411,6 @@ describeIfEnv("PoliTopics task consumer (LocalStack)", () => {
         stream.on("error", reject);
         stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
       });
-    }
-
-    function wrapError(err: any, context: string): Error {
-      const msg = err?.message ?? String(err);
-      return new Error(`${context}: ${msg}`);
     }
 
     function makeMeeting(issueID: string) {

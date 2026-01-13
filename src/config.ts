@@ -1,4 +1,4 @@
-export type AppEnvironment = "local" | "stage" | "prod"
+export type AppEnvironment = "local" | "stage" | "prod" | "localstackTest"
 
 export type AppConfig = {
   environment: AppEnvironment
@@ -21,8 +21,29 @@ export type AppConfig = {
   }
 }
 
-const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
-  local: {
+const CONFIG_BY_ENV: Record<AppEnvironment, () => Omit<AppConfig, "environment">> = {
+  local: buildLocalConfig,
+  stage: buildStageConfig,
+  prod: buildProdConfig,
+  localstackTest: buildTestConfig,
+}
+
+const ACTIVE_ENVIRONMENT: AppEnvironment = resolveEnvironment()
+
+export let appConfig: AppConfig = {
+  environment: ACTIVE_ENVIRONMENT,
+  ...CONFIG_BY_ENV[ACTIVE_ENVIRONMENT](),
+}
+
+export function setAppEnvironment(environment: AppEnvironment) {
+  appConfig = {
+    environment,
+    ...CONFIG_BY_ENV[environment](),
+  }
+}
+
+function buildLocalConfig(): Omit<AppConfig, "environment"> {
+  return {
     aws: {
       region: "ap-northeast-3",
       endpoint: "http://localstack:4566",
@@ -40,8 +61,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
       batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
     },
-  },
-  stage: {
+  };
+}
+
+function buildStageConfig(): Omit<AppConfig, "environment"> {
+  return {
     aws: {
       region: "ap-northeast-3",
     },
@@ -56,8 +80,11 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
       batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
     },
-  },
-  prod: {
+  };
+}
+
+function buildProdConfig(): Omit<AppConfig, "environment"> {
+  return {
     aws: {
       region: "ap-northeast-3",
     },
@@ -72,26 +99,39 @@ const CONFIG_BY_ENV: Record<AppEnvironment, Omit<AppConfig, "environment">> = {
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
       batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
     },
-  },
+  };
 }
 
-const ACTIVE_ENVIRONMENT: AppEnvironment = resolveEnvironment()
-
-export let appConfig: AppConfig = {
-  environment: ACTIVE_ENVIRONMENT,
-  ...CONFIG_BY_ENV[ACTIVE_ENVIRONMENT],
+function buildTestConfig(): Omit<AppConfig, "environment"> {
+  const optionalEnv = (name: string) => requireEnv(name, true);
+  return {
+    aws: {
+      region: process.env.AWS_REGION || "ap-northeast-3",
+      endpoint: process.env.AWS_ENDPOINT_URL || "http://localhost:4566",
+      forcePathStyle: true,
+      credentials:
+        process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
+          ? { accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY }
+          : { accessKeyId: "test", secretAccessKey: "test" },
+    },
+    taskTableName: process.env.TASK_TABLE_NAME || "politopics-llm-tasks-local",
+    taskStatusIndexName: "StatusIndex",
+    promptBucketName: process.env.PROMPT_BUCKET_NAME || "politopics-prompts-local",
+    articleTableName: process.env.ARTICLE_TABLE_NAME || "politopics-local",
+    articleAssetBucketName: process.env.ARTICLE_ASSET_BUCKET_NAME || "politopics-articles-local",
+    geminiApiKey: optionalEnv("GEMINI_API_KEY"),
+    notifications: {
+      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
+      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
+      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+    },
+  };
 }
 
-export function setAppEnvironment(environment: AppEnvironment) {
-  appConfig = {
-    environment,
-    ...CONFIG_BY_ENV[environment],
-  }
-}
-
-function requireEnv(name: string): string {
+function requireEnv(name: string, allowMissing = false): string {
   const value = process.env[name];
   if (!value || value.trim() === "") {
+    if (allowMissing) return "";
     throw new Error(`Environment variable ${name} is required`);
   }
   return value;
@@ -102,10 +142,10 @@ function resolveEnvironment(): AppEnvironment {
     throw new Error("Environment variable APP_ENVIRONMENT is required");
   }
   const value = process.env.APP_ENVIRONMENT;
-  if (value === "local" || value === "stage" || value === "prod") {
+  if (value === "local" || value === "stage" || value === "prod" || value === "localstackTest") {
     return value;
   }
   throw new Error(
-    `Environment variable APP_ENVIRONMENT must be one of local, stage, prod (received: ${value})`,
+    `Environment variable APP_ENVIRONMENT must be one of local, stage, prod, localstackTest (received: ${value})`,
   );
 }

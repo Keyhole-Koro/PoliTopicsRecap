@@ -1,20 +1,6 @@
-import {
-  CreateBucketCommand,
-  PutObjectCommand,
-  GetObjectCommand,
-  ListObjectsV2Command,
-  DeleteObjectsCommand,
-  S3Client,
-  ListBucketsCommand,
-} from "@aws-sdk/client-s3";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import {
-  DynamoDBDocumentClient,
-  PutCommand,
-  GetCommand,
-  ScanCommand,
-  BatchWriteCommand,
-} from "@aws-sdk/lib-dynamodb";
+import { PutObjectCommand, GetObjectCommand, S3Client, ListBucketsCommand, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import {
   PROMPT_VERSION,
   reduce_prompt,
@@ -40,25 +26,6 @@ jest.mock("@llm/geminiClient", () => {
     },
   };
 });
-
-const requiredEnv = [
-  "GEMINI_API_KEY",
-  "DISCORD_WEBHOOK_ERROR",
-  "DISCORD_WEBHOOK_WARN",
-  "DISCORD_WEBHOOK_BATCH",
-  "DISCORD_WEBHOOK_ACCESS",
-  "APP_ENVIRONMENT",
-];
-const missingEnv = requiredEnv.filter((name) => !process.env[name]);
-if (missingEnv.length > 0) {
-  // eslint-disable-next-line no-console
-  console.error(
-    `[lambda_handler.integration] Missing env vars (${missingEnv.join(
-      ", ",
-    )}). Run 'source scripts/export_test_env.sh' and, if tables/buckets are missing, '../scripts/localstack_apply_all.sh -only Recap'`,
-  );
-}
-const describeIfEnv = missingEnv.length > 0 ? describe.skip : describe;
 
 jest.setTimeout(120000);
 
@@ -88,7 +55,7 @@ const getGenerativeModelMock = jest.fn();
  * [History] No known bug; preventive coverage.
  */
 
-describeIfEnv("lambda_handler LocalStack integration", () => {
+describe("lambda_handler LocalStack integration", () => {
   const { appConfig } = require("./config") as typeof import("./config");
   const { handler } = require("./lambda_handler") as typeof import("./lambda_handler");
 
@@ -99,65 +66,79 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
     process.env.LOCALSTACK_URL ??
     process.env.LOCALSTACK_ENDPOINT ??
     "";
-  const credentials = appConfig.aws.credentials ?? {
-    accessKeyId: "test",
-    secretAccessKey: "test",
+const credentials = appConfig.aws.credentials ?? {
+  accessKeyId: "test",
+  secretAccessKey: "test",
+};
+
+describe("lambda_handler LocalStack integration", () => {
+  const s3Client = new S3Client({
+    region,
+    endpoint,
+    forcePathStyle: true,
+    credentials,
+  });
+  const dynamoClient = new DynamoDBClient({
+    region,
+    endpoint,
+    credentials,
+  });
+  const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
+    marshallOptions: { removeUndefinedValues: true },
+  });
+
+  const toSafeError = (err: any, context: string) => {
+    const parts = [context];
+    const code = err?.name || err?.code;
+    if (code) parts.push(String(code));
+    if (err?.message) parts.push(String(err.message));
+    const status = err?.$metadata?.httpStatusCode;
+    if (status) parts.push(`status=${status}`);
+    const host = err?.hostname || err?.address;
+    if (host) parts.push(`host=${host}`);
+    return new Error(parts.join(" | "));
   };
-  const shouldRunLocalstack = process.env.RUN_LOCALSTACK_TESTS === "true" && Boolean(endpoint);
-  const describeIfEndpoint = shouldRunLocalstack ? describe : describe.skip;
 
-  describeIfEndpoint("with LocalStack", () => {
-    if (!endpoint) {
-      it("skipped because no LocalStack endpoint is configured", () => {
-        expect(true).toBe(true);
-      });
-      return;
+  const safeS3Send = async (command: any, context: string): Promise<any> => {
+    try {
+      return await s3Client.send(command);
+    } catch (err: any) {
+      throw toSafeError(err, context);
     }
+  };
 
-    let localstackReady = true;
-    const s3Client = new S3Client({
-      region,
-      endpoint,
-      forcePathStyle: true,
-      credentials,
-    });
-    const dynamoClient = new DynamoDBClient({
-      region,
-      endpoint,
-      credentials,
-    });
-    const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
-      marshallOptions: { removeUndefinedValues: true },
-    });
-
-    async function ensureBucketExists(bucket: string) {
-      try {
-        await s3Client.send(new CreateBucketCommand({ Bucket: bucket }));
-      } catch (err: any) {
-        if (err?.name !== "BucketAlreadyOwnedByYou" && err?.name !== "BucketAlreadyExists") {
-          throw Error(`ensureBucketExists ${bucket}`);
-        }
-      }
+  const safeDynamoSend = async (command: any, context: string): Promise<any> => {
+    try {
+      return await dynamoDoc.send(command);
+    } catch (err: any) {
+      throw toSafeError(err, context);
     }
+  };
 
-    beforeAll(async () => {
-      const promptBucket = appConfig.promptBucketName;
-      const articleAssetBucket = appConfig.articleAssetBucketName || promptBucket;
-      try {
-        await s3Client.send(new ListBucketsCommand({}));
-        await ensureBucketExists(promptBucket);
-        await ensureBucketExists(articleAssetBucket);
-      } catch (err: any) {
-        localstackReady = false;
-        // eslint-disable-next-line no-console
-        console.warn("[lambda_handler.integration] LocalStack unavailable; skipping tests:", err?.message ?? err);
-      }
-    });
+  const assertBucketExists = async (bucket: string) => {
+    await safeS3Send(new HeadBucketCommand({ Bucket: bucket }), `HeadBucket ${bucket}`);
+  };
 
-    afterAll(async () => {
-      s3Client.destroy();
-      dynamoClient.destroy();
-    });
+  const assertTableExists = async (tableName: string) => {
+    await safeDynamoSend(new DescribeTableCommand({ TableName: tableName }), `DescribeTable ${tableName}`);
+  };
+
+  beforeAll(async () => {
+    try {
+      await safeS3Send(new ListBucketsCommand({}), "ListBuckets");
+      await assertBucketExists(appConfig.promptBucketName);
+      await assertBucketExists(appConfig.articleAssetBucketName || appConfig.promptBucketName);
+      await assertTableExists(appConfig.taskTableName);
+      await assertTableExists(appConfig.articleTableName);
+    } catch (err: any) {
+      throw err;
+    }
+  });
+
+  afterAll(async () => {
+    s3Client.destroy();
+    dynamoClient.destroy();
+  });
 
     beforeEach(() => {
       generateContentMock.mockReset();
@@ -173,18 +154,10 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
     });
 
     test("polling lambda_handler every minute eventually stores a recap in PoliTopics", async () => {
-      if (!localstackReady) {
-        return;
-      }
       const bucket = appConfig.promptBucketName;
       const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
-
-      await cleanupBucket(bucket);
-      await cleanupBucket(articleAssetBucket);
-      await cleanupTaskTable(tableName);
-      await cleanupArticleTable(articleTableName);
 
       const issueID = uniqueIssue();
       const promptKey = `prompts/reduce/${issueID}_minute.txt`;
@@ -194,9 +167,9 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
         { order: 1, speaker: "Chair", originalText: "Original speech text" },
       ]);
 
-      const createdAt = new Date().toISOString();
+      const createdAt = new Date(0).toISOString();
       const updatedAt = createdAt.slice(0, 10);
-      await dynamoDoc.send(
+      await safeDynamoSend(
         new PutCommand({
           TableName: tableName,
           Item: {
@@ -214,6 +187,7 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
             attachedAssets: { speakerMetadataUrl: attachedAssetsUrl },
           },
         }),
+        `Put pending task ${issueID}`,
       );
 
       __setGeminiResponses([JSON.stringify(buildReduceArticle(issueID))]);
@@ -223,6 +197,7 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
       }
 
       const stored = await getTask(tableName, issueID);
+      expect(stored).toBeDefined();
       expect(stored?.status).toBe("completed");
 
       const articleItem = await getArticle(articleTableName, issueID);
@@ -230,18 +205,10 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
     });
 
     test("chunked processing completes after sequential minute polls", async () => {
-      if (!localstackReady) {
-        return;
-      }
       const bucket = appConfig.promptBucketName;
       const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
-
-      await cleanupBucket(bucket);
-      await cleanupBucket(articleAssetBucket);
-      await cleanupTaskTable(tableName);
-      await cleanupArticleTable(articleTableName);
 
       const issueID = uniqueIssue();
       const chunkDefinitions = [
@@ -289,9 +256,9 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
         { order: 7, speaker: "Member 7", originalText: "Chunk 7 text" },
       ]);
 
-      const createdAt = new Date().toISOString();
+      const createdAt = new Date(0).toISOString();
       const updatedAt = createdAt.slice(0, 10);
-      await dynamoDoc.send(
+      await safeDynamoSend(
         new PutCommand({
           TableName: tableName,
           Item: {
@@ -316,6 +283,7 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
             })),
           },
         }),
+        `Put chunked task ${issueID}`,
       );
 
       __setGeminiResponses([
@@ -346,102 +314,36 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
       expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
     });
 
-    async function cleanupTaskTable(tableName: string) {
-      const items = await scanAllItems(tableName);
-      if (items.length === 0) return;
-      await batchDelete(tableName, items.map((item) => ({ pk: item.pk })));
-    }
-
-    async function cleanupArticleTable(tableName: string) {
-      const items = await scanAllItems(tableName);
-      const keys = items
-        .map((item) => ({ PK: item.PK, SK: item.SK }))
-        .filter((key) => key.PK && key.SK);
-      if (keys.length === 0) return;
-      await batchDelete(tableName, keys);
-    }
-
-    async function scanAllItems(tableName: string) {
-      const items: Record<string, any>[] = [];
-      let lastKey: Record<string, any> | undefined;
-      do {
-        const res = await dynamoDoc.send(
-          new ScanCommand({
-            TableName: tableName,
-            ExclusiveStartKey: lastKey,
-          }),
-        );
-        if (res.Items) {
-          items.push(...res.Items);
-        }
-        lastKey = res.LastEvaluatedKey as Record<string, any> | undefined;
-      } while (lastKey);
-      return items;
-    }
-
-    async function batchDelete(tableName: string, keys: Record<string, any>[]) {
-      const chunkSize = 25;
-      for (let i = 0; i < keys.length; i += chunkSize) {
-        const chunk = keys.slice(i, i + chunkSize);
-        if (!chunk.length) continue;
-        await dynamoDoc.send(
-          new BatchWriteCommand({
-            RequestItems: {
-              [tableName]: chunk.map((key) => ({
-                DeleteRequest: { Key: key },
-              })),
-            },
-          }),
-        );
-      }
-    }
-
-    async function cleanupBucket(bucket: string) {
-      const listed = await s3Client.send(
-        new ListObjectsV2Command({
-          Bucket: bucket,
-        }),
-      );
-      if (!listed.Contents || listed.Contents.length === 0) return;
-      await s3Client.send(
-        new DeleteObjectsCommand({
-          Bucket: bucket,
-          Delete: {
-            Objects: listed.Contents.map((obj) => ({ Key: obj.Key! })),
-            Quiet: true,
-          },
-        }),
-      );
-    }
-
     async function putPrompt(key: string, body: string) {
       const bucket = appConfig.promptBucketName;
-      await s3Client.send(
+      await safeS3Send(
         new PutObjectCommand({
           Bucket: bucket,
           Key: key,
           Body: body,
           ContentType: "text/plain; charset=utf-8",
         }),
+        `PutObject ${bucket}/${key}`,
       );
     }
 
     async function putAttachedAssets(issueID: string, speeches: any[]) {
       const bucket = appConfig.promptBucketName;
       const key = `attachedAssets/${issueID}.json`;
-      await s3Client.send(
+      await safeS3Send(
         new PutObjectCommand({
           Bucket: bucket,
           Key: key,
           Body: JSON.stringify({ speeches }, null, 2),
           ContentType: "application/json; charset=utf-8",
         }),
+        `PutObject ${bucket}/${key}`,
       );
       return `s3://${bucket}/${key}`;
     }
 
     async function readObjectText(bucket: string, key: string): Promise<string> {
-      const res = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const res = await safeS3Send(new GetObjectCommand({ Bucket: bucket, Key: key }), `GetObject ${bucket}/${key}`);
       return streamToString(res.Body as any);
     }
 
@@ -455,21 +357,23 @@ describeIfEnv("lambda_handler LocalStack integration", () => {
     }
 
     async function getTask(tableName: string, issueID: string) {
-      const res = await dynamoDoc.send(
+      const res = await safeDynamoSend(
         new GetCommand({
           TableName: tableName,
           Key: { pk: issueID },
         }),
+        `GetTask ${issueID}`,
       );
       return res.Item;
     }
 
     async function getArticle(tableName: string, issueID: string) {
-      const res = await dynamoDoc.send(
+      const res = await safeDynamoSend(
         new GetCommand({
           TableName: tableName,
           Key: { PK: `A#${issueID}`, SK: "META" },
         }),
+        `GetArticle ${issueID}`,
       );
       return res.Item;
     }

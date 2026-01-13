@@ -42,6 +42,13 @@ export async function handler(): Promise<void> {
       mode: task.processingMode,
       llm: task.llm,
     });
+    if (task.retryAttempts >= 3) {
+      console.log("[handler] skipping task because retryAttempts reached limit", {
+        taskId: task.pk,
+        retryAttempts: task.retryAttempts,
+      });
+      return;
+    }
     assertTaskReadyForProcessing(task);
 
     const llmClient = createLlmClient(task, config.geminiApiKey);

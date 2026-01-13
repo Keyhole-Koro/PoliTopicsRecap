@@ -1,0 +1,60 @@
+name: Recap Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+
+jobs:
+  recap-jest:
+    runs-on: ubuntu-latest
+    env:
+      LOCALSTACK_URL: http://localhost:4570
+      AWS_ENDPOINT_URL: http://localhost:4570
+      AWS_REGION: ap-northeast-3
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      ENABLE_NOTIFICATION: "false"
+      GEMINI_API_KEY: dummy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: PoliTopicsRecap/package-lock.json
+
+      - name: Start LocalStack
+        run: docker compose -f docker-compose.yml up -d localstack
+
+      - name: Wait for LocalStack
+        run: |
+          for _ in {1..30}; do
+            if curl -s "$LOCALSTACK_URL/_localstack/health" | grep '"initialized": true' >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "LocalStack failed to start" >&2
+          docker compose -f docker-compose.yml logs localstack || true
+          exit 1
+
+      - name: Ensure LocalStack resources
+        run: ./scripts/verify_localstack_resources.sh --ensure
+
+      - name: Install dependencies
+        working-directory: PoliTopicsRecap
+        run: npm ci
+
+      - name: Test Recap
+        working-directory: PoliTopicsRecap
+        run: npm test -- --runInBand
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f docker-compose.yml down -v

@@ -28,7 +28,8 @@ const endpoint =
   process.env.LOCALSTACK_ENDPOINT_URL ??
   process.env.AWS_ENDPOINT_URL ??
   process.env.LOCALSTACK_URL ??
-  process.env.LOCALSTACK_ENDPOINT;
+  process.env.LOCALSTACK_ENDPOINT ??
+  "http://localhost:4566";
 
 const bucketName = 'localstack-unit-' + Date.now();
 const textKey = 'sample/test-object.txt';
@@ -36,16 +37,7 @@ const jsonKey = 'sample/test-object.json';
 const textBody = 'hello from localstack s3 unit test';
 const jsonBody = { hello: 'world', count: 3 };
 
-const describeIfEndpoint = endpoint ? describe : describe.skip;
-
-describeIfEndpoint('LocalStack S3 roundtrip using utils/s3 helpers', () => {
-  if (!endpoint) {
-    it('skipped because no LocalStack endpoint is set', () => {
-      expect(true).toBe(true);
-    });
-    return;
-  }
-
+describe('LocalStack S3 roundtrip using utils/s3 helpers', () => {
   const s3 = new S3Client({
     region,
     endpoint,

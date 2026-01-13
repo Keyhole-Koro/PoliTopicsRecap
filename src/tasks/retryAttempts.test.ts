@@ -10,22 +10,22 @@ const getS3ClientConfigMock = jest.fn();
 const createDocumentClientMock = jest.fn();
 const assertTaskReadyForProcessingMock = jest.fn();
 
-jest.mock("./tasks/taskRepository", () => ({
+jest.mock("./taskRepository", () => ({
   fetchOldestPendingTask: (...args: any[]) => fetchOldestPendingTaskMock(...args),
   bumpRetryAttempts: (...args: any[]) => bumpRetryAttemptsMock(...args),
 }));
 
-jest.mock("./lambda/taskProcessor", () => ({
+jest.mock("../lambda/taskProcessor", () => ({
   handleDirectTask: (...args: any[]) => handleDirectTaskMock(...args),
   handleChunkedTask: (...args: any[]) => handleChunkedTaskMock(...args),
 }));
 
-jest.mock("./lambda/notifications", () => ({
+jest.mock("../lambda/notifications", () => ({
   notifyTaskError: (...args: any[]) => notifyTaskErrorMock(...args),
   notifyTaskWarning: (...args: any[]) => notifyTaskWarningMock(...args),
 }));
 
-jest.mock("./lambda/llmFactory", () => ({
+jest.mock("../lambda/llmFactory", () => ({
   createLlmClient: (...args: any[]) => createLlmClientMock(...args),
 }));
 
@@ -41,12 +41,12 @@ jest.mock("@utils/dynamo", () => ({
   createDocumentClient: (...args: any[]) => createDocumentClientMock(...args),
 }));
 
-jest.mock("./tasks/taskValidator", () => ({
+jest.mock("./taskValidator", () => ({
   assertTaskReadyForProcessing: (...args: any[]) => assertTaskReadyForProcessingMock(...args),
 }));
 
-import { handler } from "./lambda_handler";
-import type { TaskItem } from "./tasks/types";
+import { handler } from "../lambda_handler";
+import type { TaskItem } from "./types";
 
 /*
  * increments retryAttempts even when error notifications fail
@@ -57,7 +57,34 @@ import type { TaskItem } from "./tasks/types";
  * [History] None.
  */
 
-describe("retryAttempts on failure", () => {
+function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
+  return {
+    pk: "ISSUE-1",
+    status: "pending",
+    llm: "gemini",
+    llmModel: "gemini-2.5-flash",
+    retryAttempts: 0,
+    createdAt: "2025-01-01T00:00:00Z",
+    updatedAt: "2025-01-01",
+    processingMode: "single_chunk",
+    prompt_url: "s3://bucket/prompts/reduce/ISSUE-1.json",
+    result_url: "s3://bucket/results/ISSUE-1_reduce.json",
+    meeting: {
+      issueID: "ISSUE-1",
+      nameOfMeeting: "Test Meeting",
+      nameOfHouse: "Test House",
+      date: "2025-01-01",
+      numberOfSpeeches: 1,
+      session: 1,
+    },
+    attachedAssets: {
+      speakerMetadataUrl: "s3://bucket/attachedAssets/ISSUE-1.json",
+    },
+    ...overrides,
+  };
+}
+
+describe("retryAttempts", () => {
   beforeEach(() => {
     jest.resetAllMocks();
     resolveConfigMock.mockReturnValue({
@@ -74,29 +101,7 @@ describe("retryAttempts on failure", () => {
   });
 
   it("increments retryAttempts even when error notifications fail", async () => {
-    const task: TaskItem = {
-      pk: "ISSUE-1",
-      status: "pending",
-      llm: "gemini",
-      llmModel: "gemini-2.5-flash",
-      retryAttempts: 1,
-      createdAt: "2025-01-01T00:00:00Z",
-      updatedAt: "2025-01-01",
-      processingMode: "single_chunk",
-      prompt_url: "s3://bucket/prompts/reduce/ISSUE-1.json",
-      result_url: "s3://bucket/results/ISSUE-1_reduce.json",
-      meeting: {
-        issueID: "ISSUE-1",
-        nameOfMeeting: "Test Meeting",
-        nameOfHouse: "Test House",
-        date: "2025-01-01",
-        numberOfSpeeches: 1,
-        session: 1,
-      },
-      attachedAssets: {
-        speakerMetadataUrl: "s3://bucket/attachedAssets/ISSUE-1.json",
-      },
-    };
+    const task: TaskItem = buildTask({ retryAttempts: 1 });
 
     fetchOldestPendingTaskMock.mockResolvedValueOnce(task);
     handleDirectTaskMock.mockRejectedValueOnce(new Error("task failure"));
@@ -111,5 +116,18 @@ describe("retryAttempts on failure", () => {
       expect.anything(),
       task,
     );
+  });
+
+  it("skips processing when retryAttempts is 3", async () => {
+    const task = buildTask({ retryAttempts: 3 });
+    fetchOldestPendingTaskMock.mockResolvedValueOnce(task);
+
+    await expect(handler()).resolves.toBeUndefined();
+
+    expect(handleDirectTaskMock).not.toHaveBeenCalled();
+    expect(handleChunkedTaskMock).not.toHaveBeenCalled();
+    expect(bumpRetryAttemptsMock).not.toHaveBeenCalled();
+    expect(notifyTaskErrorMock).not.toHaveBeenCalled();
+    expect(notifyTaskWarningMock).not.toHaveBeenCalled();
   });
 });
