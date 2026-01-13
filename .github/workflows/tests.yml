@@ -22,12 +22,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: PoliTopicsRecap/package-lock.json
+          cache: pnpm
+          cache-dependency-path: PoliTopicsRecap/pnpm-lock.yaml
 
       - name: Start LocalStack
         run: docker compose -f docker-compose.yml up -d localstack
@@ -49,11 +52,11 @@ jobs:
 
       - name: Install dependencies
         working-directory: PoliTopicsRecap
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Test Recap
         working-directory: PoliTopicsRecap
-        run: npm test -- --runInBand
+        run: pnpm test -- --runInBand
 
       - name: Teardown
         if: always()
