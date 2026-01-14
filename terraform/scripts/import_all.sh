@@ -14,6 +14,9 @@ case "$ENVIRONMENT_INPUT" in
   local)
     VAR_FILE_INPUT="$TF_DIR/tfvars/localstack.tfvars"
     ;;
+  ghaTest)
+    VAR_FILE_INPUT="$TF_DIR/tfvars/ghaTest.tfvars"
+    ;;
   stage)
     VAR_FILE_INPUT="$TF_DIR/tfvars/stage.tfvars"
     ;;
@@ -22,7 +25,7 @@ case "$ENVIRONMENT_INPUT" in
     ;;
   *)
     echo "Unknown environment: $ENVIRONMENT_INPUT" >&2
-    echo "Usage: $0 <local|stage|prod>" >&2
+    echo "Usage: $0 <local|ghaTest|stage|prod>" >&2
     exit 1
     ;;
 esac

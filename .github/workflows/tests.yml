@@ -15,6 +15,7 @@ jobs:
       AWS_REGION: ap-northeast-3
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
+      AWS_PAGER: ""
       ENABLE_NOTIFICATION: "false"
       GEMINI_API_KEY: dummy
       NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
@@ -52,14 +53,21 @@ jobs:
         with:
           terraform_wrapper: false
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y zip
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update || ./aws/install --update
+
       - name: Ensure LocalStack resources
-        run: bash scripts/ensure-localstack.sh localstackTest
+        run: bash scripts/ensure-localstack.sh ghaTest
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Test
-        run: pnpm test -- --runInBand
+        run: pnpm test:gha
 
       - name: Teardown
         if: always()

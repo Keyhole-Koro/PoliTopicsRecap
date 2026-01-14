@@ -1,4 +1,4 @@
-export type AppEnvironment = "local" | "stage" | "prod" | "localstackTest"
+export type AppEnvironment = "local" | "stage" | "prod" | "ghaTest" | "localstackTest"
 
 export type AppConfig = {
   environment: AppEnvironment
@@ -25,6 +25,7 @@ const CONFIG_BY_ENV: Record<AppEnvironment, () => Omit<AppConfig, "environment">
   local: buildLocalConfig,
   stage: buildStageConfig,
   prod: buildProdConfig,
+  ghaTest: buildTestConfig,
   localstackTest: buildTestConfig,
 }
 
@@ -55,7 +56,7 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
     promptBucketName: "politopics-prompts",
     articleTableName: "politopics-local",
     articleAssetBucketName: "politopics-articles-local",
-    geminiApiKey: requireEnv("GEMINI_API_KEY"),
+    geminiApiKey: "dummy",
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
@@ -116,10 +117,10 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
     },
     taskTableName: process.env.TASK_TABLE_NAME || "politopics-llm-tasks-local",
     taskStatusIndexName: "StatusIndex",
-    promptBucketName: process.env.PROMPT_BUCKET_NAME || "politopics-prompts-local",
+    promptBucketName: process.env.PROMPT_BUCKET_NAME || "politopics-prompts",
     articleTableName: process.env.ARTICLE_TABLE_NAME || "politopics-local",
     articleAssetBucketName: process.env.ARTICLE_ASSET_BUCKET_NAME || "politopics-articles-local",
-    geminiApiKey: optionalEnv("GEMINI_API_KEY"),
+    geminiApiKey: "dummy",
     notifications: {
       errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
@@ -142,10 +143,10 @@ function resolveEnvironment(): AppEnvironment {
     throw new Error("Environment variable APP_ENVIRONMENT is required");
   }
   const value = process.env.APP_ENVIRONMENT;
-  if (value === "local" || value === "stage" || value === "prod" || value === "localstackTest") {
+  if (value === "local" || value === "stage" || value === "prod" || value === "ghaTest" || value === "localstackTest") {
     return value;
   }
   throw new Error(
-    `Environment variable APP_ENVIRONMENT must be one of local, stage, prod, localstackTest (received: ${value})`,
+    `Environment variable APP_ENVIRONMENT must be one of local, stage, prod, ghaTest, localstackTest (received: ${value})`,
   );
 }

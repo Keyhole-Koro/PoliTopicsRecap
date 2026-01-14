@@ -10,9 +10,10 @@ ENVIRONMENT="$1"
 REGION="ap-northeast-3"
 LOCALSTACK_URL="${LOCALSTACK_URL:-http://localstack:4566}"
 AWS_ARGS=()
+export AWS_PAGER=""
 
 case "$ENVIRONMENT" in
-  local)
+  local|ghaTest)
     BUCKET="politopics-recap-local-state"
     AWS_ARGS+=(--endpoint-url "$LOCALSTACK_URL")
     ;;
@@ -24,7 +25,7 @@ case "$ENVIRONMENT" in
     ;;
   *)
     echo "Unknown environment: $ENVIRONMENT"
-    echo "Usage: $0 <local|stage|prod>"
+    echo "Usage: $0 <local|ghaTest|stage|prod>"
     exit 1
     ;;
 esac
@@ -32,7 +33,7 @@ esac
 echo "Environment : $ENVIRONMENT"
 echo "Bucket      : $BUCKET"
 echo "Region      : $REGION"
-if [ "$ENVIRONMENT" = "local" ]; then
+if [ "$ENVIRONMENT" = "local" ] || [ "$ENVIRONMENT" = "ghaTest" ]; then
   echo "Endpoint    : $LOCALSTACK_URL"
 fi
 echo

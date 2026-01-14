@@ -14,13 +14,6 @@ import {
   PutCommand,
 } from "@aws-sdk/lib-dynamodb";
 
-process.env.GEMINI_API_KEY ??= "dummy-gemini-key";
-process.env.DISCORD_WEBHOOK_ERROR ??= "https://discord.invalid/error";
-process.env.DISCORD_WEBHOOK_WARN ??= "https://discord.invalid/warn";
-process.env.DISCORD_WEBHOOK_BATCH ??= "https://discord.invalid/batch";
-process.env.DISCORD_WEBHOOK_ACCESS ??= "https://discord.invalid/access";
-process.env.APP_ENVIRONMENT ??= "localstackTest";
-
 jest.mock("@google/generative-ai");
 
 const { GoogleGenerativeAI: googleGenerativeAiCtorMock } = jest.requireMock("@google/generative-ai") as {

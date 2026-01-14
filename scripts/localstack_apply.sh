@@ -29,8 +29,10 @@ echo "==> Recap: create state bucket"
 "$STATE_SCRIPT" "$ENVIRONMENT"
 
 BACKEND_CONFIG="backends/local.hcl"
-if [ "$ENVIRONMENT" == "localstackTest" ]; then
+TFVARS_FILE="tfvars/localstack.tfvars"
+if [ "$ENVIRONMENT" == "ghaTest" ]; then
   BACKEND_CONFIG="backends/ghaTest.hcl"
+  TFVARS_FILE="tfvars/ghaTest.tfvars"
 fi
 
 echo "==> Recap: terraform init"
@@ -41,7 +43,7 @@ echo "==> Recap: terraform import"
 
 echo "==> Recap: terraform plan"
 set +e
-terraform -chdir="$TF_DIR" plan -detailed-exitcode -var-file="tfvars/localstack.tfvars" -out=tfplan
+terraform -chdir="$TF_DIR" plan -detailed-exitcode -var-file="$TFVARS_FILE" -out=tfplan
 PLAN_EXIT_CODE=$?
 set -e
 
