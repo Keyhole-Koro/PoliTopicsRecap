@@ -37,31 +37,24 @@ export async function handler(): Promise<void> {
       console.log("[handler] No pending tasks to process");
       return;
     }
-    console.log("[handler] fetched task", {
-      taskId: task.pk,
-      mode: task.processingMode,
-      llm: task.llm,
-    });
+    console.log(`[Recap] Fetched task ${task.pk} (mode: ${task.processingMode}, llm: ${task.llm})`);
     if (task.retryAttempts >= 3) {
-      console.log("[handler] skipping task because retryAttempts reached limit", {
-        taskId: task.pk,
-        retryAttempts: task.retryAttempts,
-      });
+      console.log(`[Recap] Skipping task ${task.pk} - max retries reached (${task.retryAttempts})`);
       return;
     }
     assertTaskReadyForProcessing(task);
 
     const llmClient = createLlmClient(task, config.geminiApiKey);
     if (!llmClient) {
-      console.error("Unsupported LLM provider", { taskId: task.pk, llm: task.llm });
+      console.error(`[Recap] Unsupported LLM provider for task ${task.pk}: ${task.llm}`);
       await bumpRetryAttempts(docClient, repoConfig, task);
       await notifyTaskWarning(task, "Unsupported LLM provider");
       return;
     }
-    console.log("[handler] llm client ready", { taskId: task.pk, llm: task.llm, model: task.llmModel });
+    console.log(`[Recap] Initialized LLM client for ${task.pk} using model ${task.llmModel}`);
 
     if (task.processingMode === "single_chunk") {
-      console.log("[handler] handling single_chunk task", { taskId: task.pk });
+      console.log(`[Recap] Starting DIRECT (single_chunk) processing for ${task.pk}`);
       await handleDirectTask(buildTaskArgs({
         task,
         docClient,
@@ -72,11 +65,11 @@ export async function handler(): Promise<void> {
         articleAssetBucketName: config.articleAssetBucketName,
         meeting: task.meeting,
       }));
-      console.log("[handler] single_chunk task completed", { taskId: task.pk });
+      console.log(`[Recap] Completed DIRECT processing for ${task.pk}`);
       return;
     }
 
-    console.log("[handler] handling chunked task", { taskId: task.pk });
+    console.log(`[Recap] Starting CHUNKED processing for ${task.pk}`);
     await handleChunkedTask(buildTaskArgs({
       task,
       docClient,
@@ -87,7 +80,7 @@ export async function handler(): Promise<void> {
       articleAssetBucketName: config.articleAssetBucketName,
       meeting: task.meeting,
     }));
-    console.log("[handler] chunked task step completed", { taskId: task.pk });
+    console.log(`[Recap] Completed CHUNKED processing step for ${task.pk}`);
   } catch (error) {
     console.error("[handler] Failed to process task", {
       taskId: task?.pk,

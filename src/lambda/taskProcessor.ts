@@ -39,39 +39,51 @@ export type TaskProcessorArgs = {
 
 export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
   const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets, meeting } = args;
-  console.log("[taskProcessor] single_chunk task start", { taskId: task.pk });
-  assertAttachedAssets(task);
-  const promptText = await readS3Text(s3Client, task.prompt_url);
-  const attachedMap = await loadSpeakerMapFromAttachedAssets(s3Client, task.attachedAssets.speakerMetadataUrl);
-  assertNonEmptySpeakerMap(attachedMap, "attached assets");
-  console.log("[taskProcessor] prompt fetched", { taskId: task.pk, promptUrl: task.prompt_url });
-  const llmResult = await llmClient.generate({
-    messages: [{ role: "user", content: promptText }],
-  });
-  console.log("[taskProcessor] llm response received", { taskId: task.pk, llm: task.llm, model: task.llmModel });
-  await writeS3Text(s3Client, task.result_url, llmResult.text);
-  console.log("[taskProcessor] result uploaded", { taskId: task.pk, resultUrl: task.result_url });
-  const persistResult = await persistArticleIfPossible(
-    docClient,
-    articleTableName,
-    llmResult.text,
-    articleAssets,
-    meeting,
-    attachedMap,
-    task,
-  );
-  if (persistResult.persisted) {
-    await notifyArticlePersisted(task, persistResult.article);
-  } else {
-    await notifyArticlePersistenceSkipped(task, persistResult.reason, persistResult.payloadDumpUri);
+  console.log(`[TaskProcessor] SINGLE_CHUNK: Starting task ${task.pk}`);
+  
+  try {
+    assertAttachedAssets(task);
+    const promptText = await readS3Text(s3Client, task.prompt_url);
+    const attachedMap = await loadSpeakerMapFromAttachedAssets(s3Client, task.attachedAssets.speakerMetadataUrl);
+    assertNonEmptySpeakerMap(attachedMap, "attached assets");
+    
+    console.log(`[TaskProcessor] Fetched prompt for ${task.pk} (${promptText.length} chars). Preview: ${promptText.slice(0, 100)}...`);
+
+    const llmResult = await llmClient.generate({
+      messages: [{ role: "user", content: promptText }],
+    });
+    console.log(`[TaskProcessor] LLM response for ${task.pk} (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
+
+    await writeS3Text(s3Client, task.result_url, llmResult.text);
+    console.log(`[TaskProcessor] Uploaded result to ${task.result_url}`);
+
+    const persistResult = await persistArticleIfPossible(
+      docClient,
+      articleTableName,
+      llmResult.text,
+      articleAssets,
+      meeting,
+      attachedMap,
+      task,
+    );
+    if (persistResult.persisted) {
+      await notifyArticlePersisted(task, persistResult.article);
+      console.log(`[TaskProcessor] Persisted article for ${task.pk}`);
+    } else {
+      await notifyArticlePersistenceSkipped(task, persistResult.reason, persistResult.payloadDumpUri);
+      console.warn(`[TaskProcessor] Skipped article persistence for ${task.pk}: ${persistResult.reason}`);
+    }
+    await markTaskSucceeded(docClient, repoConfig, task);
+    console.log(`[TaskProcessor] SINGLE_CHUNK: Completed task ${task.pk}`);
+  } catch (err) {
+    console.error(`[TaskProcessor] SINGLE_CHUNK failed for ${task.pk}`, err);
+    throw err;
   }
-  await markTaskSucceeded(docClient, repoConfig, task);
-  console.log("[taskProcessor] single_chunk task done", { taskId: task.pk });
 }
 
 export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> {
   const { task, s3Client, llmClient, docClient, repoConfig, articleTableName, articleAssets, meeting } = args;
-  console.log("[taskProcessor] chunked task start", { taskId: task.pk });
+  console.log(`[TaskProcessor] CHUNKED: Starting processing for ${task.pk}`);
   assertAttachedAssets(task);
   if (!task.chunks || task.chunks.length === 0) {
     console.warn("Chunked task missing chunk definitions", { taskId: task.pk });
@@ -82,48 +94,67 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
 
   const nextChunk = task.chunks.find((chunk) => chunk.status !== "ready");
   if (nextChunk) {
-    console.log("[taskProcessor] processing chunk", { taskId: task.pk, chunkId: nextChunk.id, status: nextChunk.status });
-    const promptText = await readS3Text(s3Client, nextChunk.prompt_url);
-    console.log("[taskProcessor] chunk prompt fetched", { taskId: task.pk, chunkId: nextChunk.id, promptUrl: nextChunk.prompt_url });
-    const llmResult = await llmClient.generate({
-      messages: [{ role: "user", content: promptText }],
-    });
+    console.log(`[TaskProcessor] Processing chunk ${nextChunk.id} for ${task.pk}`);
+    try {
+      const promptText = await readS3Text(s3Client, nextChunk.prompt_url);
+      console.log(`[TaskProcessor] Fetched chunk prompt (${promptText.length} chars). Preview: ${promptText.slice(0, 100)}...`);
+      
+      const llmResult = await llmClient.generate({
+        messages: [{ role: "user", content: promptText }],
+      });
+      console.log(`[TaskProcessor] Chunk LLM response (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
 
-    await writeS3Text(s3Client, nextChunk.result_url, llmResult.text);
-    console.log("[taskProcessor] chunk result uploaded", { taskId: task.pk, chunkId: nextChunk.id, resultUrl: nextChunk.result_url });
-    await markChunkReady(docClient, repoConfig, task, nextChunk.id);
+      await writeS3Text(s3Client, nextChunk.result_url, llmResult.text);
+      console.log(`[TaskProcessor] Uploaded chunk result to ${nextChunk.result_url}`);
+      
+      await markChunkReady(docClient, repoConfig, task, nextChunk.id);
+      console.log(`[TaskProcessor] Marked chunk ${nextChunk.id} ready`);
+    } catch (err) {
+      console.error(`[TaskProcessor] Chunk processing failed for ${nextChunk.id}`, err);
+      throw err;
+    }
     return;
   }
 
-  console.log("[taskProcessor] all chunks ready, running reduce", { taskId: task.pk });
-  const reducePrompt = await readS3Text(s3Client, task.prompt_url);
-  console.log("[taskProcessor] reduce prompt fetched", { taskId: task.pk, promptUrl: task.prompt_url });
-  const attachedMap = await loadSpeakerMapFromAttachedAssets(s3Client, task.attachedAssets.speakerMetadataUrl);
-  assertNonEmptySpeakerMap(attachedMap, "attached assets");
-  const speakerMap = attachedMap;
+  console.log(`[TaskProcessor] All chunks ready for ${task.pk}. Running REDUCE phase.`);
+  try {
+    const reducePrompt = await readS3Text(s3Client, task.prompt_url);
+    console.log(`[TaskProcessor] Fetched reduce prompt (${reducePrompt.length} chars). Preview: ${reducePrompt.slice(0, 100)}...`);
+    
+    const attachedMap = await loadSpeakerMapFromAttachedAssets(s3Client, task.attachedAssets.speakerMetadataUrl);
+    assertNonEmptySpeakerMap(attachedMap, "attached assets");
+    const speakerMap = attachedMap;
 
-  const reduceResult = await llmClient.generate({
-    messages: [{ role: "user", content: reducePrompt }],
-  });
+    const reduceResult = await llmClient.generate({
+      messages: [{ role: "user", content: reducePrompt }],
+    });
+    console.log(`[TaskProcessor] Reduce LLM response (${reduceResult.text.length} chars). Preview: ${reduceResult.text.slice(0, 100)}...`);
 
-  await writeS3Text(s3Client, task.result_url, reduceResult.text);
-  console.log("[taskProcessor] reduce result uploaded", { taskId: task.pk, resultUrl: task.result_url });
-  const persistResult = await persistArticleIfPossible(
-    docClient,
-    articleTableName,
-    reduceResult.text,
-    articleAssets,
-    meeting,
-    speakerMap,
-    task,
-  );
-  if (persistResult.persisted) {
-    await notifyArticlePersisted(task, persistResult.article);
-  } else {
-    await notifyArticlePersistenceSkipped(task, persistResult.reason, persistResult.payloadDumpUri);
+    await writeS3Text(s3Client, task.result_url, reduceResult.text);
+    console.log(`[TaskProcessor] Uploaded reduce result to ${task.result_url}`);
+
+    const persistResult = await persistArticleIfPossible(
+      docClient,
+      articleTableName,
+      reduceResult.text,
+      articleAssets,
+      meeting,
+      speakerMap,
+      task,
+    );
+    if (persistResult.persisted) {
+      await notifyArticlePersisted(task, persistResult.article);
+      console.log(`[TaskProcessor] Persisted final article for ${task.pk}`);
+    } else {
+      await notifyArticlePersistenceSkipped(task, persistResult.reason, persistResult.payloadDumpUri);
+      console.warn(`[TaskProcessor] Skipped final article persistence for ${task.pk}: ${persistResult.reason}`);
+    }
+    await markTaskSucceeded(docClient, repoConfig, task);
+    console.log(`[TaskProcessor] CHUNKED: Completed task ${task.pk}`);
+  } catch (err) {
+    console.error(`[TaskProcessor] Reduce phase failed for ${task.pk}`, err);
+    throw err;
   }
-  await markTaskSucceeded(docClient, repoConfig, task);
-  console.log("[taskProcessor] chunked task done", { taskId: task.pk });
 }
 
 async function readS3Text(client: S3Client, uri: string): Promise<string> {

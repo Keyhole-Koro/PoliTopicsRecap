@@ -159,3 +159,14 @@ Details:
 - Updated reduce-mode prompt instructions/output format to require keywords (with priority) alongside participants and summaries.
 - Files changed:
   - `PoliTopicsRecap/src/prompts.for.llmtest.ts`
+
+Agent: Gemini
+Date/Time: 2026-01-15 JST
+Keywords: logging, debug, recap
+Topic: Add comprehensive stdout logs for debugging
+Details:
+- Added structured logs to `lambda_handler.ts` and `taskProcessor.ts` to trace task lifecycle, prompt fetching, LLM usage, and result persistence.
+- Included truncation for prompt/response text to keep logs readable.
+- Files changed:
+  - `PoliTopicsRecap/src/lambda_handler.ts`
+  - `PoliTopicsRecap/src/lambda/taskProcessor.ts`

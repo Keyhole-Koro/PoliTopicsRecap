@@ -26,3 +26,5 @@ layer_content
 out.json
 
 .env
+
+.secrets
