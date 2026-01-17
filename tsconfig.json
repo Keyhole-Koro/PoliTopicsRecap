@@ -12,7 +12,6 @@
     "resolveJsonModule": true,           // Allow importing JSON files
     "allowJs": false,                     // Only compile TypeScript files
     "declaration": true,
-    "composite": true,
 
     "baseUrl": "./src",                    // Base URL for module resolution
     "paths": {         // Optional: For aliasing paths (e.g., "@/components")
@@ -28,7 +27,7 @@
       "src/*": ["*"]
     },
   },
-  "include": ["src/**/*", "tests"],               // Include all TypeScript files in the src folder
+  "include": ["src/**/*"],               // Include all TypeScript files in the src folder
   "references": [],
   "exclude": ["node_modules"]            // Exclude node_modules
 }

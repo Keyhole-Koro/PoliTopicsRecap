@@ -68,11 +68,16 @@ async function copyPackageMetadata(destinationDir) {
 
   const pnpmLockSrc = path.join(rootDir, "pnpm-lock.yaml");
   const npmLockSrc = path.join(rootDir, "package-lock.json");
+  const npmrcSrc = path.join(rootDir, ".npmrc");
 
   if (await fs.pathExists(pnpmLockSrc)) {
     await fs.copyFile(pnpmLockSrc, path.join(destinationDir, "pnpm-lock.yaml"));
   } else if (await fs.pathExists(npmLockSrc)) {
     await fs.copyFile(npmLockSrc, path.join(destinationDir, "package-lock.json"));
+  }
+
+  if (await fs.pathExists(npmrcSrc)) {
+    await fs.copyFile(npmrcSrc, path.join(destinationDir, ".npmrc"));
   }
 }
 
@@ -142,7 +147,13 @@ async function buildLayer(packageManager) {
   console.log("[build-lambda] Copying package metadata for layer");
   await copyPackageMetadata(layerNodejsDir);
 
-  await fs.writeFile(path.join(layerNodejsDir, ".npmrc"), "node-linker=hoisted\n");
+  const npmrcSrc = path.join(rootDir, ".npmrc");
+  let npmrcContent = "node-linker=hoisted\n";
+  if (await fs.pathExists(npmrcSrc)) {
+    const existingContent = await fs.readFile(npmrcSrc, "utf8");
+    npmrcContent = existingContent + "\n" + npmrcContent;
+  }
+  await fs.writeFile(path.join(layerNodejsDir, ".npmrc"), npmrcContent);
 
   console.log("[build-lambda] Installing dependencies into layer staging");
   await installProdDependencies(layerNodejsDir, packageManager);
@@ -175,6 +186,7 @@ async function main() {
   await fs.ensureDir(buildDir);
   await fs.ensureDir(distDir);
   await fs.emptyDir(distDir);
+  await fs.remove(path.join(rootDir, "tsconfig.tsbuildinfo"));
 
   const packageManager = await detectPackageManager();
 
