@@ -48,6 +48,38 @@ export async function fetchOldestPendingTask(
   }
 }
 
+export async function countPendingTasks(
+  doc: DynamoDBDocumentClient,
+  cfg: TaskRepositoryConfig,
+): Promise<number> {
+  let count = 0;
+  let startKey: Record<string, any> | undefined = undefined;
+  const exprNames = { "#status": "status" };
+  const exprValues = { ":pending": "pending", ":maxAttempts": 3 };
+
+  while (true) {
+    const res: QueryCommandOutput = await doc.send(
+      new QueryCommand({
+        TableName: cfg.tableName,
+        IndexName: cfg.statusIndexName,
+        KeyConditionExpression: "#status = :pending",
+        FilterExpression: "attribute_not_exists(retryAttempts) OR retryAttempts < :maxAttempts",
+        ExpressionAttributeNames: exprNames,
+        ExpressionAttributeValues: exprValues,
+        Select: "COUNT",
+        ExclusiveStartKey: startKey,
+      }),
+    );
+
+    count += res.Count ?? 0;
+
+    if (!res.LastEvaluatedKey) break;
+    startKey = res.LastEvaluatedKey;
+  }
+
+  return count;
+}
+
 export async function getTaskByIssue(
   doc: DynamoDBDocumentClient,
   cfg: TaskRepositoryConfig,

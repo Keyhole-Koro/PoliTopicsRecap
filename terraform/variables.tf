@@ -28,12 +28,6 @@ variable "aws_session_token" {
   default     = null
 }
 
-variable "lambda_name" {
-  description = "Unique name for the PoliTopicsRecap SQS-driven Lambda function"
-  type        = string
-  default     = "politopics-recap-sqs-processor"
-}
-
 variable "environment" {
   description = "Deployment environment identifier (e.g., dev, stage, prod)"
   type        = string
@@ -44,18 +38,6 @@ variable "tags" {
   description = "Additional resource tags to apply"
   type        = map(string)
   default     = {}
-}
-
-variable "lambda_package_path" {
-  description = "Relative path to the packaged Lambda artifact (ZIP file)"
-  type        = string
-  default     = "../dist/lambda_handler.zip"
-}
-
-variable "lambda_layer_package_path" {
-  description = "Relative path to the packaged Lambda layer artifact (ZIP file)"
-  type        = string
-  default     = "../dist/lambda_layer.zip"
 }
 
 variable "prompt_bucket_name" {
@@ -94,113 +76,152 @@ variable "create_task_table" {
   default     = false
 }
 
-variable "lambda_memory_mb" {
-  description = "Memory size for the Lambda function"
-  type        = number
-  default     = 256
-}
-
-variable "lambda_timeout_seconds" {
-  description = "Timeout (in seconds) for the Lambda function"
-  type        = number
-  default     = 60
-}
-
-variable "lambda_max_attempts" {
-  description = "Maximum retry attempts performed by the Lambda before failing"
-  type        = number
-  default     = 5
-}
-
-variable "lambda_api_timeout_ms" {
-  description = "Per-attempt API timeout in milliseconds"
-  type        = number
-  default     = 10000
-}
-
-variable "lambda_overall_timeout_ms" {
-  description = "Overall per-message processing timeout in milliseconds"
-  type        = number
-  default     = 45000
-}
-
-variable "scheduler_target_lambda_arn" {
-  description = "Optional ARN of an external starter Lambda invoked by the SQS backlog alarm"
-  type        = string
-  default     = null
-}
-
-variable "scheduler_use_processor_lambda_as_target" {
-  description = "If true and no external target ARN is provided, connect the backlog alarm rule to the processor Lambda"
-  type        = bool
-  default     = false
-}
-
-variable "scheduler_use_cloudwatch_events" {
-  description = "Fallback to CloudWatch EventBridge rules instead of AWS Scheduler (useful for LocalStack where Scheduler is unavailable)"
-  type        = bool
-  default     = false
-}
-
-variable "scheduler_cron_expression" {
-  description = "Cron expression used by the EventBridge Scheduler to invoke the processor"
-  type        = string
-  default     = null
-}
-
-variable "scheduler_start_time" {
-  description = "Daily start time (HH:MM, 24h) that bounds the scheduler window when cron expression is not provided"
-  type        = string
-  default     = null
-}
-
-variable "scheduler_end_time" {
-  description = "Daily end time (HH:MM, 24h) that bounds the scheduler window when cron expression is not provided"
-  type        = string
-  default     = null
-}
-
-variable "scheduler_timezone" {
-  description = "IANA timezone identifier applied to the scheduler cron expression"
-  type        = string
-  default     = "UTC"
-}
-
-variable "scheduler_minute_step" {
-  description = "Minute step interval for the scheduler when cron expression is not provided"
-  type        = number
-  default     = 15
-}
-
-variable "enable_scheduler" {
-  description = "Enable EventBridge Scheduler resources that invoke the processor"
+variable "enable_fargate" {
+  description = "Whether to provision Fargate resources"
   type        = bool
   default     = true
 }
 
-variable "gemini_api_key" {
-  description = "API key for accessing the Gemini API"
+variable "fargate_subnet_ids" {
+  description = "Subnet IDs for the Fargate task"
+  type        = list(string)
+  default     = []
+}
+
+variable "fargate_security_group_ids" {
+  description = "Security group IDs for the Fargate task"
+  type        = list(string)
+  default     = []
+}
+
+variable "fargate_assign_public_ip" {
+  description = "Assign public IP to the Fargate task"
+  type        = bool
+  default     = true
+}
+
+variable "fargate_task_cpu" {
+  description = "Fargate task CPU units"
+  type        = number
+  default     = 256
+}
+
+variable "fargate_task_memory" {
+  description = "Fargate task memory (MiB)"
+  type        = number
+  default     = 512
+}
+
+variable "fargate_container_image_tag" {
+  description = "Container image tag"
   type        = string
+  default     = "latest"
+}
+
+variable "fargate_log_retention_days" {
+  description = "CloudWatch log retention in days"
+  type        = number
+  default     = 14
+}
+
+variable "enable_fargate_schedule" {
+  description = "Enable the EventBridge Scheduler trigger"
+  type        = bool
+  default     = true
+}
+
+variable "fargate_schedule_expression" {
+  description = "Scheduler cron expression"
+  type        = string
+  default     = "cron(0 9 * * ? *)"
+}
+
+variable "fargate_schedule_timezone" {
+  description = "Scheduler timezone"
+  type        = string
+  default     = "Asia/Tokyo"
+}
+
+variable "gemini_api_key" {
+  description = "Gemini API key"
+  type        = string
+  sensitive   = true
   default     = ""
 }
 
 variable "discord_webhook_error" {
-  description = "Discord webhook URL for #error notifications"
+  description = "Discord webhook for error notifications"
   type        = string
   sensitive   = true
   default     = ""
 }
 
 variable "discord_webhook_warn" {
-  description = "Discord webhook URL for #warn notifications"
+  description = "Discord webhook for warning notifications"
   type        = string
   sensitive   = true
   default     = ""
 }
 
 variable "discord_webhook_batch" {
-  description = "Discord webhook URL for #batch notifications"
+  description = "Discord webhook for batch notifications"
   type        = string
   sensitive   = true
   default     = ""
+}
+
+variable "r2_endpoint_url" {
+  description = "R2 endpoint URL"
+  type        = string
+  default     = ""
+}
+
+variable "r2_region" {
+  description = "R2 region (e.g., auto)"
+  type        = string
+  default     = "auto"
+}
+
+variable "r2_access_key_id" {
+  description = "R2 access key ID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "r2_secret_access_key" {
+  description = "R2 secret access key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "r2_article_bucket" {
+  description = "R2 bucket for article assets"
+  type        = string
+  default     = ""
+}
+
+variable "r2_public_url_base" {
+  description = "R2 public URL base"
+  type        = string
+  default     = ""
+}
+
+variable "enable_notification" {
+  description = "Enable Discord notifications"
+  type        = bool
+  default     = true
+}
+
+variable "notification_delay_ms" {
+  description = "Notification delay in milliseconds"
+  type        = number
+  default     = 1000
+}
+
+variable "fargate_extra_environment_variables" {
+  description = "Additional environment variables for the Fargate task"
+  type        = map(string)
+  default     = {}
 }

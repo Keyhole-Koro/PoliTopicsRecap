@@ -1,8 +1,3 @@
-output "politopics_recap_lambda_arn" {
-  description = "ARN of the PoliTopicsRecap task processing Lambda function"
-  value       = module.lambda.lambda_function_arn
-}
-
 output "politopics_table_name" {
   description = "Primary PoliTopics DynamoDB table name"
   value       = module.dynamodb.politopics_table_name
@@ -31,4 +26,24 @@ output "article_asset_bucket_name" {
 output "article_asset_bucket_arn" {
   description = "Article payload storage bucket ARN"
   value       = module.article_asset_bucket.bucket_arn
+}
+
+output "fargate_cluster_name" {
+  description = "ECS cluster name (null when disabled)"
+  value       = module.fargate.cluster_name
+}
+
+output "fargate_task_definition_arn" {
+  description = "ECS task definition ARN (null when disabled)"
+  value       = module.fargate.task_definition_arn
+}
+
+output "fargate_ecr_repository_url" {
+  description = "ECR repository URL (null when disabled)"
+  value       = module.fargate.ecr_repository_url
+}
+
+output "fargate_scheduler_name" {
+  description = "Scheduler schedule name (null when disabled)"
+  value       = module.fargate.scheduler_name
 }

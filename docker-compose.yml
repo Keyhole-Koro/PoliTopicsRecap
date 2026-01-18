@@ -8,6 +8,58 @@ services:
     depends_on:
       - localstack
 
+  # Batch processor container for testing Fargate-style execution
+  app-batch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - APP_ENVIRONMENT=localstackTest
+      - AWS_REGION=ap-northeast-3
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - GEMINI_API_KEY=dummy
+      - DISCORD_WEBHOOK_ERROR=
+      - DISCORD_WEBHOOK_WARN=
+      - DISCORD_WEBHOOK_BATCH=
+      - ENABLE_NOTIFICATION=false
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - default
+
+  # Development batch runner (uses source code with ts-node)
+  app-batch-dev:
+    image: mcr.microsoft.com/devcontainers/base:jammy
+    working_dir: /workspaces/app
+    volumes:
+      - ./:/workspaces/app
+    environment:
+      - APP_ENVIRONMENT=localstackTest
+      - AWS_REGION=ap-northeast-3
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - GEMINI_API_KEY=dummy
+      - DISCORD_WEBHOOK_ERROR=
+      - DISCORD_WEBHOOK_WARN=
+      - DISCORD_WEBHOOK_BATCH=
+      - ENABLE_NOTIFICATION=false
+    command: >
+      bash -c "
+        cd /workspaces/app &&
+        npm install -g pnpm &&
+        pnpm install &&
+        npx ts-node -r tsconfig-paths/register src/container_main.ts
+      "
+    depends_on:
+      localstack:
+        condition: service_healthy
+    networks:
+      - default
+
   localstack:
     image: localstack/localstack:latest
     ports:
@@ -20,6 +72,11 @@ services:
     volumes:
       - "localstack_data:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   dynamodb-admin:
     image: aaronshaf/dynamodb-admin:latest

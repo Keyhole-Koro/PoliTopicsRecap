@@ -1,14 +1,11 @@
 # Terraform + LocalStack Quickstart
+[Japanese Version](./jp/terraform-localstack.md)
 
-1. Build or update the Lambda function and dependency layer so the `lambda_package_path` and `lambda_layer_package_path` files exist:
+1. Build the container TypeScript output (optional if you are only provisioning infra):
 
    ```bash
-   # because of the free tier of localstack, lambda layer is restricted to create so this script copy # node_modules to the same directory of source code (lambda function)
-   dummy of lambda_layer is created so that terraform doesnt need to distinguish local and remote.
-   npm run build:local
+   pnpm run build
    ```
-
-   This produces `dist/lambda_handler.zip` (function code) and `dist/lambda_layer.zip` (Node.js dependencies).
 
 2. Switch into the Terraform configuration directory:
 
@@ -20,7 +17,6 @@
 
    ```bash
    export ENV=local
-   export TF_VAR_gemini_api_key="fake"
    terraform init -backend-config=backends/local.hcl
    ```
 
@@ -44,7 +40,7 @@
    (Alternatively, you can skip the saved plan and run:
    `terraform apply -var-file="tfvars/localstack.tfvars"`.)
 
-6. Run the new Dynamo workflow test once the stack is up (point at LocalStack):
+6. Run the Dynamo workflow test once the stack is up (point at LocalStack):
 
    ```bash
    LOCALSTACK_ENDPOINT_URL=http://localstack:4566 \
@@ -53,13 +49,7 @@
 
    The worker now pulls tasks directly from the `PoliTopics-llm-tasks` table via its `StatusIndex` GSI, and it writes final reduce results to the `PoliTopics` article table using `storeData`.
 
-# Apply changes of lambda
-
-```bash
-nom run build:local
-```
-
-# utilities (debuging)
+# utilities (debugging)
 
 ### S3 buckets
 
@@ -76,36 +66,6 @@ aws --endpoint-url http://localstack:4566   s3 ls s3://politopics-prompts/demo/<
 - Recap now dumps invalid reduce outputs to S3 for debugging. Look under  
   `s3://<article-asset-bucket>/invalid-payloads/<taskId>/<timestamp>.txt`  
   (the Discord notification includes the exact URI).
-
-### download layer
-
-```bash
-URL=$(aws lambda get-layer-version \
-  --layer-name politopics-recap-local-deps \
-  --version-number <version> \
-  --region ap-northeast-3 \
-  --output text \
-  --query 'Content.Location')
-
-URL_FIXED=$(echo "$URL" | sed 's/localhost\.localstack\.cloud/localstack/')
-
-curl -fSL -o layer.zip "$URL_FIXED"
-
-unzip layer.zip -d layer_content
-```
-
-### lambda config
-
-```bash
-aws lambda get-function-configuration \
-  --function-name politopics-recap-local \
-  --region ap-northeast-3 \
-  --endpoint-url http://localstack:4566 \
-  --query 'Environment.Variables'
-
-# invoke
-aws lambda invoke --function-name politopics-recap-local --endpoint-url http://localstack:4566 --region ap-northeast-3 out.json
-```
 
 ### DynamoDB
 

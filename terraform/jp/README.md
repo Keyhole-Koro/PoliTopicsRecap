@@ -1,7 +1,7 @@
-# Terraform Commands (PoliTopics Recap)
-[Japanese Version](./jp/README.md)
+# Terraform コマンド (PoliTopics Recap)
+[English Version](../README.md)
 
-This module supports `stage`, `prod`, and `localstack` environments. The commands below assume you are in `PoliTopicsRecap/terraform`.
+このモジュールは `stage`、`prod`、`localstack` 環境をサポートしています。以下のコマンドは `PoliTopicsRecap/terraform` にいることを前提としています。
 
 ## LocalStack
 
@@ -24,11 +24,11 @@ export TF_VAR_discord_webhook_batch="<your-webhook>"
 export TF_VAR_r2_endpoint_url="<r2-endpoint>"
 export TF_VAR_r2_access_key_id="<r2-key>"
 export TF_VAR_r2_secret_access_key="<r2-secret>"
-# Provide networking for the Fargate task
+# Fargate タスクのネットワーク設定
 export TF_VAR_fargate_subnet_ids='["subnet-...","subnet-..."]'
 export TF_VAR_fargate_security_group_ids='["sg-..."]'
 
-# when terraform init reference to localstack
+# terraform init が localstack を参照する場合
 # unset AWS_ENDPOINT_URL
 # aws configure
 
@@ -48,11 +48,11 @@ export TF_VAR_discord_webhook_batch="<your-webhook>"
 export TF_VAR_r2_endpoint_url="<r2-endpoint>"
 export TF_VAR_r2_access_key_id="<r2-key>"
 export TF_VAR_r2_secret_access_key="<r2-secret>"
-# Provide networking for the Fargate task
+# Fargate タスクのネットワーク設定
 export TF_VAR_fargate_subnet_ids='["subnet-...","subnet-..."]'
 export TF_VAR_fargate_security_group_ids='["sg-..."]'
 
-# when terraform init reference to localstack
+# terraform init が localstack を参照する場合
 # unset AWS_ENDPOINT_URL
 # aws configure
 
@@ -61,11 +61,11 @@ terraform plan -var-file="tfvars/prod.tfvars" -out=tfplan
 terraform apply tfplan
 ```
 
-## Notes
+## ノート
 
-- Create the state bucket before `terraform init` when targeting AWS:
+- AWS をターゲットにする場合、`terraform init` の前にステートバケットを作成してください:
   - `./scripts/create-state-bucket.sh stage`
   - `./scripts/create-state-bucket.sh prod`
   - `./scripts/create-state-bucket.sh local`
-- Import existing resources if needed: `./import_all.sh tfvars/<env>.tfvars`
-- Fargate resources are disabled in LocalStack (`enable_fargate = false`). Set `enable_fargate` and `enable_fargate_schedule` to false if you only want to manage storage resources.
+- 必要に応じて既存のリソースをインポートしてください: `./import_all.sh tfvars/<env>.tfvars`
+- LocalStack では Fargate リソースを無効化しています (`enable_fargate = false`)。ストレージのみを管理する場合は `enable_fargate` と `enable_fargate_schedule` を `false` にしてください。

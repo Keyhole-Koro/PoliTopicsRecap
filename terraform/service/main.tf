@@ -41,11 +41,6 @@ resource "aws_dynamodb_table" "llm_tasks" {
   }
 }
 
-locals {
-  llm_task_table_name = aws_dynamodb_table.llm_tasks.name
-  llm_task_table_arn  = aws_dynamodb_table.llm_tasks.arn
-}
-
 module "s3" {
   source        = "./s3"
   bucket_name   = var.prompt_bucket_name
@@ -66,287 +61,43 @@ module "dynamodb" {
   tags       = local.tags
 }
 
-module "lambda" {
-  source = "./lambda"
+module "fargate" {
+  source = "./fargate"
 
-  lambda_name               = var.lambda_name
-  lambda_package_path       = var.lambda_package_path
-  lambda_layer_package_path = var.lambda_layer_package_path
-  lambda_memory_mb          = var.lambda_memory_mb
-  lambda_timeout_seconds    = var.lambda_timeout_seconds
-  lambda_max_attempts       = var.lambda_max_attempts
-  lambda_api_timeout_ms     = var.lambda_api_timeout_ms
-  lambda_overall_timeout_ms = var.lambda_overall_timeout_ms
-  environment               = var.environment
-  prompt_bucket_name        = module.s3.bucket_name
-  article_asset_bucket_name = module.article_asset_bucket.bucket_name
-  task_table_name           = local.llm_task_table_name
-  task_table_arn            = local.llm_task_table_arn
-  task_status_index_name    = var.task_status_index_name
-  article_table_name        = module.dynamodb.politopics_table_name
-  article_table_arn         = module.dynamodb.politopics_table_arn
-  tags                      = local.tags
-  gemini_api_key            = var.gemini_api_key
-  discord_webhook_error     = var.discord_webhook_error
-  discord_webhook_warn      = var.discord_webhook_warn
-  discord_webhook_batch     = var.discord_webhook_batch
-}
+  enabled                  = var.enable_fargate
+  environment              = var.environment
+  aws_region               = var.aws_region
+  tags                     = local.tags
+  prompt_bucket_arn        = module.s3.bucket_arn
+  article_asset_bucket_arn = module.article_asset_bucket.bucket_arn
+  task_table_arn           = aws_dynamodb_table.llm_tasks.arn
+  article_table_arn        = module.dynamodb.politopics_table_arn
 
-#############################################
-# Flexible Scheduler logic
-#############################################
+  subnet_ids         = var.fargate_subnet_ids
+  security_group_ids = var.fargate_security_group_ids
+  assign_public_ip   = var.fargate_assign_public_ip
 
-# Example variables (define in variables.tf if not present):
-# variable "scheduler_minute_step" { type = number, default = 5 }
-# variable "scheduler_timezone"    { type = string, default = "Asia/Tokyo" }
-# variable "scheduler_cron_expression" { type = string, default = null }
-# variable "scheduler_start_time"  { type = string, default = null }  # e.g. "06:00"
-# variable "scheduler_end_time"    { type = string, default = null }  # e.g. "17:55"
-# variable "scheduler_target_lambda_arn" { type = string, default = null }
-# variable "scheduler_use_processor_lambda_as_target" { type = bool, default = true }
+  task_cpu            = var.fargate_task_cpu
+  task_memory         = var.fargate_task_memory
+  container_image_tag = var.fargate_container_image_tag
+  log_retention_days  = var.fargate_log_retention_days
+  enable_schedule     = var.enable_fargate_schedule
+  schedule_expression = var.fargate_schedule_expression
+  schedule_timezone   = var.fargate_schedule_timezone
 
-locals {
-  # ---- Target Lambda ARN ----
-  scheduler_has_target = (
-    var.scheduler_target_lambda_arn != null && var.scheduler_target_lambda_arn != "" ?
-    true :
-    var.scheduler_use_processor_lambda_as_target
-  )
+  gemini_api_key        = var.gemini_api_key
+  discord_webhook_error = var.discord_webhook_error
+  discord_webhook_warn  = var.discord_webhook_warn
+  discord_webhook_batch = var.discord_webhook_batch
 
-  scheduler_target_lambda_arn = (
-    var.scheduler_target_lambda_arn != null && var.scheduler_target_lambda_arn != "" ?
-    var.scheduler_target_lambda_arn :
-    (var.scheduler_use_processor_lambda_as_target ? module.lambda.lambda_function_arn : null)
-  )
+  r2_endpoint_url      = var.r2_endpoint_url
+  r2_region            = var.r2_region
+  r2_access_key_id     = var.r2_access_key_id
+  r2_secret_access_key = var.r2_secret_access_key
+  r2_article_bucket    = var.r2_article_bucket
+  r2_public_url_base   = var.r2_public_url_base
 
-  scheduler_cron_expression_clean = (
-    var.scheduler_cron_expression != null ? trimspace(var.scheduler_cron_expression) : ""
-  )
-
-  # true if a non-empty cron expression is explicitly provided
-  scheduler_cron_provided = local.scheduler_cron_expression_clean != ""
-
-  # normalize start/end strings (fall back to empty when null)
-  scheduler_start_clean = (
-    var.scheduler_start_time != null ? trimspace(var.scheduler_start_time) : ""
-  )
-  scheduler_end_clean = (
-    var.scheduler_end_time != null ? trimspace(var.scheduler_end_time) : ""
-  )
-
-
-  scheduler_start_parts = local.scheduler_start_clean != "" ? split(":", local.scheduler_start_clean) : []
-  scheduler_end_parts   = local.scheduler_end_clean != "" ? split(":", local.scheduler_end_clean) : []
-
-  scheduler_start_hour   = (length(local.scheduler_start_parts) == 2 && can(tonumber(local.scheduler_start_parts[0])) ? tonumber(local.scheduler_start_parts[0]) : null)
-  scheduler_start_minute = (length(local.scheduler_start_parts) == 2 && can(tonumber(local.scheduler_start_parts[1])) ? tonumber(local.scheduler_start_parts[1]) : null)
-  scheduler_end_hour     = (length(local.scheduler_end_parts) == 2 && can(tonumber(local.scheduler_end_parts[0])) ? tonumber(local.scheduler_end_parts[0]) : null)
-  scheduler_end_minute   = (length(local.scheduler_end_parts) == 2 && can(tonumber(local.scheduler_end_parts[1])) ? tonumber(local.scheduler_end_parts[1]) : null)
-
-  minute_step = var.scheduler_minute_step
-
-  # ---- Validation ----
-  have_window = (
-    !local.scheduler_cron_provided &&
-    local.scheduler_start_hour != null &&
-    local.scheduler_end_hour != null &&
-    local.scheduler_start_minute != null &&
-    local.scheduler_end_minute != null &&
-    local.minute_step >= 1 && local.minute_step <= 59
-  )
-
-  # Determine if window crosses midnight
-  crosses_midnight = local.have_window && (
-    local.scheduler_end_hour < local.scheduler_start_hour ||
-    (local.scheduler_end_hour == local.scheduler_start_hour && local.scheduler_end_minute < local.scheduler_start_minute)
-  )
-
-  # ---- Minute lists for edge hours ----
-  start_hour_minutes_csv = (
-    local.have_window ?
-    join(",", [
-      for m in range(0, 60) :
-      m if(
-        m >= local.scheduler_start_minute &&
-        (m - local.scheduler_start_minute) % local.minute_step == 0
-      )
-    ]) : ""
-  )
-
-  end_hour_minutes_csv = (
-    local.have_window ?
-    join(",", [
-      for m in range(0, 60) :
-      m if(
-        m <= local.scheduler_end_minute &&
-        ((m - local.scheduler_start_minute) % local.minute_step + local.minute_step) % local.minute_step == 0
-      )
-    ]) : ""
-  )
-
-  same_hour_minutes_csv = (
-    local.have_window && local.scheduler_start_hour == local.scheduler_end_hour ?
-    join(",", [
-      for m in range(0, 60) :
-      m if(
-        m >= local.scheduler_start_minute &&
-        m <= local.scheduler_end_minute &&
-        (m - local.scheduler_start_minute) % local.minute_step == 0
-      )
-    ]) : ""
-  )
-
-  # ---- Interior hours ----
-  interior_hours_non_wrap = (
-    !local.crosses_midnight && (local.scheduler_end_hour - local.scheduler_start_hour >= 2) ?
-    format("%d-%d", local.scheduler_start_hour + 1, local.scheduler_end_hour - 1) :
-    ""
-  )
-
-  interior_hours_wrap_a = (
-    local.crosses_midnight && (23 - local.scheduler_start_hour >= 1) ?
-    format("%d-%d", local.scheduler_start_hour + 1, 23) : ""
-  )
-
-  interior_hours_wrap_b = (
-    local.crosses_midnight && (local.scheduler_end_hour - 0 >= 1) ?
-    format("%d-%d", 0, local.scheduler_end_hour - 1) : ""
-  )
-
-  # ---- Build map of cron expressions ----
-  scheduler_expressions = (
-    local.scheduler_cron_provided ? {
-      direct = local.scheduler_cron_expression_clean
-    } :
-    local.have_window ? merge(
-      (
-        local.scheduler_start_hour == local.scheduler_end_hour ? {
-          same_hour = format("cron(%s %d ? * * *)", local.same_hour_minutes_csv, local.scheduler_start_hour)
-        } : {}
-      ),
-      (
-        local.scheduler_start_hour != local.scheduler_end_hour && local.start_hour_minutes_csv != "" ? {
-          start_hour = format("cron(%s %d ? * * *)", local.start_hour_minutes_csv, local.scheduler_start_hour)
-        } : {}
-      ),
-      (
-        local.interior_hours_non_wrap != "" ? {
-          interior = format("cron(0/%d %s ? * * *)", local.minute_step, local.interior_hours_non_wrap)
-        } : {}
-      ),
-      (
-        local.interior_hours_wrap_a != "" ? {
-          interior_a = format("cron(0/%d %s ? * * *)", local.minute_step, local.interior_hours_wrap_a)
-        } : {}
-      ),
-      (
-        local.interior_hours_wrap_b != "" ? {
-          interior_b = format("cron(0/%d %s ? * * *)", local.minute_step, local.interior_hours_wrap_b)
-        } : {}
-      ),
-      (
-        local.scheduler_start_hour != local.scheduler_end_hour && local.end_hour_minutes_csv != "" ? {
-          end_hour = format("cron(%s %d ? * * *)", local.end_hour_minutes_csv, local.scheduler_end_hour)
-        } : {}
-      )
-    ) : {}
-  )
-
-  scheduler_is_enabled         = var.enable_scheduler && local.scheduler_has_target && length(local.scheduler_expressions) > 0
-  scheduler_schedule_base_name = "${var.lambda_name}-schedule"
-}
-
-# ---- IAM Role for Scheduler ----
-resource "aws_iam_role" "scheduler" {
-  count = (!var.scheduler_use_cloudwatch_events && var.enable_scheduler && length(local.scheduler_expressions) > 0) ? 1 : 0
-
-  name = "${var.lambda_name}-scheduler-role"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "scheduler.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-  tags = var.tags
-}
-
-resource "aws_iam_role_policy" "scheduler_invoke_lambda" {
-  count = (!var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? 1 : 0
-
-  name = "${var.lambda_name}-scheduler-invoke"
-  role = aws_iam_role.scheduler[0].id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["lambda:InvokeFunction"]
-      Resource = local.scheduler_target_lambda_arn
-    }]
-  })
-}
-
-# ---- One AWS Scheduler per cron expression ----
-resource "aws_scheduler_schedule" "processor" {
-  for_each = (!var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? local.scheduler_expressions : {}
-
-  name        = "${local.scheduler_schedule_base_name}-${each.key}"
-  description = "Invokes ${var.lambda_name} (${each.key})"
-
-  schedule_expression          = each.value
-  schedule_expression_timezone = var.scheduler_timezone
-  state                        = "ENABLED"
-
-  flexible_time_window { mode = "OFF" }
-
-  target {
-    arn      = local.scheduler_target_lambda_arn
-    role_arn = aws_iam_role.scheduler[0].arn
-    input = jsonencode({
-      source = "eventbridge-scheduler"
-      lambda = var.lambda_name
-    })
-  }
-}
-
-resource "aws_lambda_permission" "allow_scheduler_invoke" {
-  for_each = (!var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? local.scheduler_expressions : {}
-
-  statement_id  = "AllowExecutionFromScheduler-${each.key}"
-  action        = "lambda:InvokeFunction"
-  function_name = module.lambda.lambda_function_name
-  principal     = "scheduler.amazonaws.com"
-  source_arn    = aws_scheduler_schedule.processor[each.key].arn
-}
-
-# ---- CloudWatch EventBridge rule fallback (LocalStack) ----
-resource "aws_cloudwatch_event_rule" "scheduler" {
-  for_each = (var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? local.scheduler_expressions : {}
-
-  name                = "${local.scheduler_schedule_base_name}-${each.key}"
-  description         = "Invokes ${var.lambda_name} (${each.key}) via CloudWatch schedule"
-  schedule_expression = each.value
-}
-
-resource "aws_cloudwatch_event_target" "scheduler" {
-  for_each = (var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? local.scheduler_expressions : {}
-
-  rule      = aws_cloudwatch_event_rule.scheduler[each.key].name
-  target_id = "lambda-${each.key}"
-  arn       = local.scheduler_target_lambda_arn
-  input = jsonencode({
-    source = "cloudwatch-events-scheduler"
-    lambda = var.lambda_name
-  })
-}
-
-resource "aws_lambda_permission" "allow_cloudwatch_schedule" {
-  for_each = (var.scheduler_use_cloudwatch_events && local.scheduler_is_enabled) ? local.scheduler_expressions : {}
-
-  statement_id  = "AllowEventBridgeSchedule-${each.key}"
-  action        = "lambda:InvokeFunction"
-  function_name = module.lambda.lambda_function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.scheduler[each.key].arn
+  enable_notification         = var.enable_notification
+  notification_delay_ms       = var.notification_delay_ms
+  extra_environment_variables = var.fargate_extra_environment_variables
 }

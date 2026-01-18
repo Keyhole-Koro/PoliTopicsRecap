@@ -1,5 +1,33 @@
 export type AppEnvironment = "local" | "stage" | "prod" | "ghaTest" | "localstackTest"
 
+export type RateLimitConfig = {
+  requestsPerMinute: number
+  requestsPerDay: number
+  maxConsecutiveErrors: number
+  cooldownOnErrorMs: number
+}
+
+export type BatchConfig = {
+  maxTasksPerRun: number | "auto"
+  gracefulShutdownTimeoutMs: number
+}
+
+export type R2Config = {
+  endpoint: string
+  region: string
+  accessKeyId: string
+  secretAccessKey: string
+  bucket: string
+  publicUrlBase: string
+}
+
+export type NotificationSettings = {
+  enabled: boolean
+  delayMs: number
+  logGroupName?: string
+  executionEnv?: string
+}
+
 export type AppConfig = {
   environment: AppEnvironment
   aws: {
@@ -13,12 +41,16 @@ export type AppConfig = {
   promptBucketName: string
   articleTableName: string
   articleAssetBucketName: string
+  r2: R2Config | null
   geminiApiKey: string
   notifications: {
     errorWebhook: string
     warnWebhook: string
     batchWebhook: string
   }
+  notificationSettings: NotificationSettings
+  rateLimit: RateLimitConfig
+  batch: BatchConfig
 }
 
 const CONFIG_BY_ENV: Record<AppEnvironment, () => Omit<AppConfig, "environment">> = {
@@ -56,11 +88,28 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
     promptBucketName: "politopics-prompts",
     articleTableName: "politopics-local",
     articleAssetBucketName: "politopics-articles-local",
+    r2: null, // Use LocalStack S3 in local mode
     geminiApiKey: "dummy",
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
       batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
+    },
+    notificationSettings: {
+      enabled: optionalEnvBool("ENABLE_NOTIFICATION", true),
+      delayMs: optionalEnvNumber("NOTIFICATION_DELAY_MS", 1000),
+      logGroupName: optionalEnv("AWS_LAMBDA_LOG_GROUP_NAME"),
+      executionEnv: optionalEnv("AWS_EXECUTION_ENV"),
+    },
+    rateLimit: {
+      requestsPerMinute: 15,
+      requestsPerDay: 1500,
+      maxConsecutiveErrors: 5,
+      cooldownOnErrorMs: 30000,
+    },
+    batch: {
+      maxTasksPerRun: "auto",
+      gracefulShutdownTimeoutMs: 10000,
     },
   };
 }
@@ -75,11 +124,35 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     promptBucketName: "politopics-prompts-stage",
     articleTableName: "politopics-stage",
     articleAssetBucketName: "politopics-articles-stage",
+    r2: {
+      endpoint: requireEnv("R2_ENDPOINT_URL"),
+      region: optionalEnv("R2_REGION") || "auto",
+      accessKeyId: requireEnv("R2_ACCESS_KEY_ID"),
+      secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
+      bucket: optionalEnv("R2_ARTICLE_BUCKET") || "politopics-articles-stage",
+      publicUrlBase: optionalEnv("R2_PUBLIC_URL_BASE") || "https://asset.politopics.net",
+    },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
       batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
+    },
+    notificationSettings: {
+      enabled: optionalEnvBool("ENABLE_NOTIFICATION", true),
+      delayMs: optionalEnvNumber("NOTIFICATION_DELAY_MS", 1000),
+      logGroupName: optionalEnv("AWS_LAMBDA_LOG_GROUP_NAME"),
+      executionEnv: optionalEnv("AWS_EXECUTION_ENV"),
+    },
+    rateLimit: {
+      requestsPerMinute: 15,
+      requestsPerDay: 1500,
+      maxConsecutiveErrors: 5,
+      cooldownOnErrorMs: 30000,
+    },
+    batch: {
+      maxTasksPerRun: "auto",
+      gracefulShutdownTimeoutMs: 10000,
     },
   };
 }
@@ -94,39 +167,104 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
     promptBucketName: "politopics-prompts-prod",
     articleTableName: "politopics-prod",
     articleAssetBucketName: "politopics-articles-prod",
+    r2: {
+      endpoint: requireEnv("R2_ENDPOINT_URL"),
+      region: optionalEnv("R2_REGION") || "auto",
+      accessKeyId: requireEnv("R2_ACCESS_KEY_ID"),
+      secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
+      bucket: optionalEnv("R2_ARTICLE_BUCKET") || "politopics-articles-prod",
+      publicUrlBase: optionalEnv("R2_PUBLIC_URL_BASE") || "https://asset.politopics.net",
+    },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
       batchWebhook: requireEnv("DISCORD_WEBHOOK_BATCH"),
     },
+    notificationSettings: {
+      enabled: optionalEnvBool("ENABLE_NOTIFICATION", true),
+      delayMs: optionalEnvNumber("NOTIFICATION_DELAY_MS", 1000),
+      logGroupName: optionalEnv("AWS_LAMBDA_LOG_GROUP_NAME"),
+      executionEnv: optionalEnv("AWS_EXECUTION_ENV"),
+    },
+    rateLimit: {
+      requestsPerMinute: 15,
+      requestsPerDay: 1500,
+      maxConsecutiveErrors: 5,
+      cooldownOnErrorMs: 30000,
+    },
+    batch: {
+      maxTasksPerRun: "auto",
+      gracefulShutdownTimeoutMs: 10000,
+    },
   };
 }
 
 function buildTestConfig(): Omit<AppConfig, "environment"> {
-  const optionalEnv = (name: string) => requireEnv(name, true);
   return {
     aws: {
-      region: process.env.AWS_REGION || "ap-northeast-3",
-      endpoint: process.env.AWS_ENDPOINT_URL || "http://localhost:4566",
+      region: optionalEnv("AWS_REGION") || "ap-northeast-3",
+      endpoint: optionalEnv("AWS_ENDPOINT_URL") || "http://localhost:4566",
       forcePathStyle: true,
       credentials:
-        process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
-          ? { accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY }
+        optionalEnv("AWS_ACCESS_KEY_ID") && optionalEnv("AWS_SECRET_ACCESS_KEY")
+          ? { accessKeyId: optionalEnv("AWS_ACCESS_KEY_ID")!, secretAccessKey: optionalEnv("AWS_SECRET_ACCESS_KEY")! }
           : { accessKeyId: "test", secretAccessKey: "test" },
     },
-    taskTableName: process.env.TASK_TABLE_NAME || "politopics-llm-tasks-local",
+    taskTableName: optionalEnv("TASK_TABLE_NAME") || "politopics-llm-tasks-local",
     taskStatusIndexName: "StatusIndex",
-    promptBucketName: process.env.PROMPT_BUCKET_NAME || "politopics-prompts",
-    articleTableName: process.env.ARTICLE_TABLE_NAME || "politopics-local",
-    articleAssetBucketName: process.env.ARTICLE_ASSET_BUCKET_NAME || "politopics-articles-local",
+    promptBucketName: optionalEnv("PROMPT_BUCKET_NAME") || "politopics-prompts",
+    articleTableName: optionalEnv("ARTICLE_TABLE_NAME") || "politopics-local",
+    articleAssetBucketName: optionalEnv("ARTICLE_ASSET_BUCKET_NAME") || "politopics-articles-local",
+    r2: optionalEnv("R2_ENDPOINT_URL") ? {
+      endpoint: optionalEnv("R2_ENDPOINT_URL")!,
+      region: optionalEnv("R2_REGION") || "auto",
+      accessKeyId: optionalEnv("R2_ACCESS_KEY_ID") || "test",
+      secretAccessKey: optionalEnv("R2_SECRET_ACCESS_KEY") || "test",
+      bucket: optionalEnv("R2_ARTICLE_BUCKET") || "politopics-articles-local",
+      publicUrlBase: optionalEnv("R2_PUBLIC_URL_BASE") || "http://localhost:4566/politopics-articles-local",
+    } : null,
     geminiApiKey: "dummy",
     notifications: {
-      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR"),
-      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN"),
-      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH"),
+      errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR") || "",
+      warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN") || "",
+      batchWebhook: optionalEnv("DISCORD_WEBHOOK_BATCH") || "",
+    },
+    notificationSettings: {
+      enabled: optionalEnvBool("ENABLE_NOTIFICATION", false),
+      delayMs: optionalEnvNumber("NOTIFICATION_DELAY_MS", 100),
+      logGroupName: optionalEnv("AWS_LAMBDA_LOG_GROUP_NAME"),
+      executionEnv: optionalEnv("AWS_EXECUTION_ENV"),
+    },
+    rateLimit: {
+      requestsPerMinute: 60,
+      requestsPerDay: 10000,
+      maxConsecutiveErrors: 3,
+      cooldownOnErrorMs: 1000,
+    },
+    batch: {
+      maxTasksPerRun: 10,
+      gracefulShutdownTimeoutMs: 5000,
     },
   };
+}
+
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return value && value.trim() !== "" ? value : undefined;
+}
+
+function optionalEnvBool(name: string, defaultValue: boolean): boolean {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") return defaultValue;
+  return value.toLowerCase() !== "false";
+}
+
+function optionalEnvNumber(name: string, defaultValue: number): number {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") return defaultValue;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
 function requireEnv(name: string, allowMissing = false): string {

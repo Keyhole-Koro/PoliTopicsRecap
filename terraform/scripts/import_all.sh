@@ -4,12 +4,23 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TF_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <local|stage|prod>" >&2
+ENVIRONMENT_INPUT=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --batch)
+      ;;
+    local|ghaTest|stage|prod)
+      ENVIRONMENT_INPUT="$arg"
+      ;;
+  esac
+done
+
+if [[ -z "$ENVIRONMENT_INPUT" ]]; then
+  echo "Usage: $0 <local|ghaTest|stage|prod>" >&2
   exit 1
 fi
 
-ENVIRONMENT_INPUT="$1"
 case "$ENVIRONMENT_INPUT" in
   local)
     VAR_FILE_INPUT="$TF_DIR/tfvars/localstack.tfvars"
@@ -46,7 +57,6 @@ require_cmd() {
 
 require_cmd terraform
 require_cmd python3
-require_cmd aws
 
 eval "$(
   python3 - "$VAR_FILE" <<'PY'
@@ -54,7 +64,6 @@ import pathlib
 import re
 import shlex
 import sys
-from collections import OrderedDict
 
 path = pathlib.Path(sys.argv[1])
 text = path.read_text()
@@ -93,139 +102,24 @@ def parse_value(raw):
 keys = [
   "aws_region",
   "environment",
-  "lambda_name",
   "prompt_bucket_name",
   "article_asset_bucket_name",
   "politopics_table_name",
   "task_table_name",
-  "create_task_table",
-  "enable_scheduler",
-  "scheduler_use_cloudwatch_events",
-  "scheduler_use_processor_lambda_as_target",
-  "scheduler_target_lambda_arn",
-  "scheduler_cron_expression",
-  "scheduler_start_time",
-  "scheduler_end_time",
-  "scheduler_minute_step",
+  "enable_fargate",
+  "enable_fargate_schedule",
 ]
 
 values = {k: parse_value(extract_raw(k)) for k in keys}
 
 aws_region = values.get("aws_region") or ""
 environment = values.get("environment") or ""
-lambda_name = values.get("lambda_name") or ""
 prompt_bucket = values.get("prompt_bucket_name") or ""
 article_asset_bucket = values.get("article_asset_bucket_name") or ""
 politopics_table = values.get("politopics_table_name") or ""
 task_table = values.get("task_table_name") or ""
-
-create_task_table = bool(values.get("create_task_table"))
-enable_scheduler = bool(values.get("enable_scheduler"))
-use_cloudwatch = bool(values.get("scheduler_use_cloudwatch_events"))
-use_processor_target = bool(values.get("scheduler_use_processor_lambda_as_target"))
-explicit_target = (values.get("scheduler_target_lambda_arn") or "").strip()
-
-cron_expr_raw = values.get("scheduler_cron_expression")
-cron_expr_clean = cron_expr_raw.strip() if isinstance(cron_expr_raw, str) else ""
-cron_provided = cron_expr_clean != ""
-
-start_time_raw = values.get("scheduler_start_time")
-end_time_raw = values.get("scheduler_end_time")
-minute_step_val = values.get("scheduler_minute_step")
-try:
-  minute_step = int(minute_step_val) if minute_step_val is not None else 0
-except (TypeError, ValueError):
-  minute_step = 0
-
-def parse_time(value):
-  if not isinstance(value, str):
-    return (None, None)
-  trimmed = value.strip()
-  if not trimmed:
-    return (None, None)
-  parts = trimmed.split(":")
-  if len(parts) != 2:
-    return (None, None)
-  try:
-    return (int(parts[0]), int(parts[1]))
-  except ValueError:
-    return (None, None)
-
-start_hour, start_minute = parse_time(start_time_raw)
-end_hour, end_minute = parse_time(end_time_raw)
-
-have_window = (
-  (not cron_provided)
-  and start_hour is not None
-  and end_hour is not None
-  and start_minute is not None
-  and end_minute is not None
-  and 1 <= minute_step <= 59
-)
-
-crosses_midnight = (
-  have_window and (
-    end_hour < start_hour
-    or (end_hour == start_hour and end_minute < start_minute)
-  )
-)
-
-start_hour_minutes = []
-end_hour_minutes = []
-same_hour_minutes = []
-
-if have_window:
-  for m in range(60):
-    if m >= start_minute and (m - start_minute) % minute_step == 0:
-      start_hour_minutes.append(m)
-    condition = ((m - start_minute) % minute_step + minute_step) % minute_step == 0
-    if m <= end_minute and condition:
-      end_hour_minutes.append(m)
-    if start_hour == end_hour and start_minute <= m <= end_minute and condition:
-      same_hour_minutes.append(m)
-
-start_hour_csv = ",".join(str(m) for m in start_hour_minutes)
-end_hour_csv = ",".join(str(m) for m in end_hour_minutes)
-same_hour_csv = ",".join(str(m) for m in same_hour_minutes)
-
-interior_non_wrap = ""
-interior_wrap_a = ""
-interior_wrap_b = ""
-
-if have_window and not crosses_midnight and (end_hour - start_hour) >= 2:
-  interior_non_wrap = f"{start_hour + 1}-{end_hour - 1}"
-
-if have_window and crosses_midnight and (23 - start_hour) >= 1:
-  interior_wrap_a = f"{start_hour + 1}-23"
-
-if have_window and crosses_midnight and (end_hour - 0) >= 1:
-  interior_wrap_b = f"0-{end_hour - 1}"
-
-expressions = OrderedDict()
-
-if cron_provided:
-  expressions["direct"] = cron_expr_clean
-elif have_window:
-  if start_hour == end_hour and same_hour_csv:
-    expressions["same_hour"] = f"cron({same_hour_csv} {start_hour} ? * * *)"
-  if start_hour != end_hour and start_hour_csv:
-    expressions["start_hour"] = f"cron({start_hour_csv} {start_hour} ? * * *)"
-  if interior_non_wrap:
-    expressions["interior"] = f"cron(0/{minute_step} {interior_non_wrap} ? * * *)"
-  if interior_wrap_a:
-    expressions["interior_a"] = f"cron(0/{minute_step} {interior_wrap_a} ? * * *)"
-  if interior_wrap_b:
-    expressions["interior_b"] = f"cron(0/{minute_step} {interior_wrap_b} ? * * *)"
-  if start_hour != end_hour and end_hour_csv:
-    expressions["end_hour"] = f"cron({end_hour_csv} {end_hour} ? * * *)"
-
-scheduler_has_target = bool(explicit_target) or use_processor_target
-scheduler_is_enabled = enable_scheduler and scheduler_has_target and len(expressions) > 0
-
-if scheduler_is_enabled:
-  backend = "cloudwatch" if use_cloudwatch else "aws_scheduler"
-else:
-  backend = "none"
+enable_fargate = bool(values.get("enable_fargate"))
+enable_fargate_schedule = bool(values.get("enable_fargate_schedule"))
 
 def emit(name, value):
   if value is None:
@@ -238,20 +132,16 @@ def emit(name, value):
 
 emit("AWS_REGION", aws_region)
 emit("ENVIRONMENT", environment)
-emit("LAMBDA_NAME", lambda_name)
 emit("PROMPT_BUCKET_NAME", prompt_bucket)
 emit("ARTICLE_ASSET_BUCKET_NAME", article_asset_bucket)
 emit("POLITOPICS_TABLE_NAME", politopics_table)
 emit("TASK_TABLE_NAME", task_table)
-emit("CREATE_TASK_TABLE", "true" if create_task_table else "false")
-emit("ENABLE_SCHEDULER", "true" if enable_scheduler else "false")
-emit("SCHEDULER_BACKEND", backend)
-emit("SCHEDULER_KEYS", ",".join(expressions.keys()))
-emit("SCHEDULER_HAS_TARGET", "true" if scheduler_has_target else "false")
+emit("FARGATE_ENABLED", "true" if enable_fargate else "false")
+emit("FARGATE_SCHEDULE_ENABLED", "true" if enable_fargate_schedule else "false")
 PY
 )"
 
-for required in AWS_REGION LAMBDA_NAME PROMPT_BUCKET_NAME ARTICLE_ASSET_BUCKET_NAME POLITOPICS_TABLE_NAME; do
+for required in AWS_REGION PROMPT_BUCKET_NAME ARTICLE_ASSET_BUCKET_NAME POLITOPICS_TABLE_NAME TASK_TABLE_NAME; do
   if [[ -z "${!required:-}" ]]; then
     echo "Missing required value for $required (check $VAR_FILE)" >&2
     exit 1
@@ -300,22 +190,6 @@ run_import() {
   echo "$import_output"
 }
 
-iam_role_exists() {
-  local role_name="$1"
-  aws iam get-role --role-name "$role_name" >/dev/null 2>&1
-}
-
-iam_role_policy_exists() {
-  local role_name="$1"
-  local policy_name="$2"
-  aws iam get-role-policy --role-name "$role_name" --policy-name "$policy_name" >/dev/null 2>&1
-}
-
-scheduler_schedule_exists() {
-  local schedule_name="$1"
-  aws scheduler get-schedule --name "$schedule_name" >/dev/null 2>&1
-}
-
 PROMPT_BUCKET_RES="module.service.module.s3"
 run_import "$PROMPT_BUCKET_RES.aws_s3_bucket.this" "$PROMPT_BUCKET_NAME"
 run_import "$PROMPT_BUCKET_RES.aws_s3_bucket_versioning.this" "$PROMPT_BUCKET_NAME"
@@ -329,96 +203,50 @@ run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket_server_side_encryption_configurati
 run_import "$ARTICLE_BUCKET_RES.aws_s3_bucket_public_access_block.this" "$ARTICLE_ASSET_BUCKET_NAME"
 
 run_import "module.service.module.dynamodb.aws_dynamodb_table.politopics" "$POLITOPICS_TABLE_NAME"
-
-if [[ -z "${TASK_TABLE_NAME:-}" ]]; then
-  echo "Missing TASK_TABLE_NAME (check tfvars)." >&2
-  exit 1
-fi
 run_import "module.service.aws_dynamodb_table.llm_tasks" "$TASK_TABLE_NAME"
 
-LAMBDA_RES="module.service.module.lambda"
-LAMBDA_ROLE_NAME="${LAMBDA_NAME}-role"
-LAMBDA_POLICY_NAME="${LAMBDA_NAME}-inline"
-LOG_GROUP_NAME="/aws/lambda/${LAMBDA_NAME}"
-LAYER_NAME="${LAMBDA_NAME}-deps"
-
-run_import "$LAMBDA_RES.aws_iam_role.this" "$LAMBDA_ROLE_NAME"
-run_import "$LAMBDA_RES.aws_iam_role_policy.this" "${LAMBDA_ROLE_NAME}:${LAMBDA_POLICY_NAME}"
-run_import "$LAMBDA_RES.aws_cloudwatch_log_group.this" "$LOG_GROUP_NAME"
-
-if LAYER_ARN="$(aws lambda list-layer-versions --layer-name "$LAYER_NAME" --query 'max_by(LayerVersions, &Version).LayerVersionArn' --output text 2>/dev/null)"; then
-  if [[ -n "$LAYER_ARN" && "$LAYER_ARN" != "None" ]]; then
-    run_import "$LAMBDA_RES.aws_lambda_layer_version.dependencies" "$LAYER_ARN"
-  else
-    echo "Skipping lambda layer import; no versions found for $LAYER_NAME"
-  fi
-else
-  echo "Unable to describe lambda layer $LAYER_NAME; skipping import." >&2
+if [[ "${FARGATE_ENABLED:-false}" != "true" ]]; then
+  echo "Fargate disabled; skipping ECS/ECR imports."
+  echo "All import commands completed."
+  exit 0
 fi
 
-run_import "$LAMBDA_RES.aws_lambda_function.this" "$LAMBDA_NAME"
+require_cmd aws
 
-declare -a SCHED_KEYS=()
-if [[ -n "${SCHEDULER_KEYS:-}" ]]; then
-  IFS=',' read -r -a SCHED_KEYS <<< "$SCHEDULER_KEYS"
+FARGATE_NAME_PREFIX="politopics-recap-${ENVIRONMENT}"
+TASK_FAMILY="politopics-recap-task-${ENVIRONMENT}"
+LOG_GROUP_NAME="/ecs/${FARGATE_NAME_PREFIX}"
+
+run_import "module.service.module.fargate.aws_ecr_repository.this[0]" "$FARGATE_NAME_PREFIX"
+run_import "module.service.module.fargate.aws_cloudwatch_log_group.this[0]" "$LOG_GROUP_NAME"
+run_import "module.service.module.fargate.aws_ecs_cluster.this[0]" "$FARGATE_NAME_PREFIX"
+
+EXEC_ROLE_NAME="${FARGATE_NAME_PREFIX}-task-execution"
+TASK_ROLE_NAME="${FARGATE_NAME_PREFIX}-task"
+TASK_POLICY_NAME="${FARGATE_NAME_PREFIX}-task-policy"
+
+run_import "module.service.module.fargate.aws_iam_role.execution[0]" "$EXEC_ROLE_NAME"
+run_import "module.service.module.fargate.aws_iam_role_policy_attachment.execution[0]" "${EXEC_ROLE_NAME}/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+run_import "module.service.module.fargate.aws_iam_role.task[0]" "$TASK_ROLE_NAME"
+run_import "module.service.module.fargate.aws_iam_role_policy.task[0]" "${TASK_ROLE_NAME}:${TASK_POLICY_NAME}"
+
+TASK_DEF_ARN="$(aws ecs list-task-definitions --family-prefix "$TASK_FAMILY" --sort DESC --max-items 1 --query 'taskDefinitionArns[0]' --output text 2>/dev/null)"
+if [[ -n "$TASK_DEF_ARN" && "$TASK_DEF_ARN" != "None" ]]; then
+  run_import "module.service.module.fargate.aws_ecs_task_definition.this[0]" "$TASK_DEF_ARN"
+else
+  echo "Skipping task definition import; no task definitions found for $TASK_FAMILY"
 fi
 
-if [[ "${SCHEDULER_BACKEND:-none}" == "aws_scheduler" ]]; then
-  SCHED_ROLE_NAME="${LAMBDA_NAME}-scheduler-role"
-  SCHED_POLICY_NAME="${LAMBDA_NAME}-scheduler-invoke"
-  if iam_role_exists "$SCHED_ROLE_NAME"; then
-    run_import "module.service.aws_iam_role.scheduler[0]" "$SCHED_ROLE_NAME"
-  else
-    echo "Skipping scheduler role import; IAM role $SCHED_ROLE_NAME not found."
-  fi
-  if iam_role_policy_exists "$SCHED_ROLE_NAME" "$SCHED_POLICY_NAME"; then
-    run_import "module.service.aws_iam_role_policy.scheduler_invoke_lambda[0]" "${SCHED_ROLE_NAME}:${SCHED_POLICY_NAME}"
-  else
-    echo "Skipping scheduler invoke policy import; inline policy ${SCHED_POLICY_NAME} not found on ${SCHED_ROLE_NAME}."
-  fi
+if [[ "${FARGATE_SCHEDULE_ENABLED:-false}" == "true" ]]; then
+  SCHED_ROLE_NAME="${FARGATE_NAME_PREFIX}-scheduler"
+  SCHED_POLICY_NAME="${FARGATE_NAME_PREFIX}-scheduler-policy"
+  SCHED_NAME="${FARGATE_NAME_PREFIX}-daily"
 
-  declare -a EXISTING_SCHED_KEYS=()
-  for key in "${SCHED_KEYS[@]}"; do
-    [[ -z "$key" ]] && continue
-    schedule_name="${LAMBDA_NAME}-schedule-${key}"
-    if scheduler_schedule_exists "$schedule_name"; then
-      EXISTING_SCHED_KEYS+=("$key")
-    else
-      echo "Skipping scheduler import for key '${key}'; schedule ${schedule_name} not found."
-    fi
-  done
-
-  if [[ ${#EXISTING_SCHED_KEYS[@]} -eq 0 ]]; then
-    echo "No AWS Scheduler schedules detected; skipping schedule imports."
-  fi
-
-  for key in "${EXISTING_SCHED_KEYS[@]}"; do
-    schedule_name="${LAMBDA_NAME}-schedule-${key}"
-    printf -v schedule_address 'module.service.aws_scheduler_schedule.processor["%s"]' "$key"
-    run_import "$schedule_address" "$schedule_name"
-
-    statement_id="AllowExecutionFromScheduler-${key}"
-    printf -v perm_address 'module.service.aws_lambda_permission.allow_scheduler_invoke["%s"]' "$key"
-    run_import "$perm_address" "${LAMBDA_NAME}/${statement_id}"
-  done
-elif [[ "${SCHEDULER_BACKEND:-none}" == "cloudwatch" ]]; then
-  for key in "${SCHED_KEYS[@]}"; do
-    [[ -z "$key" ]] && continue
-    rule_name="${LAMBDA_NAME}-schedule-${key}"
-    target_id="lambda-${key}"
-
-    printf -v rule_address 'module.service.aws_cloudwatch_event_rule.scheduler["%s"]' "$key"
-    run_import "$rule_address" "$rule_name"
-
-    printf -v target_address 'module.service.aws_cloudwatch_event_target.scheduler["%s"]' "$key"
-    run_import "$target_address" "${rule_name}/${target_id}"
-
-    statement_id="AllowEventBridgeSchedule-${key}"
-    printf -v perm_address 'module.service.aws_lambda_permission.allow_cloudwatch_schedule["%s"]' "$key"
-    run_import "$perm_address" "${LAMBDA_NAME}/${statement_id}"
-  done
+  run_import "module.service.module.fargate.aws_iam_role.scheduler[0]" "$SCHED_ROLE_NAME"
+  run_import "module.service.module.fargate.aws_iam_role_policy.scheduler[0]" "${SCHED_ROLE_NAME}:${SCHED_POLICY_NAME}"
+  run_import "module.service.module.fargate.aws_scheduler_schedule.this[0]" "$SCHED_NAME"
 else
-  echo "Scheduler disabled or no expressions; skipping scheduler imports."
+  echo "Fargate schedule disabled; skipping scheduler imports."
 fi
 
 echo "All import commands completed."

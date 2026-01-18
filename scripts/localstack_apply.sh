@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run LocalStack apply for the Recap module (build + state bucket + import + plan/apply).
+# Run LocalStack apply for the Recap module (container build + state bucket + import + plan/apply).
 
 ENVIRONMENT="${1:-local}"
+
+for arg in "$@"; do
+  case "$arg" in
+    --batch)
+      ;;
+    local|ghaTest|stage|prod)
+      ENVIRONMENT="$arg"
+      ;;
+  esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -22,8 +32,8 @@ require_cmd terraform
 require_cmd pnpm
 require_cmd aws
 
-echo "==> Recap: build"
-(cd "$MODULE_DIR" && pnpm install && pnpm run build:local)
+echo "==> Recap: build (container)"
+(cd "$MODULE_DIR" && pnpm install && pnpm exec tsc && pnpm exec tsc-alias)
 
 echo "==> Recap: create state bucket"
 "$STATE_SCRIPT" "$ENVIRONMENT"

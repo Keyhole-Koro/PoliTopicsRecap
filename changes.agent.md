@@ -170,3 +170,110 @@ Details:
 - Files changed:
   - `PoliTopicsRecap/src/lambda_handler.ts`
   - `PoliTopicsRecap/src/lambda/taskProcessor.ts`
+
+Agent: Gemini
+Date/Time: 2026-01-18 10:00:00 JST
+Keywords: documentation, translation, japanese
+Topic: Translate documentation to Japanese
+Details:
+- Translated `docs/scripts_and_usage.md`, `docs/terraform-localstack.md`, and `terraform/README.md` to Japanese in `jp/` subdirectories.
+- Added links between English and Japanese versions.
+Files:
+- PoliTopicsRecap/docs/jp/scripts_and_usage.md
+- PoliTopicsRecap/docs/jp/terraform-localstack.md
+- PoliTopicsRecap/terraform/jp/README.md
+
+Agent: Codex
+Date/Time: 2026-01-18 13:38 JST
+Keywords: fargate, lambda-removal, batch, terraform, docs, tests
+Topic: Remove Lambda runtime and standardize on Fargate processing
+Details:
+- Moved task processing helpers into `src/processor`, added a shared task runner, and rewired batch execution/tests to use it.
+- Deleted Lambda handler/tests/build scripts and simplified LocalStack checks for container-only workflows.
+- Removed Lambda/Scheduler Terraform variables and modules, plus updated LocalStack apply/import scripts and docs.
+- Files changed:
+  - PoliTopicsRecap/src/container_main.ts
+  - PoliTopicsRecap/src/processor/taskRunner.ts
+  - PoliTopicsRecap/src/processor/llmFactory.ts
+  - PoliTopicsRecap/src/processor/notifications.ts
+  - PoliTopicsRecap/src/processor/speakerMetadata.ts
+  - PoliTopicsRecap/src/processor/taskProcessor.ts
+  - PoliTopicsRecap/src/processor/taskProcessor.metadata.test.ts
+  - PoliTopicsRecap/src/tasks/tasks.localstack.test.ts
+  - PoliTopicsRecap/src/tasks/retryAttempts.test.ts
+  - PoliTopicsRecap/src/utils/schedule.ts
+  - PoliTopicsRecap/src/lambda_handler.ts
+  - PoliTopicsRecap/src/lambda_handler.integration.test.ts
+  - PoliTopicsRecap/src/lambda/llmFactory.ts
+  - PoliTopicsRecap/src/lambda/notifications.ts
+  - PoliTopicsRecap/src/lambda/speakerMetadata.ts
+  - PoliTopicsRecap/src/lambda/taskProcessor.ts
+  - PoliTopicsRecap/src/lambda/taskProcessor.metadata.test.ts
+  - PoliTopicsRecap/scripts/build-lambda.js
+  - PoliTopicsRecap/scripts/build-local-lambda.js
+  - PoliTopicsRecap/scripts/ensure-localstack.sh
+  - PoliTopicsRecap/scripts/localstack_apply.sh
+  - PoliTopicsRecap/package.json
+  - PoliTopicsRecap/docs/scripts_and_usage.md
+  - PoliTopicsRecap/docs/jp/scripts_and_usage.md
+  - PoliTopicsRecap/docs/terraform-localstack.md
+  - PoliTopicsRecap/docs/jp/terraform-localstack.md
+  - PoliTopicsRecap/docs/fargate-architecture.md
+  - PoliTopicsRecap/docs/jp/fargate-architecture.md
+  - PoliTopicsRecap/terraform/main.tf
+  - PoliTopicsRecap/terraform/variables.tf
+  - PoliTopicsRecap/terraform/provider.tf
+  - PoliTopicsRecap/terraform/scripts/import_all.sh
+  - PoliTopicsRecap/terraform/service/main.tf
+  - PoliTopicsRecap/terraform/service/variables.tf
+  - PoliTopicsRecap/terraform/service/outputs.tf
+  - PoliTopicsRecap/terraform/service/lambda/main.tf
+  - PoliTopicsRecap/terraform/service/lambda/outputs.tf
+  - PoliTopicsRecap/terraform/service/lambda/variables.tf
+  - PoliTopicsRecap/terraform/tfvars/localstack.tfvars
+  - PoliTopicsRecap/terraform/tfvars/ghaTest.tfvars
+  - PoliTopicsRecap/terraform/tfvars/stage.tfvars
+  - PoliTopicsRecap/terraform/tfvars/prod.tfvars
+  - PoliTopicsRecap/changes.agent.md
+
+Agent: Codex
+Date/Time: 2026-01-18 14:25 JST
+Keywords: terraform, fargate, ecs, ecr, scheduler
+Topic: Add Fargate IaC for Recap batch runner
+Details:
+- Added ECS/Fargate, ECR, IAM, logs, and scheduler resources for the recap batch task.
+- Wired Fargate variables into the service module and documented required TF_VAR settings.
+- Files changed:
+  - PoliTopicsRecap/terraform/main.tf
+  - PoliTopicsRecap/terraform/variables.tf
+  - PoliTopicsRecap/terraform/provider.tf
+  - PoliTopicsRecap/terraform/service/main.tf
+  - PoliTopicsRecap/terraform/service/variables.tf
+  - PoliTopicsRecap/terraform/service/outputs.tf
+  - PoliTopicsRecap/terraform/service/fargate/main.tf
+  - PoliTopicsRecap/terraform/service/fargate/variables.tf
+  - PoliTopicsRecap/terraform/service/fargate/outputs.tf
+  - PoliTopicsRecap/terraform/tfvars/localstack.tfvars
+  - PoliTopicsRecap/terraform/tfvars/ghaTest.tfvars
+  - PoliTopicsRecap/terraform/tfvars/stage.tfvars
+  - PoliTopicsRecap/terraform/tfvars/prod.tfvars
+  - PoliTopicsRecap/terraform/README.md
+  - PoliTopicsRecap/terraform/jp/README.md
+  - PoliTopicsRecap/changes.agent.md
+
+### Changes After Review
+- Added optional Fargate checks to the LocalStack verification script and imports for Fargate resources in the Terraform import helper.
+- Files changed:
+  - PoliTopicsRecap/scripts/ensure-localstack.sh
+  - PoliTopicsRecap/terraform/scripts/import_all.sh
+  - PoliTopicsRecap/changes.agent.md
+
+Agent: Codex
+Date/Time: 2026-01-18 13:08 JST
+Keywords: jest, tests, rate-limiter, integration
+Topic: Avoid real-time waits in rate limiter integration test
+Details:
+- Switched the rate limiter integration test to Jest fake timers and asserted the expected wait duration without real delays.
+- Files changed:
+  - `PoliTopicsRecap/src/batch/batchProcessor.integration.test.ts`
+  - `PoliTopicsRecap/changes.agent.md`

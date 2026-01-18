@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ensures Recap LocalStack resources; verification lives here and root verify wraps this script.
+# Ensures Recap LocalStack resources for Fargate batch processing.
+# Use --with-fargate to include optional ECS/ECR checks (requires LocalStack services).
 
 ENVIRONMENT="${RECAP_LOCALSTACK_ENV:-local}"
 CHECK_ONLY=false
+CHECK_FARGATE=false
 
 for arg in "$@"; do
   case "$arg" in
     --check-only|--verify-only)
       CHECK_ONLY=true
+      ;;
+    --with-fargate|--fargate)
+      CHECK_FARGATE=true
+      ;;
+    --batch)
       ;;
     *)
       ENVIRONMENT="$arg"
@@ -65,23 +72,53 @@ check_table() {
   fi
 }
 
-check_lambda() {
+check_ecr_repo() {
   local name="$1"
-  if aws "${AWS_ARGS[@]}" lambda get-function --function-name "$name" >/dev/null 2>&1; then
-    echo "[OK] lambda: $name"
+  if aws "${AWS_ARGS[@]}" ecr describe-repositories --repository-names "$name" >/dev/null 2>&1; then
+    echo "[OK] ecr repo: $name"
   else
-    echo "[MISSING] lambda: $name"
+    echo "[MISSING] ecr repo: $name"
+    failures=$((failures + 1))
+  fi
+}
+
+check_ecs_cluster() {
+  local name="$1"
+  if aws "${AWS_ARGS[@]}" ecs describe-clusters --clusters "$name" --query 'clusters[0].status' --output text >/dev/null 2>&1; then
+    echo "[OK] ecs cluster: $name"
+  else
+    echo "[MISSING] ecs cluster: $name"
+    failures=$((failures + 1))
+  fi
+}
+
+check_log_group() {
+  local name="$1"
+  local found
+  found="$(aws "${AWS_ARGS[@]}" logs describe-log-groups --log-group-name-prefix "$name" --query "logGroups[?logGroupName=='$name'].logGroupName" --output text 2>/dev/null || true)"
+  if [[ "$found" == "$name" ]]; then
+    echo "[OK] log group: $name"
+  else
+    echo "[MISSING] log group: $name"
     failures=$((failures + 1))
   fi
 }
 
 echo "[ensure-localstack] Checking Recap LocalStack resources at $LOCALSTACK_URL"
+
+# Core resources required for batch processing
 check_bucket "politopics-prompts"
 check_bucket "politopics-articles-local"
 check_bucket "politopics-recap-local-state"
 check_table "politopics-local"
 check_table "politopics-llm-tasks-local"
-check_lambda "politopics-recap-local"
+
+if $CHECK_FARGATE; then
+  fargate_prefix="politopics-recap-${ENVIRONMENT}"
+  check_ecr_repo "$fargate_prefix"
+  check_ecs_cluster "$fargate_prefix"
+  check_log_group "/ecs/${fargate_prefix}"
+fi
 
 if [[ $failures -eq 0 ]]; then
   echo "[ensure-localstack] Resources already present."

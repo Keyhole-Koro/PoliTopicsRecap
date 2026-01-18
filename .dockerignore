@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Source files (using compiled dist instead)
+src/
+
+# Build artifacts not needed in image
+*.tsbuildinfo
+coverage/
+.nyc_output/
+
+# Development files
+.devcontainer/
+.github/
+.git/
+.gitignore
+.npmrc
+*.md
+jest.config.ts
+tsconfig.json
+
+# Test files
+tests/
+**/*.test.ts
+**/*.spec.ts
+testSetup.ts
+
+# Terraform
+terraform/
+
+# Scripts
+scripts/
+
+# IDE
+.vscode/
+.idea/
+
+# LocalStack
+localstack-artifacts/
+docker-compose.yml
+
+# Build outputs
+build/
+
+# Logs
+*.log
+npm-debug.log*

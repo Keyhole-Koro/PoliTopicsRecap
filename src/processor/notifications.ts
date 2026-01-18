@@ -3,22 +3,26 @@ import { appConfig } from "../config";
 import type Article from "../dynamoDB/article";
 import type { TaskItem } from "../tasks/types";
 
-const enableNotification = process.env.ENABLE_NOTIFICATION !== "false"
-const parsedDelay = Number(process.env.NOTIFICATION_DELAY_MS ?? "1000")
-const notificationDelayMs = Number.isFinite(parsedDelay) && parsedDelay > 0 ? parsedDelay : 0
 const shouldSkipTaskNotification = (task?: TaskItem | null): boolean => Boolean(task && task.retryAttempts >= 2)
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 const sendNotification = async (...args: Parameters<typeof _sendNotification>) => {
-  if (!enableNotification) return
-  if (notificationDelayMs > 0) {
-    await delay(notificationDelayMs)
+  const { enabled, delayMs } = appConfig.notificationSettings;
+  if (!enabled) return
+  if (delayMs > 0) {
+    await delay(delayMs)
   }
   return _sendNotification(...args)
 }
 
 function baseFields(task?: TaskItem): DiscordField[] {
   const fields: DiscordField[] = [];
+  
+  const { logGroupName } = appConfig.notificationSettings;
+  if (logGroupName) {
+    fields.push({ name: "Log Group", value: logGroupName, inline: false });
+  }
+
   if (task) {
     fields.push(
       { name: "Task ID", value: task.pk, inline: true },
@@ -35,11 +39,16 @@ function baseFields(task?: TaskItem): DiscordField[] {
 
 function formatError(error: unknown): string {
   if (!error) return "Unknown error";
+  let text = "";
   if (error instanceof Error) {
     const base = `${error.name}: ${error.message}`;
-    return error.stack ? `${base}\n${error.stack}`.slice(0, 900) : base.slice(0, 900);
+    text = error.stack ? `${base}\n${error.stack}` : base;
+  } else {
+    text = String(error);
   }
-  return String(error).slice(0, 900);
+  
+  // Truncate to ~1000 to fit in Discord field (1024 limit) with code block
+  return `\`\`\`\n${text.slice(0, 1000)}\n\`\`\``;
 }
 
 export async function notifyTaskError(task: TaskItem | null, error: unknown): Promise<void> {
@@ -120,4 +129,60 @@ export async function notifyArticlePersistenceSkipped(
     fields,
     label: "recap-article-persistence-skipped",
   });
+}
+
+export interface BatchStats {
+  processed: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  startTime: number;
+}
+
+export async function notifyBatchComplete(
+  stats: BatchStats,
+  status: "success" | "error",
+): Promise<void> {
+  const duration = Date.now() - stats.startTime;
+  const durationStr = formatDuration(duration);
+  
+  const fields: DiscordField[] = [
+    { name: "Processed", value: String(stats.processed), inline: true },
+    { name: "Succeeded", value: String(stats.succeeded), inline: true },
+    { name: "Failed", value: String(stats.failed), inline: true },
+    { name: "Skipped", value: String(stats.skipped), inline: true },
+    { name: "Duration", value: durationStr, inline: true },
+  ];
+
+  const { executionEnv } = appConfig.notificationSettings;
+  if (executionEnv) {
+    fields.push({ name: "Environment", value: executionEnv, inline: true });
+  }
+
+  const isError = status === "error";
+  const emoji = isError ? ":x:" : ":white_check_mark:";
+  const title = isError ? "Batch processing failed" : "Batch processing completed";
+
+  await sendNotification({
+    environment: appConfig.environment,
+    webhook: isError ? appConfig.notifications.errorWebhook : appConfig.notifications.batchWebhook,
+    fallbackWebhook: appConfig.notifications.errorWebhook,
+    title,
+    content: `${emoji} Recap batch ${status}`,
+    color: isError ? DISCORD_COLORS.error : DISCORD_COLORS.success,
+    fields,
+    label: "recap-batch-complete",
+  });
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m`;
 }

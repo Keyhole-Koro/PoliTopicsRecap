@@ -1,51 +1,36 @@
-const fetchOldestPendingTaskMock = jest.fn();
 const bumpRetryAttemptsMock = jest.fn();
 const handleDirectTaskMock = jest.fn();
 const handleChunkedTaskMock = jest.fn();
 const notifyTaskErrorMock = jest.fn();
 const notifyTaskWarningMock = jest.fn();
 const createLlmClientMock = jest.fn();
-const resolveConfigMock = jest.fn();
-const getS3ClientConfigMock = jest.fn();
-const createDocumentClientMock = jest.fn();
 const assertTaskReadyForProcessingMock = jest.fn();
 
-jest.mock("./taskRepository", () => ({
-  fetchOldestPendingTask: (...args: any[]) => fetchOldestPendingTaskMock(...args),
+jest.mock("../tasks/taskRepository", () => ({
   bumpRetryAttempts: (...args: any[]) => bumpRetryAttemptsMock(...args),
+  fetchOldestPendingTask: jest.fn(),
 }));
 
-jest.mock("../lambda/taskProcessor", () => ({
+jest.mock("../processor/taskProcessor", () => ({
   handleDirectTask: (...args: any[]) => handleDirectTaskMock(...args),
   handleChunkedTask: (...args: any[]) => handleChunkedTaskMock(...args),
 }));
 
-jest.mock("../lambda/notifications", () => ({
+jest.mock("../processor/notifications", () => ({
   notifyTaskError: (...args: any[]) => notifyTaskErrorMock(...args),
   notifyTaskWarning: (...args: any[]) => notifyTaskWarningMock(...args),
 }));
 
-jest.mock("../lambda/llmFactory", () => ({
+jest.mock("../processor/llmFactory", () => ({
   createLlmClient: (...args: any[]) => createLlmClientMock(...args),
 }));
 
-jest.mock("@utils/config", () => ({
-  resolveConfig: (...args: any[]) => resolveConfigMock(...args),
-}));
-
-jest.mock("@utils/aws", () => ({
-  getS3ClientConfig: (...args: any[]) => getS3ClientConfigMock(...args),
-}));
-
-jest.mock("@utils/dynamo", () => ({
-  createDocumentClient: (...args: any[]) => createDocumentClientMock(...args),
-}));
-
-jest.mock("./taskValidator", () => ({
+jest.mock("../tasks/taskValidator", () => ({
   assertTaskReadyForProcessing: (...args: any[]) => assertTaskReadyForProcessingMock(...args),
 }));
 
-import { handler } from "../lambda_handler";
+import type { AppConfig } from "../config";
+import { processTask } from "../processor/taskRunner";
 import type { TaskItem } from "./types";
 
 /*
@@ -56,6 +41,46 @@ import type { TaskItem } from "./types";
  * [Odd] Forces handleDirectTask and notifyTaskError to reject to simulate error handling.
  * [History] None.
  */
+
+const baseConfig: AppConfig = {
+  environment: "local",
+  aws: { region: "ap-northeast-1" },
+  taskTableName: "tasks",
+  taskStatusIndexName: "StatusIndex",
+  promptBucketName: "prompts",
+  articleTableName: "articles",
+  articleAssetBucketName: "assets",
+  r2: null,
+  geminiApiKey: "test-key",
+  notifications: {
+    errorWebhook: "",
+    warnWebhook: "",
+    batchWebhook: "",
+  },
+  notificationSettings: {
+    enabled: false,
+    delayMs: 0,
+  },
+  rateLimit: {
+    requestsPerMinute: 1,
+    requestsPerDay: 1,
+    maxConsecutiveErrors: 1,
+    cooldownOnErrorMs: 0,
+  },
+  batch: {
+    maxTasksPerRun: 1,
+    gracefulShutdownTimeoutMs: 0,
+  },
+};
+
+const baseContext = {
+  config: baseConfig,
+  docClient: {} as any,
+  s3Client: {} as any,
+  articleAssetClient: {} as any,
+  articleAssetBucket: "assets",
+  repoConfig: { tableName: "tasks", statusIndexName: "StatusIndex" },
+};
 
 function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
   return {
@@ -87,15 +112,6 @@ function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
 describe("retryAttempts", () => {
   beforeEach(() => {
     jest.resetAllMocks();
-    resolveConfigMock.mockReturnValue({
-      taskTableName: "tasks",
-      taskStatusIndexName: "StatusIndex",
-      geminiApiKey: "test-key",
-      articleTableName: "articles",
-      articleAssetBucketName: "assets",
-    });
-    getS3ClientConfigMock.mockReturnValue({ region: "ap-northeast-1" });
-    createDocumentClientMock.mockReturnValue({});
     createLlmClientMock.mockReturnValue({ generate: jest.fn() });
     assertTaskReadyForProcessingMock.mockImplementation(() => {});
   });
@@ -103,12 +119,12 @@ describe("retryAttempts", () => {
   it("increments retryAttempts even when error notifications fail", async () => {
     const task: TaskItem = buildTask({ retryAttempts: 1 });
 
-    fetchOldestPendingTaskMock.mockResolvedValueOnce(task);
     handleDirectTaskMock.mockRejectedValueOnce(new Error("task failure"));
     notifyTaskErrorMock.mockRejectedValueOnce(new Error("notify failure"));
 
-    await expect(handler()).resolves.toBeUndefined();
+    const result = await processTask(baseContext, task);
 
+    expect(result.status).toBe("failed");
     expect(notifyTaskErrorMock).toHaveBeenCalledTimes(1);
     expect(bumpRetryAttemptsMock).toHaveBeenCalledTimes(1);
     expect(bumpRetryAttemptsMock).toHaveBeenCalledWith(
@@ -120,10 +136,10 @@ describe("retryAttempts", () => {
 
   it("skips processing when retryAttempts is 3", async () => {
     const task = buildTask({ retryAttempts: 3 });
-    fetchOldestPendingTaskMock.mockResolvedValueOnce(task);
 
-    await expect(handler()).resolves.toBeUndefined();
+    const result = await processTask(baseContext, task);
 
+    expect(result.status).toBe("skipped");
     expect(handleDirectTaskMock).not.toHaveBeenCalled();
     expect(handleChunkedTaskMock).not.toHaveBeenCalled();
     expect(bumpRetryAttemptsMock).not.toHaveBeenCalled();

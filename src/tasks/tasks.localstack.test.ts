@@ -32,16 +32,16 @@ const getGenerativeModelMock = jest.fn();
  * [History] No recorded incident; regression guardrail.
  *
  * processes a chunked task, marks chunks ready, and writes reduce output
- * [Contract] Chunked tasks must progress notReady→ready→completed across handler invocations and emit reduce output plus article assets.
+ * [Contract] Chunked tasks must progress notReady→ready→completed across runner invocations and emit reduce output plus article assets.
  * [Reason] Normal long-meeting flow depends on chunk readiness before reduce.
  * [Accident] Without this, chunked tasks could stall pending and never publish recaps.
- * [Odd] Single CHUNK#0 definition with sequential handler calls and mocked Gemini responses for chunk then reduce.
+ * [Odd] Single CHUNK#0 definition with sequential runner calls and mocked Gemini responses for chunk then reduce.
  * [History] No recorded incident; preventive coverage.
  */
 
 describe("PoliTopics task consumer (LocalStack)", () => {
-  const { handler } = require("../lambda_handler") as typeof import("../lambda_handler");
   const { appConfig } = require("../config") as typeof import("../config");
+  const { processNextPendingTask } = require("../processor/taskRunner") as typeof import("../processor/taskRunner");
 
   const region = process.env.AWS_REGION ?? appConfig.aws.region;
   const endpoint =
@@ -72,6 +72,19 @@ describe("PoliTopics task consumer (LocalStack)", () => {
     const dynamoDoc = DynamoDBDocumentClient.from(dynamoClient, {
       marshallOptions: { removeUndefinedValues: true },
     });
+    const repoConfig = {
+      tableName: appConfig.taskTableName,
+      statusIndexName: appConfig.taskStatusIndexName,
+    };
+    const articleAssetBucket = appConfig.articleAssetBucketName || appConfig.promptBucketName;
+    const taskContext = {
+      config: appConfig,
+      docClient: dynamoDoc,
+      s3Client,
+      articleAssetClient: s3Client,
+      articleAssetBucket,
+      repoConfig,
+    };
 
     const toSafeError = (err: any, context: string) => {
       const parts = [context];
@@ -148,7 +161,6 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
     test("processes a single_chunk task, stores reduce result, and marks it completed", async () => {
       const bucket = appConfig.promptBucketName;
-      const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
       const issueID = uniqueIssue();
@@ -198,7 +210,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
           response: { text: () => JSON.stringify(buildArticle(issueID)) },
         });
 
-        await handler();
+        await processNextPendingTask(taskContext);
 
         const stored = await getTask(tableName, issueID);
         expect(stored?.status).toBe("completed");
@@ -224,7 +236,6 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
     test("processes a chunked task, marks chunks ready, and writes reduce output", async () => {
       const bucket = appConfig.promptBucketName;
-      const articleAssetBucket = appConfig.articleAssetBucketName || bucket;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
       const issueID = uniqueIssue();
@@ -299,8 +310,8 @@ describe("PoliTopics task consumer (LocalStack)", () => {
             response: { text: () => JSON.stringify(buildReduceOutput(issueID)) },
           });
 
-        await handler(); // process chunk
-        await handler(); // process reduce
+        await processNextPendingTask(taskContext); // process chunk
+        await processNextPendingTask(taskContext); // process reduce
 
         const stored = await getTask(tableName, issueID);
         expect(stored?.status).toBe("completed");

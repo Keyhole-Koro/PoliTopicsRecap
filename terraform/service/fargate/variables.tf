@@ -1,111 +1,100 @@
+variable "enabled" {
+  type        = bool
+  description = "Whether to provision the Fargate resources"
+  default     = true
+}
+
 variable "environment" {
   type        = string
   description = "Deployment environment identifier"
 }
 
+variable "aws_region" {
+  type        = string
+  description = "AWS region used for logs and task settings"
+}
+
 variable "tags" {
   type        = map(string)
-  description = "Additional tags applied to service resources"
+  description = "Tags applied to Fargate resources"
   default     = {}
 }
 
-variable "prompt_bucket_name" {
+variable "prompt_bucket_arn" {
   type        = string
-  description = "S3 bucket name used for prompts"
+  description = "ARN of the prompt bucket"
 }
 
-variable "article_asset_bucket_name" {
+variable "article_asset_bucket_arn" {
   type        = string
-  description = "S3 bucket name used for storing article payloads/assets"
+  description = "ARN of the article asset bucket"
 }
 
-variable "politopics_table_name" {
+variable "task_table_arn" {
   type        = string
-  description = "Primary DynamoDB table name for PoliTopics records"
+  description = "ARN of the task DynamoDB table"
 }
 
-variable "task_table_name" {
+variable "article_table_arn" {
   type        = string
-  description = "DynamoDB table that stores LLM map/reduce tasks"
+  description = "ARN of the article DynamoDB table"
 }
 
-variable "task_status_index_name" {
-  type        = string
-  description = "GSI name for querying pending tasks by status"
-}
-
-variable "create_task_table" {
-  type        = bool
-  description = "Whether to provision the LLM tasks table (set true for LocalStack)"
-  default     = false
-}
-
-variable "aws_region" {
-  type        = string
-  description = "AWS region used for Fargate settings"
-}
-
-variable "enable_fargate" {
-  type        = bool
-  description = "Whether to provision Fargate resources"
-  default     = true
-}
-
-variable "fargate_subnet_ids" {
+variable "subnet_ids" {
   type        = list(string)
   description = "Subnet IDs for the Fargate task"
   default     = []
 }
 
-variable "fargate_security_group_ids" {
+variable "security_group_ids" {
   type        = list(string)
   description = "Security group IDs for the Fargate task"
   default     = []
 }
 
-variable "fargate_assign_public_ip" {
+variable "assign_public_ip" {
   type        = bool
   description = "Assign public IP to the Fargate task"
   default     = true
 }
 
-variable "fargate_task_cpu" {
+variable "task_cpu" {
   type        = number
   description = "Fargate task CPU units"
   default     = 256
 }
 
-variable "fargate_task_memory" {
+variable "task_memory" {
   type        = number
   description = "Fargate task memory (MiB)"
   default     = 512
 }
 
-variable "fargate_container_image_tag" {
+variable "container_image_tag" {
   type        = string
-  description = "Container image tag"
+  description = "Container image tag to deploy"
   default     = "latest"
 }
 
-variable "fargate_log_retention_days" {
+variable "log_retention_days" {
   type        = number
   description = "CloudWatch log retention in days"
   default     = 14
 }
 
-variable "enable_fargate_schedule" {
+variable "enable_schedule" {
   type        = bool
-  description = "Enable the EventBridge Scheduler trigger"
+  description = "Whether to create the EventBridge Scheduler trigger"
   default     = true
 }
 
-variable "fargate_schedule_expression" {
+variable "schedule_expression" {
   type        = string
   description = "Scheduler cron expression"
   default     = "cron(0 9 * * ? *)"
 }
 
-variable "fargate_schedule_timezone" {
+variable "schedule_timezone" {
   type        = string
   description = "Scheduler timezone"
   default     = "Asia/Tokyo"
@@ -189,8 +178,8 @@ variable "notification_delay_ms" {
   default     = 1000
 }
 
-variable "fargate_extra_environment_variables" {
+variable "extra_environment_variables" {
   type        = map(string)
-  description = "Additional environment variables for the Fargate task"
+  description = "Additional environment variables for the task"
   default     = {}
 }

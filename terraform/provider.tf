@@ -26,16 +26,9 @@ provider "aws" {
   dynamic "endpoints" {
     for_each = var.aws_endpoint_url == null ? [] : [var.aws_endpoint_url]
     content {
-      dynamodb   = endpoints.value
-      s3         = endpoints.value
-      sqs        = endpoints.value
-      lambda     = endpoints.value
-      iam        = endpoints.value
-      sts        = endpoints.value
-      scheduler  = endpoints.value
-      events     = endpoints.value
-      cloudwatch = endpoints.value
-      logs       = endpoints.value
+      dynamodb = endpoints.value
+      s3       = endpoints.value
+      sts      = endpoints.value
     }
   }
 }
