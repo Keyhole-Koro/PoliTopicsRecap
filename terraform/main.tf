@@ -14,7 +14,6 @@ module "service" {
   enable_fargate              = var.enable_fargate
   fargate_subnet_ids          = var.fargate_subnet_ids
   fargate_security_group_ids  = var.fargate_security_group_ids
-  fargate_assign_public_ip    = var.fargate_assign_public_ip
   fargate_task_cpu            = var.fargate_task_cpu
   fargate_task_memory         = var.fargate_task_memory
   fargate_container_image_tag = var.fargate_container_image_tag

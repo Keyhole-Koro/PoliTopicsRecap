@@ -94,12 +94,6 @@ variable "fargate_security_group_ids" {
   default     = []
 }
 
-variable "fargate_assign_public_ip" {
-  description = "Assign public IP to the Fargate task"
-  type        = bool
-  default     = true
-}
-
 variable "fargate_task_cpu" {
   description = "Fargate task CPU units"
   type        = number
