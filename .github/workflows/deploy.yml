@@ -102,7 +102,7 @@ jobs:
           REPOSITORY: politopics-recap-${{ steps.vars.outputs.env }}
           IMAGE_TAG: latest
         run: |
-          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker build --build-arg NODE_AUTH_TOKEN=${{ secrets.NODE_AUTH_TOKEN }} -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
       - name: Terraform Init
