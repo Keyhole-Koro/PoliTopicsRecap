@@ -92,6 +92,19 @@ jobs:
             echo "TF_VAR_gemini_api_key=$STAGE_GEMINI_API_KEY" >> "$GITHUB_ENV"
           fi
 
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: politopics-recap-${{ steps.vars.outputs.env }}
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -backend-config="backends/${{ steps.vars.outputs.tf_backend_file }}"

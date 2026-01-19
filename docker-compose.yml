@@ -65,7 +65,7 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=dynamodb,s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway,logs,scheduler
+      - SERVICES=dynamodb,s3,sqs,events,iam,sts,lambda,cloudwatch,apigateway,logs,scheduler,ec2
       - AWS_DEFAULT_REGION=ap-northeast-3
       - LS_LOG=warning
       - DEBUG=0
