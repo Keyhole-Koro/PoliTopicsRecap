@@ -3,7 +3,6 @@ node_modules/
 .pnpm-store/
 
 # Source files (using compiled dist instead)
-src/
 
 # Build artifacts not needed in image
 *.tsbuildinfo
@@ -18,7 +17,6 @@ coverage/
 .npmrc
 *.md
 jest.config.ts
-tsconfig.json
 
 # Test files
 tests/
