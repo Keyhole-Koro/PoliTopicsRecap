@@ -37,6 +37,17 @@ locals {
   ]
 }
 
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
 resource "aws_ecr_repository" "this" {
   count = var.enabled ? 1 : 0
 
@@ -267,8 +278,8 @@ resource "aws_scheduler_schedule" "this" {
       launch_type         = "FARGATE"
 
       network_configuration {
-        subnets          = var.subnet_ids
-        security_groups  = var.security_group_ids
+        subnets          = length(var.subnet_ids) > 0 ? var.subnet_ids : data.aws_subnets.default.ids
+        security_groups  = length(var.security_group_ids) > 0 ? var.security_group_ids : null
         assign_public_ip = var.assign_public_ip
       }
     }
