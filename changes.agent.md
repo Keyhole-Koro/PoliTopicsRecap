@@ -287,3 +287,14 @@ Details:
 - Files changed:
   - `PoliTopicsRecap/src/container_main.ts`
   - `PoliTopicsRecap/changes.agent.md`
+
+Agent: Gemini
+Date/Time: 2026-01-20 15:15 JST
+Keywords: bugfix, package.json, docker, build
+Topic: Fix typo in stage build command
+Details:
+- Corrected a typo in `package.json` where `NODE_AUTH_TOKEN` was split into `NODE_AUTH_TOKE N`, causing build failures in the stage environment.
+- Added logic to `docker:batch:local` to list `dist` contents for debugging.
+- Files changed:
+  - `PoliTopicsRecap/package.json`
+  - `PoliTopicsRecap/changes.agent.md`

@@ -17,7 +17,7 @@
     "docker:build": "docker build -t politopics-recap:local -f fargate-image/Dockerfile.prod .",
     "docker:build:local": "DOCKER_BUILDKIT=1 docker build --secret id=github_token,env=NODE_AUTH_TOKEN -t politopics-recap:local-test -f fargate-image/Dockerfile.local .",
     "docker:build:prod": "DOCKER_BUILDKIT=1 docker build --secret id=github_token,env=NODE_AUTH_TOKEN -t politopics-recap:prod -f fargate-image/Dockerfile.prod .",
-    "docker:build:stage": "DOCKER_BUILDKIT=1 docker build --secret id=github_token,env=NODE_AUTH_TOKE N -t politopics-recap:stage -f fargate-image/Dockerfile.stage .",
+    "docker:build:stage": "DOCKER_BUILDKIT=1 docker build --secret id=github_token,env=NODE_AUTH_TOKEN -t politopics-recap:stage -f fargate-image/Dockerfile.stage .",
     "docker:batch:local": "docker run --init --rm --network politopics_default -e APP_ENVIRONMENT=localstackTest -e AWS_REGION=ap-northeast-3 -e AWS_ENDPOINT_URL=http://localstack:4566 -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test -e GEMINI_API_KEY=dummy -e ENABLE_NOTIFICATION=false politopics-recap:local-test sh -c 'ls -R dist && node dist/container_main.js'",
     "predocker:batch:local": "npm run ensure:localstack",
     "docker:batch:stage": "docker compose run --rm app-batch-stage",
