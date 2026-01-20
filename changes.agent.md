@@ -298,3 +298,17 @@ Details:
 - Files changed:
   - `PoliTopicsRecap/package.json`
   - `PoliTopicsRecap/changes.agent.md`
+
+Agent: Gemini
+Date/Time: 2026-01-20 15:30 JST
+Keywords: workflow, github-actions, deploy, rename
+Topic: Rename deploy workflow to deploy-service
+Details:
+- Renamed `.github/workflows/deploy.yml` to `.github/workflows/deploy-service.yml`.
+- Updated workflow name to "Deploy Service".
+- Removed redundant "Build Lambda bundle" step as the deployment is now container-based.
+- Deprecated `deploy.yml` by replacing its content with a removal notice.
+- Files changed:
+  - `PoliTopicsRecap/.github/workflows/deploy-service.yml`
+  - `PoliTopicsRecap/.github/workflows/deploy.yml` (deprecated)
+  - `PoliTopicsRecap/changes.agent.md`
