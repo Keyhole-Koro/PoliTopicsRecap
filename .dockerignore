@@ -14,7 +14,7 @@ coverage/
 .github/
 .git/
 .gitignore
-.npmrc
+# .npmrc
 *.md
 jest.config.ts
 

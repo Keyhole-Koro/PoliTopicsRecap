@@ -1,0 +1,23 @@
+FROM node:22-slim
+
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm@10.18.2
+
+COPY package.json pnpm-lock.yaml .npmrc ./
+
+# Mount secret and export to env var for pnpm install
+RUN --mount=type=secret,id=github_token \
+    NODE_AUTH_TOKEN=$(cat /run/secrets/github_token) pnpm install --frozen-lockfile
+
+COPY . .
+
+# Build TypeScript
+RUN pnpm run build
+
+# Remove devDependencies for production to reduce image size
+RUN pnpm prune --prod
+
+# Default command on container startup (run built JS)
+CMD ["node", "dist/container_main.js"]

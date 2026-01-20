@@ -136,9 +136,18 @@ async function main(): Promise<void> {
 
   // Batch complete
   const duration = Date.now() - stats.startTime;
-  console.log(
-    `[BatchProcessor] Completed: ${stats.succeeded} succeeded, ${stats.failed} failed, ${stats.skipped} skipped in ${duration}ms`
-  );
+  console.log("\n============================================");
+  console.log("          Batch Execution Summary           ");
+  console.log("============================================");
+  console.log(`Environment: ${config.environment}`);
+  console.log(`Duration   : ${duration}ms`);
+  console.log("--------------------------------------------");
+  console.log(`Processed  : ${stats.processed}`);
+  console.log(`Succeeded  : ${stats.succeeded}`);
+  console.log(`Failed     : ${stats.failed}`);
+  console.log(`Skipped    : ${stats.skipped}`);
+  console.log("============================================\n");
+  
   await notifyBatchComplete(stats, "success");
   process.exit(0);
 }

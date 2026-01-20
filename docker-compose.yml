@@ -8,11 +8,11 @@ services:
     depends_on:
       - localstack
 
-  # Batch processor container for testing Fargate-style execution
-  app-batch:
+  # Batch processor container for testing Fargate-style execution (stage)
+  app-batch-stage:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: fargate-image/Dockerfile.stage
     environment:
       - APP_ENVIRONMENT=localstackTest
       - AWS_REGION=ap-northeast-3

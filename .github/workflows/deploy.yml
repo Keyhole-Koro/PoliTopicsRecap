@@ -101,8 +101,10 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: politopics-recap-${{ steps.vars.outputs.env }}
           IMAGE_TAG: latest
+          DEPLOY_ENV: ${{ steps.vars.outputs.env }}
         run: |
-          docker build --build-arg NODE_AUTH_TOKEN=${{ secrets.NODE_AUTH_TOKEN }} -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          pnpm run docker:build:$DEPLOY_ENV
+          docker tag politopics-recap:$DEPLOY_ENV $REGISTRY/$REPOSITORY:$IMAGE_TAG
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
       - name: Terraform Init

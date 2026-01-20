@@ -277,3 +277,13 @@ Details:
 - Files changed:
   - `PoliTopicsRecap/src/batch/batchProcessor.integration.test.ts`
   - `PoliTopicsRecap/changes.agent.md`
+
+Agent: Gemini
+Date/Time: 2026-01-20 15:00 JST
+Keywords: logging, cli, output
+Topic: Add structured batch execution summary
+Details:
+- Enhanced `container_main.ts` to display a structured summary table (Environment, Duration, Processed, Succeeded, Failed, Skipped) at the end of execution for better visibility.
+- Files changed:
+  - `PoliTopicsRecap/src/container_main.ts`
+  - `PoliTopicsRecap/changes.agent.md`
