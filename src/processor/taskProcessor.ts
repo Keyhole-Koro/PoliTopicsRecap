@@ -66,13 +66,14 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
       attachedMap,
       task,
     );
-    if (persistResult.persisted) {
-      await notifyArticlePersisted(task, persistResult.article);
-      console.log(`[TaskProcessor] Persisted article for ${task.pk}`);
-    } else {
+
+    if (!persistResult.persisted) {
       await notifyArticlePersistenceSkipped(task, persistResult.reason, persistResult.payloadDumpUri);
-      console.warn(`[TaskProcessor] Skipped article persistence for ${task.pk}: ${persistResult.reason}`);
+      throw new Error(`Failed to persist article for ${task.pk}: ${persistResult.reason}`);
     }
+
+    await notifyArticlePersisted(task, persistResult.article);
+    console.log(`[TaskProcessor] Persisted article for ${task.pk}`);
     await markTaskSucceeded(docClient, repoConfig, task);
     console.log(`[TaskProcessor] SINGLE_CHUNK: Completed task ${task.pk}`);
   } catch (err) {
@@ -142,13 +143,14 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
       speakerMap,
       task,
     );
-    if (persistResult.persisted) {
-      await notifyArticlePersisted(task, persistResult.article);
-      console.log(`[TaskProcessor] Persisted final article for ${task.pk}`);
-    } else {
+
+    if (!persistResult.persisted) {
       await notifyArticlePersistenceSkipped(task, persistResult.reason, persistResult.payloadDumpUri);
-      console.warn(`[TaskProcessor] Skipped final article persistence for ${task.pk}: ${persistResult.reason}`);
+      throw new Error(`Failed to persist final article for ${task.pk}: ${persistResult.reason}`);
     }
+
+    await notifyArticlePersisted(task, persistResult.article);
+    console.log(`[TaskProcessor] Persisted final article for ${task.pk}`);
     await markTaskSucceeded(docClient, repoConfig, task);
     console.log(`[TaskProcessor] CHUNKED: Completed task ${task.pk}`);
   } catch (err) {
@@ -224,6 +226,10 @@ async function persistArticleIfPossible(
         error: reason,
         uploadError: uploadReason,
         taskId: task.pk,
+        bucket: assets.bucket,
+        environment: appConfig.environment,
+        r2Configured: !!appConfig.r2,
+        r2Endpoint: appConfig.r2?.endpoint,
       });
     }
     return { persisted: false, reason, payloadDumpUri };

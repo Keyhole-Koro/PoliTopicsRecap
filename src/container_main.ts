@@ -3,7 +3,7 @@
  * Processes pending tasks with rate limiting and exits when complete.
  */
 
-import { S3Client } from "@aws-sdk/client-s3";
+import { S3Client, GetBucketLocationCommand } from "@aws-sdk/client-s3";
 import { appConfig } from "./config";
 import { createDocumentClient } from "@utils/dynamo";
 import { getS3ClientConfig, getR2ClientConfig, getR2Bucket } from "@utils/aws";
@@ -31,6 +31,13 @@ async function main(): Promise<void> {
     articleAssetClient = s3Client;
     articleAssetBucket = config.articleAssetBucketName;
     console.log(`[BatchProcessor] Using S3 for article assets (bucket: ${articleAssetBucket})`);
+
+    try {
+      const loc = await s3Client.send(new GetBucketLocationCommand({ Bucket: articleAssetBucket }));
+      console.log(`[BatchProcessor] Bucket ${articleAssetBucket} location: ${loc.LocationConstraint ?? "us-east-1 (default)"}`);
+    } catch (e) {
+      console.warn(`[BatchProcessor] Failed to check bucket ${articleAssetBucket} location:`, e);
+    }
   }
   
   const rateLimiter = new RateLimiter(config.rateLimit);

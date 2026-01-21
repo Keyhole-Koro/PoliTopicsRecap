@@ -23,10 +23,12 @@ export function getAwsBaseConfig(): AwsBaseConfig {
 
 export function getS3ClientConfig(): S3ClientConfig {
   const base = getAwsBaseConfig();
-  return {
+  const config = {
     ...base,
     forcePathStyle: appConfig.aws.forcePathStyle,
   };
+  console.log("[AWS] S3 Client Config:", JSON.stringify({ ...config, credentials: config.credentials ? "***" : undefined }, null, 2));
+  return config;
 }
 
 /**

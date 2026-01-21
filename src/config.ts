@@ -230,10 +230,7 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
       region: optionalEnv("AWS_REGION") || "ap-northeast-3",
       endpoint: optionalEnv("AWS_ENDPOINT_URL") || "http://localhost:4566",
       forcePathStyle: true,
-      credentials:
-        optionalEnv("AWS_ACCESS_KEY_ID") && optionalEnv("AWS_SECRET_ACCESS_KEY")
-          ? { accessKeyId: optionalEnv("AWS_ACCESS_KEY_ID")!, secretAccessKey: optionalEnv("AWS_SECRET_ACCESS_KEY")! }
-          : { accessKeyId: "test", secretAccessKey: "test" },
+      credentials: { accessKeyId: "test", secretAccessKey: "test" },
     },
     taskTableName: optionalEnv("TASK_TABLE_NAME") || "politopics-llm-tasks-local",
     taskStatusIndexName: "StatusIndex",
@@ -242,7 +239,7 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
     articleAssetBucketName: optionalEnv("ARTICLE_ASSET_BUCKET_NAME") || "politopics-articles-local",
     r2: optionalEnv("R2_ENDPOINT_URL") ? {
       endpoint: optionalEnv("R2_ENDPOINT_URL")!,
-      region: optionalEnv("R2_REGION") || "auto",
+      region: "auto",
       accessKeyId: optionalEnv("R2_ACCESS_KEY_ID") || "test",
       secretAccessKey: optionalEnv("R2_SECRET_ACCESS_KEY") || "test",
       bucket: optionalEnv("R2_ARTICLE_BUCKET") || "politopics-articles-local",
@@ -275,7 +272,7 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
 
 function optionalEnv(name: string): string | undefined {
   const value = process.env[name];
-  return value && value.trim() !== "" ? value : undefined;
+  return value && value.trim() !== "" ? value.trim() : undefined;
 }
 
 function optionalEnvBool(name: string, defaultValue: boolean): boolean {
@@ -297,7 +294,7 @@ function requireEnv(name: string, allowMissing = false): string {
     if (allowMissing) return "";
     throw new Error(`Environment variable ${name} is required`);
   }
-  return value;
+  return value.trim();
 }
 
 function resolveEnvironment(): AppEnvironment {
