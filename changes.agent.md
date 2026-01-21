@@ -312,3 +312,16 @@ Details:
   - `PoliTopicsRecap/.github/workflows/deploy-service.yml`
   - `PoliTopicsRecap/.github/workflows/deploy.yml` (deprecated)
   - `PoliTopicsRecap/changes.agent.md`
+
+Agent: Codex
+Date/Time: 2026-01-21 23:49:05 JST
+Keywords: documentation, recap, mermaid
+Topic: Add module README with architecture and local flow
+Details:
+- Added new README (EN/JP) covering Fargate flow, S3 prompts, R2 assets, Discord webhooks, commands, and environment variables with embedded Mermaid.
+- Removed legacy scripts_and_usage docs.
+Files:
+- PoliTopicsRecap/README.md
+- PoliTopicsRecap/jp/README.md
+- PoliTopicsRecap/docs/scripts_and_usage.md (deleted)
+- PoliTopicsRecap/docs/jp/scripts_and_usage.md (deleted)

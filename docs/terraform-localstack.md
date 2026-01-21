@@ -1,5 +1,5 @@
 # Terraform + LocalStack Quickstart
-[Japanese Version](./jp/terraform-localstack.md)
+[日本語版](./jp/terraform-localstack.md)
 
 1. Build the container TypeScript output (optional if you are only provisioning infra):
 

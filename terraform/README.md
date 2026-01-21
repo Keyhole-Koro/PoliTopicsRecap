@@ -1,5 +1,5 @@
 # Terraform Commands (PoliTopics Recap)
-[Japanese Version](./jp/README.md)
+[日本語版](./jp/README.md)
 
 This module supports `stage`, `prod`, and `localstack` environments. The commands below assume you are in `PoliTopicsRecap/terraform`.
 
