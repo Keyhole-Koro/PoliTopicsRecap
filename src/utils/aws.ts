@@ -32,11 +32,13 @@ export function getS3ClientConfig(): S3ClientConfig {
 /**
  * Get S3ClientConfig for Cloudflare R2.
  * R2 uses S3-compatible API with custom endpoint and credentials.
- * Returns null if R2 is not configured (e.g., local/test environment).
+ * Throws error if R2 is not configured (e.g., local/test environment).
  */
-export function getR2ClientConfig(): S3ClientConfig | null {
+export function getR2ClientConfig(): S3ClientConfig {
   const r2 = appConfig.r2;
-  if (!r2) return null;
+  if (!r2) {
+    throw new Error("R2 is not configured");
+  }
   
   return {
     region: r2.region,
@@ -51,19 +53,25 @@ export function getR2ClientConfig(): S3ClientConfig | null {
 
 /**
  * Get R2 bucket name from config.
- * Returns null if R2 is not configured.
+ * Throws error if R2 is not configured.
  */
-export function getR2Bucket(): string | null {
-  return appConfig.r2?.bucket ?? null;
+export function getR2Bucket(): string {
+  if (!appConfig.r2) {
+    throw new Error("R2 is not configured");
+  }
+  return appConfig.r2.bucket;
 }
 
 /**
  * Get R2 public URL base from config.
  * Used for generating public asset URLs.
- * Returns null if R2 is not configured.
+ * Throws error if R2 is not configured.
  */
-export function getR2PublicUrlBase(): string | null {
-  return appConfig.r2?.publicUrlBase ?? null;
+export function getR2PublicUrlBase(): string {
+  if (!appConfig.r2?.publicUrlBase) {
+    throw new Error("R2 is not configured");
+  }
+  return appConfig.r2.publicUrlBase;
 }
 
 /**
@@ -71,8 +79,8 @@ export function getR2PublicUrlBase(): string | null {
  * Falls back to s3:// format if R2 is not configured.
  */
 export function buildAssetUrl(bucket: string, key: string): string {
-  const publicBase = getR2PublicUrlBase();
-  if (publicBase) {
+  if (appConfig.r2) {
+    const publicBase = getR2PublicUrlBase();
     // R2 public URL: https://asset.politopics.net/{key}
     return `${publicBase.replace(/\/+$/, "")}/${key}`;
   }

@@ -13,11 +13,35 @@ export type BatchConfig = {
 }
 
 export type R2Config = {
+  /**
+   * R2 API endpoint (S3 compatible URL).
+   * Used by the SDK to perform backend operations (upload/delete).
+   * e.g., https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+   */
   endpoint: string
+  /**
+   * R2 region. Cloudflare R2 usually uses "auto".
+   */
   region: string
+  /**
+   * R2 Token Access Key ID.
+   * Credential for authentication (like a username).
+   */
   accessKeyId: string
+  /**
+   * R2 Token Secret Access Key.
+   * Credential for authentication (like a password).
+   */
   secretAccessKey: string
+  /**
+   * The name of the R2 bucket.
+   */
   bucket: string
+  /**
+   * The public-facing URL base for accessing assets via HTTP.
+   * Used to generate public links for users (e.g., in emails or UI).
+   * e.g., https://asset.politopics.net or https://pub-<ID>.r2.dev
+   */
   publicUrlBase: string
 }
 
@@ -126,11 +150,11 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     articleAssetBucketName: "politopics-articles-stage",
     r2: {
       endpoint: requireEnv("R2_ENDPOINT_URL"),
-      region: optionalEnv("R2_REGION") || "auto",
+      region: "auto",
       accessKeyId: requireEnv("R2_ACCESS_KEY_ID"),
       secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
-      bucket: optionalEnv("R2_ARTICLE_BUCKET") || "politopics-articles-stage",
-      publicUrlBase: optionalEnv("R2_PUBLIC_URL_BASE") || "https://asset.politopics.net",
+      bucket: "politopics-articles-stage",
+      publicUrlBase: requireEnv("R2_ENDPOINT_URL"),
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
@@ -145,9 +169,9 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
       executionEnv: optionalEnv("AWS_EXECUTION_ENV"),
     },
     rateLimit: {
-      requestsPerMinute: 15,
-      requestsPerDay: 1500,
-      maxConsecutiveErrors: 5,
+      requestsPerMinute: 1,
+      requestsPerDay: 100,
+      maxConsecutiveErrors: 3,
       cooldownOnErrorMs: 30000,
     },
     batch: {
@@ -169,11 +193,11 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
     articleAssetBucketName: "politopics-articles-prod",
     r2: {
       endpoint: requireEnv("R2_ENDPOINT_URL"),
-      region: optionalEnv("R2_REGION") || "auto",
+      region: "auto",
       accessKeyId: requireEnv("R2_ACCESS_KEY_ID"),
       secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
-      bucket: optionalEnv("R2_ARTICLE_BUCKET") || "politopics-articles-prod",
-      publicUrlBase: optionalEnv("R2_PUBLIC_URL_BASE") || "https://asset.politopics.net",
+      bucket: "politopics-articles-prod",
+      publicUrlBase: "https://asset.politopics.net",
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
