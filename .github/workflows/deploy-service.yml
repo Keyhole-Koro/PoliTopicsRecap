@@ -96,17 +96,6 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push Docker image
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: politopics-recap-${{ steps.vars.outputs.env }}
-          IMAGE_TAG: latest
-          DEPLOY_ENV: ${{ steps.vars.outputs.env }}
-        run: |
-          pnpm run docker:build:$DEPLOY_ENV
-          docker tag politopics-recap:$DEPLOY_ENV $REGISTRY/$REPOSITORY:$IMAGE_TAG
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
       - name: Terraform Init
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform init -backend-config="backends/${{ steps.vars.outputs.tf_backend_file }}"
@@ -122,3 +111,14 @@ jobs:
       - name: Terraform Apply
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform apply -auto-approve tfplan
+
+      - name: Build and push Docker image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: politopics-recap-${{ steps.vars.outputs.env }}
+          IMAGE_TAG: latest
+          DEPLOY_ENV: ${{ steps.vars.outputs.env }}
+        run: |
+          pnpm run docker:build:$DEPLOY_ENV
+          docker tag politopics-recap:$DEPLOY_ENV $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
