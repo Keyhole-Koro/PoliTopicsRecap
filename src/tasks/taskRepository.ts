@@ -109,24 +109,32 @@ export async function markChunkReady(
   }
 
   const now = dateOnlyNow();
-  await doc.send(
-    new UpdateCommand({
-      TableName: cfg.tableName,
-      Key: { pk: task.pk },
-      ConditionExpression: "#status = :pending",
-      UpdateExpression: `SET chunks[${index}].#chunkStatus = :ready, #updatedAt = :now`,
-      ExpressionAttributeNames: {
-        "#chunkStatus": "status",
-        "#status": "status",
-        "#updatedAt": "updatedAt",
-      },
-      ExpressionAttributeValues: {
-        ":pending": "pending",
-        ":ready": "ready",
-        ":now": now,
-      },
-    }),
-  );
+  try {
+    await doc.send(
+      new UpdateCommand({
+        TableName: cfg.tableName,
+        Key: { pk: task.pk },
+        ConditionExpression: "#status = :pending",
+        UpdateExpression: `SET chunks[${index}].#chunkStatus = :ready, #updatedAt = :now`,
+        ExpressionAttributeNames: {
+          "#chunkStatus": "status",
+          "#status": "status",
+          "#updatedAt": "updatedAt",
+        },
+        ExpressionAttributeValues: {
+          ":pending": "pending",
+          ":ready": "ready",
+          ":now": now,
+        },
+      }),
+    );
+  } catch (err: any) {
+    if (err.name === "ConditionalCheckFailedException") {
+      console.warn(`[markChunkReady] Condition failed for ${task.pk} chunk ${chunkId} (task likely not pending)`);
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function markTaskSucceeded(
@@ -135,23 +143,31 @@ export async function markTaskSucceeded(
   task: TaskItem,
 ): Promise<void> {
   const now = dateOnlyNow();
-  await doc.send(
-    new UpdateCommand({
-      TableName: cfg.tableName,
-      Key: { pk: task.pk },
-      ConditionExpression: "#status = :pending",
-      UpdateExpression: "SET #status = :completed, #updatedAt = :now",
-      ExpressionAttributeNames: {
-        "#status": "status",
-        "#updatedAt": "updatedAt",
-      },
-      ExpressionAttributeValues: {
-        ":pending": "pending",
-        ":completed": "completed",
-        ":now": now,
-      },
-    }),
-  );
+  try {
+    await doc.send(
+      new UpdateCommand({
+        TableName: cfg.tableName,
+        Key: { pk: task.pk },
+        ConditionExpression: "#status = :pending",
+        UpdateExpression: "SET #status = :completed, #updatedAt = :now",
+        ExpressionAttributeNames: {
+          "#status": "status",
+          "#updatedAt": "updatedAt",
+        },
+        ExpressionAttributeValues: {
+          ":pending": "pending",
+          ":completed": "completed",
+          ":now": now,
+        },
+      }),
+    );
+  } catch (err: any) {
+    if (err.name === "ConditionalCheckFailedException") {
+      console.warn(`[markTaskSucceeded] Condition failed for ${task.pk} (task likely not pending)`);
+      return;
+    }
+    throw err;
+  }
 }
 
 export async function bumpRetryAttempts(
