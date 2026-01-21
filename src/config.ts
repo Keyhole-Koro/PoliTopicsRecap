@@ -170,7 +170,7 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     },
     rateLimit: {
       requestsPerMinute: 1,
-      requestsPerDay: 100,
+      requestsPerDay: 15,
       maxConsecutiveErrors: 3,
       cooldownOnErrorMs: 30000,
     },
@@ -212,9 +212,9 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
       executionEnv: optionalEnv("AWS_EXECUTION_ENV"),
     },
     rateLimit: {
-      requestsPerMinute: 15,
-      requestsPerDay: 1500,
-      maxConsecutiveErrors: 5,
+      requestsPerMinute: 1,
+      requestsPerDay: 15,
+      maxConsecutiveErrors: 3,
       cooldownOnErrorMs: 30000,
     },
     batch: {

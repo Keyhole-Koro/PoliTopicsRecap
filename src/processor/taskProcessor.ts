@@ -239,6 +239,8 @@ function sanitizeJsonPayload(payloadText: string): string {
   return trimmed;
 }
 
+// NOTE: This function uses 'assets' which is R2Client, to store invalid payloads.
+// Since this is related to the Final Article persistence (or failure thereof), using R2 (assets) is appropriate here.
 async function storeInvalidPayload(
   assets: ArticleAssetStorage,
   taskId: string,
@@ -248,7 +250,7 @@ async function storeInvalidPayload(
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const key = `invalid-payloads/${appConfig.environment}/${taskId}/${timestamp}.txt`;
   await uploadObject({
-    client: assets.client,
+    client: assets.client as unknown as S3Client,
     bucket: assets.bucket,
     key,
     body: payloadText,

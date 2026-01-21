@@ -9,20 +9,23 @@ import {
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 
+// R2 is S3-compatible, so we reuse the S3Client but alias it for clarity.
+export type R2Client = S3Client;
+
 export const PROMPT_BUCKET = 'politopics-prompts';
 
 /**
- * Parse an S3 URI like `s3://bucket/key...` into { bucket, key }.
+ * Parse an R2 URI like `s3://bucket/key...` into { bucket, key }.
  * Throws if the URI format is invalid.
  */
-export function parseS3Uri(uri: string): { bucket: string; key: string } {
+export function parseR2Uri(uri: string): { bucket: string; key: string } {
   if (!uri.startsWith('s3://')) {
-    throw new Error(`Invalid S3 URI: ${uri}`);
+    throw new Error(`Invalid R2 URI: ${uri}`);
   }
   const remainder = uri.slice('s3://'.length);
   const slashIndex = remainder.indexOf('/');
   if (slashIndex <= 0 || slashIndex === remainder.length - 1) {
-    throw new Error(`Invalid S3 URI: ${uri}`);
+    throw new Error(`Invalid R2 URI: ${uri}`);
   }
   return {
     bucket: remainder.slice(0, slashIndex),
@@ -35,7 +38,7 @@ export function parseS3Uri(uri: string): { bucket: string; key: string } {
  * Returns true if present; false for 404/NotFound/403; rethrows otherwise.
  */
 export async function ensureObjectExists(
-  client: S3Client,
+  client: R2Client,
   bucket: string,
   key: string,
 ): Promise<boolean> {
@@ -55,7 +58,7 @@ export async function ensureObjectExists(
  * Throws if the body is empty or cannot be read.
  */
 export async function fetchObjectText(
-  client: S3Client,
+  client: R2Client,
   bucket: string,
   key: string,
 ): Promise<string> {
@@ -73,7 +76,7 @@ export async function fetchObjectText(
  * Throws with cause if JSON.parse fails.
  */
 export async function fetchJsonObject<T>(
-  client: S3Client,
+  client: R2Client,
   bucket: string,
   key: string,
 ): Promise<T> {
@@ -88,7 +91,7 @@ export async function fetchJsonObject<T>(
 }
 
 /* ======================
-   Upload helpers (S3 v3)
+   Upload helpers (R2/S3)
    ====================== */
 
 /**
@@ -96,7 +99,7 @@ export async function fetchJsonObject<T>(
  * Suitable for small/medium payloads; for large bodies prefer multipartUpload().
  */
 export async function uploadObject(params: {
-  client: S3Client;
+  client: R2Client;
   bucket: string;
   key: string;
   body: string | Uint8Array | Buffer | Readable;
@@ -127,7 +130,7 @@ export async function uploadObject(params: {
  * Automatically stringifies the input.
  */
 export async function uploadJson(params: {
-  client: S3Client;
+  client: R2Client;
   bucket: string;
   key: string;
   data: unknown;
@@ -184,5 +187,5 @@ async function streamBodyToBuffer(body: any): Promise<Buffer> {
     }
     return Buffer.concat(chunks);
   }
-  throw new Error('Unsupported S3 body type');
+  throw new Error('Unsupported R2 body type');
 }

@@ -11,12 +11,12 @@ import {
   ensureObjectExists,
   fetchJsonObject,
   fetchObjectText,
-  parseS3Uri,
-} from './s3';
+  parseR2Uri,
+} from './r2';
 
 /*
  * uploads text and JSON then reads them via utils
- * [Contract] parseS3Uri/ensureObjectExists/fetchObjectText/fetchJsonObject must work end-to-end against S3.
+ * [Contract] parseR2Uri/ensureObjectExists/fetchObjectText/fetchJsonObject must work end-to-end against S3/R2.
  * [Reason] Prompt/result IO relies on these helpers for LocalStack and production parity.
  * [Accident] Without this, workers could misread objects or miss existence checks.
  * [Odd] Random bucket name, text and JSON objects { hello: 'world', count: 3 }; forcePathStyle enabled.
@@ -37,7 +37,7 @@ const jsonKey = 'sample/test-object.json';
 const textBody = 'hello from localstack s3 unit test';
 const jsonBody = { hello: 'world', count: 3 };
 
-describe('LocalStack S3 roundtrip using utils/s3 helpers', () => {
+describe('LocalStack S3 roundtrip using utils/r2 helpers', () => {
   const s3 = new S3Client({
     region,
     endpoint,
@@ -80,8 +80,8 @@ describe('LocalStack S3 roundtrip using utils/s3 helpers', () => {
     const textUri = `s3://${bucketName}/${textKey}`;
     const jsonUri = `s3://${bucketName}/${jsonKey}`;
 
-    const { bucket: textBucket, key: textObjectKey } = parseS3Uri(textUri);
-    const { bucket: jsonBucket, key: jsonObjectKey } = parseS3Uri(jsonUri);
+    const { bucket: textBucket, key: textObjectKey } = parseR2Uri(textUri);
+    const { bucket: jsonBucket, key: jsonObjectKey } = parseR2Uri(jsonUri);
 
     await Promise.all([
       s3.send(

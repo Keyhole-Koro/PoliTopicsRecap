@@ -32,13 +32,12 @@ import {
   PutCommand,
   BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
-import type { S3Client } from "@aws-sdk/client-s3";
 
 import type Article from './article';
-import { uploadJson } from "@utils/s3";
+import { type R2Client, uploadJson } from "@utils/r2";
 
 export type ArticleAssetStorage = {
-  client: S3Client;
+  client: R2Client;
   bucket: string;
   prefix?: string;
   makeUrl?: (bucket: string, key: string) => string;
