@@ -89,9 +89,8 @@ variable "enable_schedule" {
 }
 
 variable "schedule_expression" {
-  type        = string
   description = "Scheduler cron expression"
-  default     = "cron(0 9 * * ? *)"
+  default     = "cron(0 6 * * ? *)"
 }
 
 variable "schedule_timezone" {

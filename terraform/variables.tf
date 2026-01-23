@@ -127,7 +127,7 @@ variable "enable_fargate_schedule" {
 variable "fargate_schedule_expression" {
   description = "Scheduler cron expression"
   type        = string
-  default     = "cron(0 9 * * ? *)"
+  default     = "cron(0 6 * * ? *)"
 }
 
 variable "fargate_schedule_timezone" {
