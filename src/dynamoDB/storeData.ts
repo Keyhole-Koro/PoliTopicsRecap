@@ -189,7 +189,7 @@ async function batchPutAll(
   }
 }
 
-type ArticleAsset = Pick<Article, "summary" | "soft_language_summary" | "middle_summary" | "dialogs">;
+type ArticleAsset = Pick<Article, "key_points" | "summary" | "soft_language_summary" | "middle_summary" | "dialogs">;
 
 async function persistArticleAsset(
   storageConfig: ArticleAssetStorage,
@@ -243,6 +243,7 @@ export default async function storeData(
   const gsi2pk = `Y#${yOf(monthNorm)}#M#${mOf(monthNorm)}`;
 
   const {
+    key_points,
     summary,
     soft_language_summary,
     middle_summary,
@@ -251,6 +252,7 @@ export default async function storeData(
   } = article;
 
   const { key: assetKey, url: assetUrl } = await persistArticleAsset(assets, article.id, {
+    key_points,
     summary,
     soft_language_summary,
     middle_summary,

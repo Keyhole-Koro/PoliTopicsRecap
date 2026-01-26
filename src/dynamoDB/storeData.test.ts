@@ -187,6 +187,7 @@ describe('storeData (mocked client)', () => {
     nameOfMeeting: 'Committee A',
     categories: ['budget'],
     description: 'Internal description',
+    key_points: ['補正予算案の議論', '執行遅れへの指摘', '次回対応の確認'],
     summary: { based_on_orders: [1, 2], summary: '審議の全体像を説明' },
     soft_language_summary: { based_on_orders: [1], summary: '丁寧に要点を紹介' },
     middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
@@ -247,6 +248,7 @@ describe('storeData (mocked client)', () => {
     expect(putItem.soft_language_summary).toBeUndefined();
     expect(putItem.middle_summary).toBeUndefined();
     expect(putItem.dialogs).toBeUndefined();
+    expect(putItem.key_points).toBeUndefined();
     expect(putItem.asset_url).toBe('s3://article-assets/articles/article-123/asset.json');
     expect(putItem.asset_key).toBe('articles/article-123/asset.json');
 
@@ -330,6 +332,7 @@ function buildArticle(id: string): Article {
     nameOfMeeting: 'Committee A',
     categories: ['budget'],
     description: 'Internal description',
+    key_points: ['補正予算案の議論', '執行遅れへの指摘', '次回対応の確認'],
     summary: { based_on_orders: [1, 2], summary: '審議の全体像を説明' },
     soft_language_summary: { based_on_orders: [1], summary: '丁寧に要点を紹介' },
     middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],

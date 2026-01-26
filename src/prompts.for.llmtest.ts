@@ -1,11 +1,11 @@
-export const PROMPT_VERSION = "2025-10-02.1";
+export const PROMPT_VERSION = "2026-01-24.1";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
 
 タスクは2モード:
 - chunk: 会議全体の一部（発言群）を処理し、reduce統合を見越した middle_summary を中心に出力。soft_language_summary と summary は必須。
-- reduce: 全 chunk 出力（特に middle_summary と participants）を統合し、会議全体の summary / soft_language_summary に加え、title / category / description / date / participants を生成。
+- reduce: 全 chunk 出力（特に middle_summary と participants）を統合し、会議全体の summary / soft_language_summary に加え、title / category / description / date / key_points / participants を生成。
 
 厳守:
 - middle_summary は「1トピック=1要点」。重複回避、結論/対立/未決/宿題/担当/期限/金額を明示できる範囲で。
@@ -26,9 +26,10 @@ export const instruction_chunk = `【chunkモードの出力指針】
 
 export const instruction_reduce = `【reduceモードの出力指針】
 - 全chunkの middle_summary を統合し、重複排除・矛盾解消・網羅性確保。
+- key_points は会議の要点を3〜5点の箇条書きでまとめる。
 - participants は chunk由来の重複/別表記を正規化し、一人につき要旨を統合。役職や所属は可能なら統合、曖昧なら空欄可。
 - keywords は会議全体の主要テーマ/論点/政策ワードを重複排除し、priority を high/medium/low で付与。
-- 出力は title / category / description / date / summary / soft_language_summary / participants / keywords。
+- 出力は title / category / description / date / key_points / summary / soft_language_summary / participants / keywords。
 - summary 構成（推奨）: 決定事項 / 主要論点と立場 / 未決・宿題 / 次に起こること（担当・期限） / 重要数値。
 - based_on_orders は統合後に参照した order のユニオンまたは代表範囲。
 - dialogs / terms は出力しない。
@@ -88,6 +89,11 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
   "category": "会議全体を表すカテゴリ（主要テーマや種別を簡潔に）",
   "description": "1〜2文＋必要なら箇条書きで全体像をひと目で伝える",
   "date": "開催日 (YYYY-MM-DD) または 空文字",
+  "key_points": [
+    "会議全体の要点1",
+    "会議全体の要点2",
+    "会議全体の要点3"
+  ],
 
   "summary": {
     "based_on_orders": [1,2,3,4,5],

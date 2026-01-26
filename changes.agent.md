@@ -325,3 +325,32 @@ Files:
 - PoliTopicsRecap/jp/README.md
 - PoliTopicsRecap/docs/scripts_and_usage.md (deleted)
 - PoliTopicsRecap/docs/jp/scripts_and_usage.md (deleted)
+
+Agent: Codex
+Date/Time: 2026-01-24 12:09 JST
+Keywords: schema, key_points, prompts, recap, docs
+Topic: Add key_points to recap article assets and prompts
+Details:
+- Added key_points to the Article schema and persisted asset payloads with safe defaults during task processing.
+- Updated reduce prompt instructions/output to require 3–5 key points.
+- Updated documentation to reflect key_points in article assets and detail views.
+- Files changed:
+  - `PoliTopicsRecap/src/dynamoDB/article.d.ts`
+  - `PoliTopicsRecap/src/dynamoDB/storeData.ts`
+  - `PoliTopicsRecap/src/dynamoDB/storeData.test.ts`
+  - `PoliTopicsRecap/src/processor/taskProcessor.ts`
+  - `PoliTopicsRecap/src/prompts.for.llmtest.ts`
+  - `PoliTopicsRecap/src/tasks/tasks.localstack.test.ts`
+  - `docs/01_project_overview.md`
+  - `docs/02_functional_spec.md`
+  - `docs/06_architecture.md`
+  - `docs/08_db_design.md`
+  - `docs/system_overview.md`
+  - `docs/tech_choices.md`
+  - `docs/jp/01_project_overview.md`
+  - `docs/jp/02_functional_spec.md`
+  - `docs/jp/06_architecture.md`
+  - `docs/jp/08_db_design.md`
+  - `docs/jp/system_overview.md`
+  - `docs/jp/tech_choices.md`
+  - `PoliTopicsRecap/changes.agent.md`

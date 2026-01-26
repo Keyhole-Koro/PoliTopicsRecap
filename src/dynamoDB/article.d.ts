@@ -50,6 +50,7 @@ export default interface Article {
   categories: string[];
   description: string;
 
+  key_points: string[];
   summary: Summary;
   soft_language_summary: SoftLanguageSummary;
   middle_summary: MiddleSummary[];

@@ -202,8 +202,12 @@ async function persistArticleIfPossible(
     if (!rawArticle.soft_language_summary) {
       throw new Error("Reduced payload is missing soft_language_summary");
     }
+    const normalizedKeyPoints = Array.isArray(rawArticle.key_points)
+      ? rawArticle.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
+      : [];
     const withFallbacks: Article = {
       ...rawArticle,
+      key_points: normalizedKeyPoints,
       dialogs: attachSpeakerMetadata(rawArticle.dialogs ?? [], speakerMap),
       date: rawArticle.date ?? meeting?.date,
       month: rawArticle.month ?? (meeting?.date ? meeting.date.slice(0, 7) : rawArticle.month),
