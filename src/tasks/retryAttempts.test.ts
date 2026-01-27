@@ -44,7 +44,10 @@ import type { TaskItem } from "./types";
 
 const baseConfig: AppConfig = {
   environment: "local",
-  aws: { region: "ap-northeast-1" },
+  aws: {
+    region: "ap-northeast-3",
+    clientConfig: { region: "ap-northeast-3" },
+  },
   taskTableName: "tasks",
   taskStatusIndexName: "StatusIndex",
   promptBucketName: "prompts",

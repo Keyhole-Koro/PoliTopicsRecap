@@ -30,18 +30,37 @@
 import {
   DynamoDBDocumentClient,
   PutCommand,
-  BatchWriteCommand,
 } from "@aws-sdk/lib-dynamodb";
 
 import type Article from './article';
-import { type R2Client, uploadJson } from "@utils/r2";
+import {
+  toDateOnly,
+  ensureYYYYMM,
+  yOf,
+  mOf,
+  monthFromIsoUsingJST,
+} from "./dateUtils";
+import {
+  artPK,
+  artSK,
+  idxSK,
+  catKey,
+  personKey,
+  kwKey,
+  kindKey,
+  sessionKey,
+  houseKey,
+  meetingKey,
+} from "./dbKeys";
+import {
+  persistArticleAsset,
+  type ArticleAssetStorage,
+} from "./assetStorage";
+import { batchPutAll } from "./batchWrite";
 
-export type ArticleAssetStorage = {
-  client: R2Client;
-  bucket: string;
-  prefix?: string;
-  makeUrl?: (bucket: string, key: string) => string;
-};
+// Re-export for compatibility with existing consumers/tests
+export * from "./dateUtils";
+export * from "./assetStorage";
 
 export type Cfg = {
   doc: DynamoDBDocumentClient;
@@ -49,174 +68,6 @@ export type Cfg = {
   assets: ArticleAssetStorage;
 };
 
-// ==========================
-// Key helpers
-// ==========================
-const artPK = (id: string) => `A#${id}`;
-const artSK = "META";
-
-// Consider normalizing PERSON/KEYWORD via yomi/slug in production
-const catKey = (c: string) => `CATEGORY#${c}`;
-const personKey = (p: string) => `PERSON#${p}`;
-const kwKey = (k: string) => `KEYWORD#${k}`;
-const kindKey = (k: string) => `IMAGEKIND#${k}`;
-const sessionKey = (s: number | string) => `SESSION#${String(s).padStart(4, "0")}`;
-const houseKey = (h: string) => `HOUSE#${h}`;
-const meetingKey = (m: string) => `MEETING#${m}`;
-const DEFAULT_ASSET_PREFIX = "articles";
-
-// ==========================
-// Validators / formatters
-// ==========================
-function ensureYYYYMM(v: string) {
-  if (!/^\d{4}-\d{2}$/.test(v)) {
-    throw new Error(`month must be 'YYYY-MM', got: ${v}`);
-  }
-  return v;
-}
-function yOf(monthYYYYMM: string) { return ensureYYYYMM(monthYYYYMM).slice(0, 4); }
-function mOf(monthYYYYMM: string) { return ensureYYYYMM(monthYYYYMM).slice(5, 7); }
-
-// Normalize input date-like string to strict ISO UTC (fixed length).
-// - If input is already ISO-like, it will be parsed and re-serialized via toISOString().
-// - If input is "YYYY-MM-DD", we treat it as 00:00:00Z of that day.
-export function toIsoUtc(dateLike: unknown): string | undefined {
-  if (dateLike == null) return undefined;
-
-  // If it's already a Date
-  if (dateLike instanceof Date) {
-    if (isNaN(dateLike.getTime())) throw new Error(`Invalid Date input: ${dateLike}`);
-    return dateLike.toISOString();
-  }
-
-  // If it's a number (likely epoch seconds → convert to ms)
-  if (typeof dateLike === "number") {
-    const d = new Date(dateLike > 1e12 ? dateLike : dateLike * 1000);
-    if (isNaN(d.getTime())) throw new Error(`Invalid epoch time: ${dateLike}`);
-    return d.toISOString();
-  }
-
-  // If it's a string
-  if (typeof dateLike === "string") {
-    const trimmed = dateLike.trim();
-    if (!trimmed) return undefined;
-
-    // Already ISO-ish
-    if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
-      const d = new Date(trimmed);
-      if (isNaN(d.getTime())) throw new Error(`Invalid ISO datetime: ${trimmed}`);
-      return d.toISOString();
-    }
-
-    // Only date
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      return new Date(trimmed + "T00:00:00Z").toISOString();
-    }
-
-    // Try to auto-fix "YYYY-MM-DD HH:mm:ss"
-    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(trimmed)) {
-      const d = new Date(trimmed.replace(" ", "T") + "Z");
-      if (isNaN(d.getTime())) throw new Error(`Invalid fallback datetime: ${trimmed}`);
-      return d.toISOString();
-    }
-
-    // Fallback
-    const d = new Date(trimmed);
-    if (isNaN(d.getTime())) throw new Error(`Invalid date string: ${trimmed}`);
-    return d.toISOString();
-  }
-
-  throw new Error(`Unsupported date input type: ${typeof dateLike}`);
-}
-
-// If you want "month" aligned to *JST* day boundaries instead of UTC, use this:
-// (Default below keeps UTC alignment; switch if your product logic is JST-centric.)
-export function monthFromIsoUsingJST(isoUtc: string): string {
-  const d = new Date(isoUtc);
-  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000); // UTC+9h
-  const y = jst.getUTCFullYear();
-  const m = String(jst.getUTCMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
-}
-
-// Compose thin-index SK as "Y#YYYY#M#MM#D#<YYYY-MM-DD>#A#<id>"
-const idxSK = (monthYYYYMM: string, isoDate: string, id: string) =>
-  `Y#${yOf(monthYYYYMM)}#M#${mOf(monthYYYYMM)}#D#${isoDate}#A#${id}`;
-
-// Convert "8" or "08" to "YYYY-08" using a base date (UTC year by default)
-export function toYYYYMM(monthLike: string, baseDate = new Date()): string {
-  const m = monthLike.padStart(2, "0").slice(-2);
-  const y = String(baseDate.getUTCFullYear());
-  return `${y}-${m}`;
-}
-
-export function toDateOnly(dateLike: unknown): string | undefined {
-  const iso = toIsoUtc(dateLike);
-  if (!iso) return undefined;
-  return iso.slice(0, 10);
-}
-
-export function lastNDaysRange(n: number, now = new Date()) {
-  const end = now.toISOString();
-  const start = new Date(now.getTime() - n * 86_400_000).toISOString();
-  return { start, end };
-}
-
-// ==========================
-// BatchWrite helper (max 25 per request) with simple retry
-// ==========================
-async function batchPutAll(
-  doc: DynamoDBDocumentClient,
-  table: string,
-  items: any[]
-) {
-  let i = 0;
-  while (i < items.length) {
-    const slice = items.slice(i, i + 25).map((Item) => ({ PutRequest: { Item } }));
-    const res = await doc.send(
-      new BatchWriteCommand({ RequestItems: { [table]: slice } })
-    );
-
-    const unp = res.UnprocessedItems?.[table] ?? [];
-    if (unp.length > 0) {
-      // naive backoff + requeue unprocessed items into the current window
-      await new Promise((r) => setTimeout(r, 200));
-      const retryItems = unp.map((u) => u.PutRequest!.Item);
-      items.splice(i, 0, ...retryItems);
-    } else {
-      i += 25;
-    }
-  }
-}
-
-type ArticleAsset = Pick<Article, "key_points" | "summary" | "soft_language_summary" | "middle_summary" | "dialogs">;
-
-async function persistArticleAsset(
-  storageConfig: ArticleAssetStorage,
-  articleId: string,
-  asset: ArticleAsset
-): Promise<{ key: string; url: string }> {
-  if (!storageConfig?.client || !storageConfig.bucket) {
-    throw new Error("Article asset storage configuration is required");
-  }
-  const trimmedPrefix = trimSlashes(storageConfig.prefix ?? DEFAULT_ASSET_PREFIX);
-  const basePrefix = trimmedPrefix ? `${trimmedPrefix}/${articleId}` : articleId;
-  const key = `${basePrefix}/asset.json`;
-  
-  await uploadJson({
-    client: storageConfig.client,
-    bucket: storageConfig.bucket,
-    key,
-    data: asset,
-  });
-
-  const buildUrl = storageConfig.makeUrl ?? ((bucket: string, objectKey: string) => `s3://${bucket}/${objectKey}`);
-  return { key, url: buildUrl(storageConfig.bucket, key) };
-}
-
-function trimSlashes(input: string): string {
-  return input.replace(/^\/+/, "").replace(/\/+$/, "");
-}
 
 // ==========================
 // Store: main item + thin index items

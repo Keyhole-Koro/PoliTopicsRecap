@@ -6,7 +6,6 @@
 import { S3Client, GetBucketLocationCommand } from "@aws-sdk/client-s3";
 import { appConfig } from "./config";
 import { createDocumentClient } from "@utils/dynamo";
-import { getS3ClientConfig, getR2ClientConfig, getR2Bucket } from "@utils/aws";
 import { RateLimiter } from "@utils/rateLimiter";
 import type { TaskRepositoryConfig } from "./tasks/taskRepository";
 import { BatchProcessor, type BatchContext, type BatchStats } from "./batch/batchProcessor";
@@ -16,16 +15,16 @@ async function main(): Promise<void> {
   console.log(`[BatchProcessor] Starting in ${config.environment} environment`);
 
   const docClient = createDocumentClient();
-  const s3Client = new S3Client(getS3ClientConfig());
+  const s3Client = new S3Client(config.aws.clientConfig);
   
   // Use R2 for article assets if configured, otherwise fall back to S3
   let articleAssetClient: S3Client;
   let articleAssetBucket: string;
 
   if (config.r2) {
-    const r2Config = getR2ClientConfig();
+    const r2Config = config.r2.clientConfig;
     articleAssetClient = new S3Client(r2Config);
-    articleAssetBucket = getR2Bucket();
+    articleAssetBucket = config.r2.bucket;
     console.log(`[BatchProcessor] Using R2 for article assets (bucket: ${articleAssetBucket})`);
   } else {
     articleAssetClient = s3Client;

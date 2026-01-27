@@ -1,7 +1,7 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import type { AppConfig } from "../config";
-import { buildAssetUrl } from "@utils/aws";
+import { type AppConfig } from "../config";
+import { buildAssetUrl } from "../dynamoDB/assetStorage";
 import { createLlmClient } from "./llmFactory";
 import { notifyTaskError, notifyTaskWarning } from "./notifications";
 import {
@@ -131,7 +131,6 @@ function buildTaskArgs(input: BuildArgsInput): TaskProcessorArgs {
     articleAssets: {
       client: articleAssetClient,
       bucket: articleAssetBucket,
-      makeUrl: buildAssetUrl,
     },
     meeting: meeting ?? task.meeting,
   };

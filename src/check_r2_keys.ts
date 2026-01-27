@@ -1,7 +1,6 @@
 
 import { S3Client, ListBucketsCommand } from "@aws-sdk/client-s3";
 import { appConfig } from "./config";
-import { getR2ClientConfig } from "./utils/aws";
 
 async function main() {
   console.log(`[CheckR2] Environment: ${appConfig.environment}`);
@@ -16,7 +15,7 @@ async function main() {
   console.log(`[CheckR2] AccessKeyID: ${appConfig.r2.accessKeyId.slice(0, 4)}***`);
 
   try {
-    const client = new S3Client(getR2ClientConfig());
+    const client = new S3Client(appConfig.r2.clientConfig);
     console.log("[CheckR2] Attempting ListBuckets...");
     const result = await client.send(new ListBucketsCommand({}));
     console.log("[CheckR2] Success! Buckets:", result.Buckets?.map(b => b.Name));

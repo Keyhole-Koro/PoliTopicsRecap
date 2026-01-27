@@ -1,3 +1,5 @@
+import type { S3ClientConfig } from '@aws-sdk/client-s3';
+
 export type AppEnvironment = "local" | "stage" | "prod" | "ghaTest" | "localstackTest"
 
 export type RateLimitConfig = {
@@ -43,6 +45,7 @@ export type R2Config = {
    * e.g., https://asset.politopics.net or https://pub-<ID>.r2.dev
    */
   publicUrlBase: string
+  clientConfig: S3ClientConfig
 }
 
 export type NotificationSettings = {
@@ -59,6 +62,7 @@ export type AppConfig = {
     endpoint?: string
     forcePathStyle?: boolean
     credentials?: { accessKeyId: string; secretAccessKey: string }
+    clientConfig: S3ClientConfig
   }
   taskTableName: string
   taskStatusIndexName: string
@@ -106,6 +110,12 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
       endpoint: "http://localstack:4566",
       forcePathStyle: true,
       credentials: { accessKeyId: "test", secretAccessKey: "test" },
+      clientConfig: {
+        region: "ap-northeast-3",
+        endpoint: "http://localstack:4566",
+        forcePathStyle: true,
+        credentials: { accessKeyId: "test", secretAccessKey: "test" },
+      },
     },
     taskTableName: "politopics-llm-tasks-local",
     taskStatusIndexName: "StatusIndex",
@@ -142,6 +152,9 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
   return {
     aws: {
       region: "ap-northeast-3",
+      clientConfig: {
+        region: "ap-northeast-3",
+      },
     },
     taskTableName: "politopics-llm-tasks-stage",
     taskStatusIndexName: "StatusIndex",
@@ -155,6 +168,15 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
       secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
       bucket: "politopics-articles-stage",
       publicUrlBase: requireEnv("R2_ENDPOINT_URL"),
+      clientConfig: {
+        region: "auto",
+        endpoint: requireEnv("R2_ENDPOINT_URL"),
+        credentials: {
+          accessKeyId: requireEnv("R2_ACCESS_KEY_ID"),
+          secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
+        },
+        forcePathStyle: true,
+      },
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
@@ -185,6 +207,9 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
   return {
     aws: {
       region: "ap-northeast-3",
+      clientConfig: {
+        region: "ap-northeast-3",
+      },
     },
     taskTableName: "politopics-llm-tasks-prod",
     taskStatusIndexName: "StatusIndex",
@@ -198,6 +223,15 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
       secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
       bucket: "politopics-articles-prod",
       publicUrlBase: "https://asset.politopics.net",
+      clientConfig: {
+        region: "auto",
+        endpoint: requireEnv("R2_ENDPOINT_URL"),
+        credentials: {
+          accessKeyId: requireEnv("R2_ACCESS_KEY_ID"),
+          secretAccessKey: requireEnv("R2_SECRET_ACCESS_KEY"),
+        },
+        forcePathStyle: true,
+      },
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     notifications: {
@@ -231,6 +265,12 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
       endpoint: optionalEnv("AWS_ENDPOINT_URL") || "http://localhost:4566",
       forcePathStyle: true,
       credentials: { accessKeyId: "test", secretAccessKey: "test" },
+      clientConfig: {
+        region: optionalEnv("AWS_REGION") || "ap-northeast-3",
+        endpoint: optionalEnv("AWS_ENDPOINT_URL") || "http://localhost:4566",
+        forcePathStyle: true,
+        credentials: { accessKeyId: "test", secretAccessKey: "test" },
+      },
     },
     taskTableName: optionalEnv("TASK_TABLE_NAME") || "politopics-llm-tasks-local",
     taskStatusIndexName: "StatusIndex",
@@ -244,6 +284,15 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
       secretAccessKey: optionalEnv("R2_SECRET_ACCESS_KEY") || "test",
       bucket: optionalEnv("R2_ARTICLE_BUCKET") || "politopics-articles-local",
       publicUrlBase: optionalEnv("R2_PUBLIC_URL_BASE") || "http://localhost:4566/politopics-articles-local",
+      clientConfig: {
+        region: "auto",
+        endpoint: optionalEnv("R2_ENDPOINT_URL")!,
+        credentials: {
+          accessKeyId: optionalEnv("R2_ACCESS_KEY_ID") || "test",
+          secretAccessKey: optionalEnv("R2_SECRET_ACCESS_KEY") || "test",
+        },
+        forcePathStyle: true,
+      },
     } : null,
     geminiApiKey: "dummy",
     notifications: {
@@ -308,4 +357,14 @@ function resolveEnvironment(): AppEnvironment {
   throw new Error(
     `Environment variable APP_ENVIRONMENT must be one of local, stage, prod, ghaTest, localstackTest (received: ${value})`,
   );
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+export type Config = AppConfig;
+
+export function resolveConfig(): Config {
+  return appConfig;
 }

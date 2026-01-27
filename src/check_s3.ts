@@ -1,11 +1,10 @@
 
 import { S3Client, ListBucketsCommand, GetBucketLocationCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getS3ClientConfig } from "./utils/aws";
 import { appConfig } from "./config";
 
 async function main() {
   console.log("Config:", JSON.stringify(appConfig.aws, null, 2));
-  const client = new S3Client(getS3ClientConfig());
+  const client = new S3Client(appConfig.aws.clientConfig);
 
   try {
     console.log("Listing buckets...");
