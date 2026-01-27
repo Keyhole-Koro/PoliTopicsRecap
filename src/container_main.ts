@@ -18,26 +18,10 @@ async function main(): Promise<void> {
   const s3Client = new S3Client(config.aws.clientConfig);
   
   // Use R2 for article assets if configured, otherwise fall back to S3
-  let articleAssetClient: S3Client;
-  let articleAssetBucket: string;
-
-  if (config.r2) {
-    const r2Config = config.r2.clientConfig;
-    articleAssetClient = new S3Client(r2Config);
-    articleAssetBucket = config.r2.bucket;
-    console.log(`[BatchProcessor] Using R2 for article assets (bucket: ${articleAssetBucket})`);
-  } else {
-    articleAssetClient = s3Client;
-    articleAssetBucket = config.articleAssetBucketName;
-    console.log(`[BatchProcessor] Using S3 for article assets (bucket: ${articleAssetBucket})`);
-
-    try {
-      const loc = await s3Client.send(new GetBucketLocationCommand({ Bucket: articleAssetBucket }));
-      console.log(`[BatchProcessor] Bucket ${articleAssetBucket} location: ${loc.LocationConstraint ?? "us-east-1 (default)"}`);
-    } catch (e) {
-      console.warn(`[BatchProcessor] Failed to check bucket ${articleAssetBucket} location:`, e);
-    }
-  }
+  const r2Config = config.r2.clientConfig;
+  const articleAssetClient = new S3Client(r2Config);
+  const articleAssetBucket = config.r2.bucket;
+  console.log(`[BatchProcessor] Using R2 for article assets (bucket: ${articleAssetBucket})`);
   
   const rateLimiter = new RateLimiter(config.rateLimit);
 

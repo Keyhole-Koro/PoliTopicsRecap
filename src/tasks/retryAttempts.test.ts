@@ -46,6 +46,9 @@ const baseConfig: AppConfig = {
   environment: "local",
   aws: {
     region: "ap-northeast-3",
+    endpoint: "http://localhost:4566",
+    forcePathStyle: true,
+    credentials: { accessKeyId: "test", secretAccessKey: "test" },
     clientConfig: { region: "ap-northeast-3" },
   },
   taskTableName: "tasks",
@@ -53,7 +56,15 @@ const baseConfig: AppConfig = {
   promptBucketName: "prompts",
   articleTableName: "articles",
   articleAssetBucketName: "assets",
-  r2: null,
+  r2: {
+    endpoint: "http://localhost:4566",
+    region: "ap-northeast-3",
+    accessKeyId: "test",
+    secretAccessKey: "test",
+    bucket: "assets",
+    publicUrlBase: "http://localhost:4566/assets",
+    clientConfig: { region: "ap-northeast-3" },
+  },
   geminiApiKey: "test-key",
   notifications: {
     errorWebhook: "",

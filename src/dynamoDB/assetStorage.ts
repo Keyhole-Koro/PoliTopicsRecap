@@ -39,11 +39,7 @@ function trimSlashes(input: string): string {
 }
 
 export function buildAssetUrl(bucket: string, key: string): string {
-  if (appConfig.r2) {
     const publicBase = appConfig.r2.publicUrlBase;
     // R2 public URL: https://asset.politopics.net/{key}
     return `${publicBase.replace(/\/+$/, "")}/${key}`;
-  }
-  // Fallback to S3 URI format
-  return `s3://${bucket}/${key}`;
 }

@@ -59,9 +59,9 @@ export type AppConfig = {
   environment: AppEnvironment
   aws: {
     region: string
-    endpoint?: string
-    forcePathStyle?: boolean
-    credentials?: { accessKeyId: string; secretAccessKey: string }
+    endpoint: string
+    forcePathStyle: boolean
+    credentials: { accessKeyId: string; secretAccessKey: string }
     clientConfig: S3ClientConfig
   }
   taskTableName: string
@@ -69,7 +69,7 @@ export type AppConfig = {
   promptBucketName: string
   articleTableName: string
   articleAssetBucketName: string
-  r2: R2Config | null
+  r2: R2Config
   geminiApiKey: string
   notifications: {
     errorWebhook: string
@@ -122,7 +122,20 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
     promptBucketName: "politopics-prompts",
     articleTableName: "politopics-local",
     articleAssetBucketName: "politopics-articles-local",
-    r2: null, // Use LocalStack S3 in local mode
+    r2: {
+      endpoint: "http://localstack:4566",
+      region: "ap-northeast-3",
+      accessKeyId: "test",
+      secretAccessKey: "test",
+      bucket: "politopics-articles-local",
+      publicUrlBase: "http://localhost:4566/politopics-articles-local",
+      clientConfig: {
+        region: "ap-northeast-3",
+        endpoint: "http://localstack:4566",
+        forcePathStyle: true,
+        credentials: { accessKeyId: "test", secretAccessKey: "test" },
+      },
+    },
     geminiApiKey: "dummy",
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
@@ -152,6 +165,9 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
   return {
     aws: {
       region: "ap-northeast-3",
+      endpoint: "dummy",
+      forcePathStyle: false,
+      credentials: { accessKeyId: "dummy", secretAccessKey: "dummy" },
       clientConfig: {
         region: "ap-northeast-3",
       },
@@ -207,6 +223,9 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
   return {
     aws: {
       region: "ap-northeast-3",
+      endpoint: "dummy",
+      forcePathStyle: false,
+      credentials: { accessKeyId: "dummy", secretAccessKey: "dummy" },
       clientConfig: {
         region: "ap-northeast-3",
       },
@@ -277,7 +296,7 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
     promptBucketName: optionalEnv("PROMPT_BUCKET_NAME") || "politopics-prompts",
     articleTableName: optionalEnv("ARTICLE_TABLE_NAME") || "politopics-local",
     articleAssetBucketName: optionalEnv("ARTICLE_ASSET_BUCKET_NAME") || "politopics-articles-local",
-    r2: optionalEnv("R2_ENDPOINT_URL") ? {
+    r2: {
       endpoint: optionalEnv("R2_ENDPOINT_URL")!,
       region: "auto",
       accessKeyId: optionalEnv("R2_ACCESS_KEY_ID") || "test",
@@ -293,7 +312,7 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
         },
         forcePathStyle: true,
       },
-    } : null,
+    },
     geminiApiKey: "dummy",
     notifications: {
       errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR") || "",

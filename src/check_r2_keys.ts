@@ -5,11 +5,6 @@ import { appConfig } from "./config";
 async function main() {
   console.log(`[CheckR2] Environment: ${appConfig.environment}`);
   
-  if (!appConfig.r2) {
-    console.log("[CheckR2] R2 is not configured for this environment.");
-    return;
-  }
-
   console.log(`[CheckR2] Configured Endpoint: ${appConfig.r2.endpoint}`);
   console.log(`[CheckR2] Configured Region: ${appConfig.r2.region}`);
   console.log(`[CheckR2] AccessKeyID: ${appConfig.r2.accessKeyId.slice(0, 4)}***`);
