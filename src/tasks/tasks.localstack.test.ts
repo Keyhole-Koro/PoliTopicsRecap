@@ -77,6 +77,8 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       statusIndexName: appConfig.taskStatusIndexName,
     };
     const articleAssetBucket = appConfig.articleAssetBucketName || appConfig.promptBucketName;
+    const assetBaseUrl = appConfig.r2.publicUrlBase.replace(/\/+$/, "");
+    const expectedAssetUrl = (issueID: string) => `${assetBaseUrl}/articles/${issueID}/asset.json`;
     const taskContext = {
       config: appConfig,
       docClient: dynamoDoc,
@@ -221,7 +223,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
         const articleItem = await getArticle(articleTableName, issueID);
         expect(articleItem?.title).toContain("Test Committee");
-        expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
+        expect(articleItem?.asset_url).toBe(expectedAssetUrl(issueID));
 
         const asset = await readArticleAsset(articleItem?.asset_url);
         expect(asset?.dialogs?.[0]?.speaker).toBe("架空太郎");
@@ -322,7 +324,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         expect(JSON.parse(reduceOutput).id).toBe(issueID);
 
         const articleItem = await getArticle(articleTableName, issueID);
-        expect(articleItem?.asset_url).toBe(`s3://${articleAssetBucket}/articles/${issueID}/asset.json`);
+        expect(articleItem?.asset_url).toBe(expectedAssetUrl(issueID));
       } finally {
         await deleteKeys(bucket, [
           chunkDefinition.promptKey,
@@ -438,8 +440,16 @@ describe("PoliTopics task consumer (LocalStack)", () => {
     async function readArticleAsset(assetUrl?: string) {
       if (!assetUrl) return undefined;
       const parsed = new URL(assetUrl);
-      const bucket = parsed.hostname.split(".")[0];
-      const key = parsed.pathname.replace(/^\/+/, "");
+      let bucket = parsed.hostname.split(".")[0];
+      let key = parsed.pathname.replace(/^\/+/, "");
+      // LocalStack path-style URLs: http://localhost:4566/<bucket>/<key>
+      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+        const [pathBucket, ...rest] = key.split("/");
+        if (pathBucket) {
+          bucket = pathBucket;
+          key = rest.join("/");
+        }
+      }
       const text = await readObjectText(bucket, key);
       return JSON.parse(text);
     }

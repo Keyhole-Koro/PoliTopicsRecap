@@ -15,6 +15,7 @@ import storeData, {
   toDateOnly,
   monthFromIsoUsingJST,
   lastNDaysRange,
+  buildAssetUrl,
 } from './storeData';
 
 import type Article from './article';
@@ -177,6 +178,7 @@ describe('storeData (LocalStack integration)', () => {
 
 describe('storeData (mocked client)', () => {
   const baseArticle: Article = {
+    prompt_version: '2024-05-01.1',
     id: 'article-123',
     title: 'Example Article',
     date: '2024-05-01T09:00:00.000Z',
@@ -249,14 +251,15 @@ describe('storeData (mocked client)', () => {
     expect(putItem.middle_summary).toBeUndefined();
     expect(putItem.dialogs).toBeUndefined();
     expect(putItem.key_points).toBeUndefined();
-    expect(putItem.asset_url).toBe('s3://article-assets/articles/article-123/asset.json');
+    expect(putItem.asset_url).toBe(buildAssetUrl('article-assets', 'articles/article-123/asset.json'));
     expect(putItem.asset_key).toBe('articles/article-123/asset.json');
+    expect(putItem.prompt_version).toBe('2024-05-01.1');
 
     const batchCall = send.mock.calls.find(([cmd]) => cmd instanceof BatchWriteCommand);
     expect(batchCall).toBeDefined();
     const batchInput = (batchCall![0] as BatchWriteCommand).input;
     const requests = batchInput.RequestItems?.ArticlesTable ?? [];
-    expect(requests).toHaveLength(8);
+    expect(requests).toHaveLength(9);
     const requestBodies = requests.map((item) => item.PutRequest?.Item);
     expect(requestBodies).toEqual(
       expect.arrayContaining([
@@ -276,9 +279,10 @@ describe('storeData (mocked client)', () => {
             },
           ],
           asset_key: 'articles/article-123/asset.json',
-          asset_url: 's3://article-assets/articles/article-123/asset.json',
+          asset_url: buildAssetUrl('article-assets', 'articles/article-123/asset.json'),
         }),
         expect.objectContaining({ PK: 'KEYWORD_RECENT', kind: 'KEYWORD_OCCURRENCE', SK: 'D#2024-05-01#KW#finance#A#article-123' }),
+        expect.objectContaining({ PK: 'PROMPT_VERSION#2024-05-01.1', kind: 'PROMPT_VERSION_INDEX' }),
         expect.objectContaining({ PK: 'IMAGEKIND#会議録', kind: 'IMAGEKIND_INDEX' }),
         expect.objectContaining({ PK: 'SESSION#0012', kind: 'SESSION_INDEX' }),
         expect.objectContaining({ PK: 'HOUSE#Lower House', kind: 'HOUSE_INDEX' }),
@@ -309,10 +313,11 @@ describe('storeData (mocked client)', () => {
     const batchCall = send.mock.calls.find(([cmd]) => cmd instanceof BatchWriteCommand);
     expect(batchCall).toBeDefined();
     const requests = (batchCall![0] as BatchWriteCommand).input.RequestItems?.ArticlesTable ?? [];
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     const items = requests.map((item) => item.PutRequest?.Item);
     expect(items).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ PK: 'PROMPT_VERSION#2024-05-01.1', kind: 'PROMPT_VERSION_INDEX' }),
         expect.objectContaining({ PK: 'IMAGEKIND#会議録', kind: 'IMAGEKIND_INDEX' }),
         expect.objectContaining({ PK: 'SESSION#0012', kind: 'SESSION_INDEX' }),
       ]),
@@ -322,6 +327,7 @@ describe('storeData (mocked client)', () => {
 
 function buildArticle(id: string): Article {
   return {
+    prompt_version: '2024-05-01.1',
     id,
     title: 'Example Article',
     date: '2024-05-01',

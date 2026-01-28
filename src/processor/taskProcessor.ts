@@ -202,11 +202,13 @@ async function persistArticleIfPossible(
     if (!rawArticle.soft_language_summary) {
       throw new Error("Reduced payload is missing soft_language_summary");
     }
+    const promptVersionRaw = typeof rawArticle.prompt_version === "string" ? rawArticle.prompt_version.trim() : "";
     const normalizedKeyPoints = Array.isArray(rawArticle.key_points)
       ? rawArticle.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
       : [];
     const withFallbacks: Article = {
       ...rawArticle,
+      prompt_version: promptVersionRaw || "unknown",
       key_points: normalizedKeyPoints,
       dialogs: attachSpeakerMetadata(rawArticle.dialogs ?? [], speakerMap),
       date: rawArticle.date ?? meeting?.date,

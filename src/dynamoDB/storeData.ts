@@ -8,7 +8,8 @@
 //
 // - Thin index items (for fast listing by facets):
 //     PK in { CATEGORY#<category>, PERSON#<name>, KEYWORD#<kw>,
-//             IMAGEKIND#<kind>, SESSION#<zero-padded>, HOUSE#<house>, MEETING#<meeting> }
+//             IMAGEKIND#<kind>, SESSION#<zero-padded>, HOUSE#<house>, MEETING#<meeting>,
+//             PROMPT_VERSION#<version> }
 //     SK = "Y#<YYYY>#M#<MM>#D#<ISO-UTC>#A#<id>"
 //     Example: "Y#2025#M#08#D#20T12:34:56.000Z#A#a1"
 //     Using a fixed-length ISO UTC string guarantees lexicographic order == chronological order.
@@ -51,6 +52,7 @@ import {
   sessionKey,
   houseKey,
   meetingKey,
+  promptVersionKey,
 } from "./dbKeys";
 import {
   persistArticleAsset,
@@ -93,6 +95,8 @@ export default async function storeData(
 
   const gsi2pk = `Y#${yOf(monthNorm)}#M#${mOf(monthNorm)}`;
 
+  const promptVersion = (article.prompt_version ?? "").trim() || "unknown";
+
   const {
     key_points,
     summary,
@@ -120,6 +124,7 @@ export default async function storeData(
     type: "ARTICLE",
     asset_url: assetUrl,
     asset_key: assetKey,
+    prompt_version: promptVersion,
 
     // GSIs for global listings
     GSI1PK: "ARTICLE",
@@ -203,6 +208,16 @@ export default async function storeData(
   }
 
   // Other facet indexes
+  if (promptVersion) {
+    idxItems.push({
+      PK: promptVersionKey(promptVersion),
+      SK: sk,
+      kind: "PROMPT_VERSION_INDEX",
+      ...thinBase,
+      prompt_version: promptVersion,
+    });
+  }
+
   idxItems.push({
     PK: kindKey(article.imageKind),
     SK: sk,

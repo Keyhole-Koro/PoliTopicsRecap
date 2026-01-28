@@ -39,6 +39,7 @@ export type Term = {
 };
 
 export default interface Article {
+  prompt_version: string;
   id: string;
   title: string;
   date: string;  // ISO string or "YYYY-MM-DD" (will be normalized to ISO UTC)
