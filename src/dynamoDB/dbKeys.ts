@@ -14,7 +14,6 @@ export const kindKey = (k: string) => `IMAGEKIND#${k}`;
 export const sessionKey = (s: number | string) => `SESSION#${String(s).padStart(4, "0")}`;
 export const houseKey = (h: string) => `HOUSE#${h}`;
 export const meetingKey = (m: string) => `MEETING#${m}`;
-export const promptVersionKey = (v: string) => `PROMPT_VERSION#${v}`;
 
 // Compose thin-index SK as "Y#YYYY#M#MM#D#<YYYY-MM-DD>#A#<id>"
 export const idxSK = (monthYYYYMM: string, isoDate: string, id: string) =>

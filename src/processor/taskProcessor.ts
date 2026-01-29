@@ -192,7 +192,8 @@ async function persistArticleIfPossible(
 ): Promise<PersistResult> {
   try {
     const jsonText = sanitizeJsonPayload(payloadText);
-    const rawArticle = JSON.parse(jsonText) as Article;
+    type ArticlePayload = Article & { prompt_version?: string };
+    const rawArticle = JSON.parse(jsonText) as ArticlePayload;
     if (typeof rawArticle !== "object" || rawArticle === null) {
       throw new Error("Reduced payload is not an object");
     }
@@ -202,20 +203,19 @@ async function persistArticleIfPossible(
     if (!rawArticle.soft_language_summary) {
       throw new Error("Reduced payload is missing soft_language_summary");
     }
-    const promptVersionRaw = typeof rawArticle.prompt_version === "string" ? rawArticle.prompt_version.trim() : "";
-    const normalizedKeyPoints = Array.isArray(rawArticle.key_points)
-      ? rawArticle.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
+    const { prompt_version: _promptVersion, ...articlePayload } = rawArticle;
+    const normalizedKeyPoints = Array.isArray(articlePayload.key_points)
+      ? articlePayload.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
       : [];
     const withFallbacks: Article = {
-      ...rawArticle,
-      prompt_version: promptVersionRaw || "unknown",
+      ...articlePayload,
       key_points: normalizedKeyPoints,
-      dialogs: attachSpeakerMetadata(rawArticle.dialogs ?? [], speakerMap),
-      date: rawArticle.date ?? meeting?.date,
-      month: rawArticle.month ?? (meeting?.date ? meeting.date.slice(0, 7) : rawArticle.month),
-      nameOfMeeting: rawArticle.nameOfMeeting ?? meeting?.nameOfMeeting ?? "",
-      nameOfHouse: rawArticle.nameOfHouse ?? meeting?.nameOfHouse ?? "",
-      session: rawArticle.session ?? meeting?.session ?? rawArticle.session,
+      dialogs: attachSpeakerMetadata(articlePayload.dialogs ?? [], speakerMap),
+      date: articlePayload.date ?? meeting?.date,
+      month: articlePayload.month ?? (meeting?.date ? meeting.date.slice(0, 7) : articlePayload.month),
+      nameOfMeeting: articlePayload.nameOfMeeting ?? meeting?.nameOfMeeting ?? "",
+      nameOfHouse: articlePayload.nameOfHouse ?? meeting?.nameOfHouse ?? "",
+      session: articlePayload.session ?? meeting?.session ?? articlePayload.session,
     };
     await storeData({ doc: docClient, table_name: tableName, assets }, withFallbacks);
     console.log("[taskProcessor] article persisted", { tableName, meetingDate: withFallbacks.date });

@@ -29,6 +29,9 @@ export function assertTaskReadyForProcessing(task: TaskItem): void {
   requireString(task.pk, "pk");
   requireString(task.llm, "llm");
   requireString(task.llmModel, "llmModel");
+  if (task.prompt_version !== undefined) {
+    requireString(task.prompt_version, "prompt_version");
+  }
   requireS3Url(task.prompt_url, "prompt_url");
   requireS3Url(task.result_url, "result_url");
   requireAttachedAssets(task.attachedAssets);

@@ -354,3 +354,26 @@ Details:
   - `docs/jp/system_overview.md`
   - `docs/jp/tech_choices.md`
   - `PoliTopicsRecap/changes.agent.md`
+
+Agent: Codex
+Date/Time: 2026-01-29 09:43 JST
+Keywords: tasks, prompt_version, schema, dynamodb
+Topic: Move prompt_version tracking from articles to LLM tasks
+Details:
+- Added prompt_version to task types/validation and updated task-related tests.
+- Stopped persisting prompt_version on article items/indexes and stripped it during task processing.
+- Updated DB design docs to reflect prompt_version on tasks (not articles).
+Files:
+- PoliTopicsRecap/src/tasks/types.ts
+- PoliTopicsRecap/src/tasks/taskValidator.ts
+- PoliTopicsRecap/src/tasks/taskValidator.test.ts
+- PoliTopicsRecap/src/tasks/retryAttempts.test.ts
+- PoliTopicsRecap/src/tasks/taskRepository.test.ts
+- PoliTopicsRecap/src/tasks/tasks.localstack.test.ts
+- PoliTopicsRecap/src/dynamoDB/article.d.ts
+- PoliTopicsRecap/src/dynamoDB/storeData.ts
+- PoliTopicsRecap/src/dynamoDB/dbKeys.ts
+- PoliTopicsRecap/src/dynamoDB/storeData.test.ts
+- PoliTopicsRecap/src/processor/taskProcessor.ts
+- docs/08_db_design.md
+- docs/jp/08_db_design.md

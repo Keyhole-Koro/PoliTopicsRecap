@@ -32,6 +32,7 @@ export type TaskItem = {
   createdAt: string;
   updatedAt: string;
   processingMode: ProcessingMode;
+  prompt_version?: string;
   prompt_url: string;
   meeting: Meeting;
   result_url: string;

@@ -14,6 +14,7 @@ function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
     createdAt: "2025-01-01T00:00:00Z",
     updatedAt: "2025-01-01",
     processingMode: "single_chunk",
+    prompt_version: "2026-01-28.2",
     prompt_url: "s3://bucket/prompts/ISSUE-1.json",
     result_url: "s3://bucket/results/ISSUE-1.json",
     meeting: {
