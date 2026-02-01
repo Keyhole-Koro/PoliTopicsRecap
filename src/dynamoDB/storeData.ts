@@ -13,10 +13,6 @@
 //     Example: "Y#2025#M#08#D#20T12:34:56.000Z#A#a1"
 //     Using a fixed-length ISO UTC string guarantees lexicographic order == chronological order.
 //
-// - Optional "recent keyword" log (for trending views):
-//     PK = "KEYWORD_RECENT"
-//     SK = "D#<ISO-UTC>#KW#<keyword>#A#<id>"
-//
 // - GSIs (global listings):
 //     ArticleByDate   (GSI1PK = "ARTICLE",       GSI1SK = <ISO-UTC date>)
 //     MonthDateIndex  (GSI2PK = "YEAR#YYYY#MONTH#MM", GSI2SK = <ISO-UTC date>)
@@ -178,7 +174,7 @@ export default async function storeData(
     });
   }
 
-  // Keyword indexes + optional recent keyword occurrence log
+  // Keyword indexes
   for (const k of article.keywords ?? []) {
     const kw = (k?.keyword ?? "").trim();
     if (!kw) continue;
@@ -187,18 +183,6 @@ export default async function storeData(
       SK: sk,
       kind: "KEYWORD_INDEX",
       ...thinBase,
-    });
-
-    // Optional: recent keyword occurrence (for "trending keywords" views)
-    idxItems.push({
-      PK: "KEYWORD_RECENT",
-      SK: `D#${isoDate}#KW#${kw}#A#${article.id}`,
-      kind: "KEYWORD_OCCURRENCE",
-      keyword: kw,
-      articleId: article.id,
-      title: article.title,
-      date: isoDate,
-      month: monthNorm,
     });
   }
 

@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "2026-01-24.1";
+export const PROMPT_VERSION = "2026-01-29.1";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -12,6 +12,7 @@ export const instruction_common = `【目的】
 - すべての要点に based_on_orders（発言 order 配列）を付与。
 - 余談や定型挨拶は除外。推測や創作は禁止。
 - summary / soft_language_summary / middle_summary は Markdown の機能を自由に使ってよい。
+- summary / soft_language_summary / middle_summary の本文には (order: 1) のような注記は書かない。order参照は本文末尾に `[[orders:1,2,3]]` のみ許可（数字・カンマ・ハイフンのみ、空白なし）。
 - すべての出力に prompt_version を含める（現在値: ${PROMPT_VERSION}）。`;
 
 const no_code_fence_warning = "出力は必ず純粋なJSON文字列のみ（バックティックやコードブロック禁止）。";
@@ -44,17 +45,17 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
   "middle_summary": [
     {
       "based_on_orders": [4,5],
-      "summary": "reduceで統合しやすい1要点（決定/対立/未決/宿題/担当/期限/金額を簡潔に）"
+      "summary": "reduceで統合しやすい1要点（決定/対立/未決/宿題/担当/期限/金額を簡潔に） [[orders:4,5]]"
     }
   ],
 
   "soft_language_summary": {
     "based_on_orders": [1,2,3],
-    "summary": "やさしい言葉での説明（このchunk範囲）"
+    "summary": "やさしい言葉での説明（このchunk範囲） [[orders:1,2,3]]"
   },
   "summary": {
     "based_on_orders": [1,2,3],
-    "summary": "このchunk範囲の詳細要約"
+    "summary": "このchunk範囲の詳細要約 [[orders:1-3]]"
   },
 
   "dialogs": [
@@ -97,11 +98,11 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
 
   "summary": {
     "based_on_orders": [1,2,3,4,5],
-    "summary": "会議全体の最終要約（決定事項/主要論点/未決・宿題/次に起こること/重要数値を簡潔に）"
+    "summary": "会議全体の最終要約（決定事項/主要論点/未決・宿題/次に起こること/重要数値を簡潔に） [[orders:1-5]]"
   },
   "soft_language_summary": {
     "based_on_orders": [1,2,3,4,5],
-    "summary": "会議全体をやさしい言葉で説明した要約"
+    "summary": "会議全体をやさしい言葉で説明した要約 [[orders:1-5]]"
   },
 
   "participants": [

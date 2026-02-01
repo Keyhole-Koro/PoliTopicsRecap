@@ -377,3 +377,29 @@ Files:
 - PoliTopicsRecap/src/processor/taskProcessor.ts
 - docs/08_db_design.md
 - docs/jp/08_db_design.md
+
+Agent: Codex
+Date/Time: 2026-01-29 10:57 JST
+Keywords: dynamodb, keywords, cleanup
+Topic: Remove recent keyword log writes
+Details:
+- Removed KEYWORD_RECENT/KEYWORD_OCCURRENCE writes from article persistence.
+- Updated related tests and documentation to drop the optional keyword log.
+Files:
+- PoliTopicsRecap/src/dynamoDB/storeData.ts
+- PoliTopicsRecap/src/dynamoDB/storeData.test.ts
+- docs/08_db_design.md
+- docs/jp/08_db_design.md
+- docs/system_overview.md
+- docs/jp/system_overview.md
+
+Agent: Codex
+Date/Time: 2026-01-29 16:05 JST
+Keywords: prompts, orders, docs
+Topic: Document order jump directives in summaries
+Details:
+- Added `[[orders:...]]` guidance to the LLM test prompt and functional spec docs.
+Files:
+- PoliTopicsRecap/src/prompts.for.llmtest.ts
+- docs/02_functional_spec.md
+- docs/jp/02_functional_spec.md

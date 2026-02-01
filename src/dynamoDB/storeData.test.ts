@@ -257,7 +257,7 @@ describe('storeData (mocked client)', () => {
     expect(batchCall).toBeDefined();
     const batchInput = (batchCall![0] as BatchWriteCommand).input;
     const requests = batchInput.RequestItems?.ArticlesTable ?? [];
-    expect(requests).toHaveLength(8);
+    expect(requests).toHaveLength(7);
     const requestBodies = requests.map((item) => item.PutRequest?.Item);
     expect(requestBodies).toEqual(
       expect.arrayContaining([
@@ -279,7 +279,6 @@ describe('storeData (mocked client)', () => {
           asset_key: 'articles/article-123/asset.json',
           asset_url: buildAssetUrl('article-assets', 'articles/article-123/asset.json'),
         }),
-        expect.objectContaining({ PK: 'KEYWORD_RECENT', kind: 'KEYWORD_OCCURRENCE', SK: 'D#2024-05-01#KW#finance#A#article-123' }),
         expect.objectContaining({ PK: 'IMAGEKIND#会議録', kind: 'IMAGEKIND_INDEX' }),
         expect.objectContaining({ PK: 'SESSION#0012', kind: 'SESSION_INDEX' }),
         expect.objectContaining({ PK: 'HOUSE#Lower House', kind: 'HOUSE_INDEX' }),
