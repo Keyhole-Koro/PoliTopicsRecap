@@ -3,12 +3,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TF_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+FORCE_IMPORT="false"
 
 ENVIRONMENT_INPUT=""
 
 for arg in "$@"; do
   case "$arg" in
     --batch)
+      ;;
+    --force)
+      FORCE_IMPORT="true"
       ;;
     local|ghaTest|stage|prod)
       ENVIRONMENT_INPUT="$arg"
@@ -17,7 +21,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$ENVIRONMENT_INPUT" ]]; then
-  echo "Usage: $0 <local|ghaTest|stage|prod>" >&2
+  echo "Usage: $0 <local|ghaTest|stage|prod> [--force]" >&2
   exit 1
 fi
 
@@ -36,7 +40,7 @@ case "$ENVIRONMENT_INPUT" in
     ;;
   *)
     echo "Unknown environment: $ENVIRONMENT_INPUT" >&2
-    echo "Usage: $0 <local|ghaTest|stage|prod>" >&2
+    echo "Usage: $0 <local|ghaTest|stage|prod> [--force]" >&2
     exit 1
     ;;
 esac
@@ -160,9 +164,16 @@ run_import() {
     return
   fi
 
-  if "${TF_CMD[@]}" state show "$address" >/dev/null 2>&1; then
-    echo "skip   -> $address (already in state)"
-    return
+  if [[ "$FORCE_IMPORT" == "true" ]]; then
+    if "${TF_CMD[@]}" state show "$address" >/dev/null 2>&1; then
+      echo "force  -> rm $address (state)"
+      "${TF_CMD[@]}" state rm -no-color "$address" >/dev/null 2>&1 || true
+    fi
+  else
+    if "${TF_CMD[@]}" state show "$address" >/dev/null 2>&1; then
+      echo "skip   -> $address (already in state)"
+      return
+    fi
   fi
 
   echo "import -> $address :: $identifier"
