@@ -5,10 +5,11 @@ const notifyTaskErrorMock = jest.fn();
 const notifyTaskWarningMock = jest.fn();
 const createLlmClientMock = jest.fn();
 const assertTaskReadyForProcessingMock = jest.fn();
+const prepareTaskFromRawMock = jest.fn();
 
 jest.mock("../tasks/taskRepository", () => ({
   bumpRetryAttempts: (...args: any[]) => bumpRetryAttemptsMock(...args),
-  fetchOldestPendingTask: jest.fn(),
+  fetchOldestReadyTask: jest.fn(),
 }));
 
 jest.mock("../processor/taskProcessor", () => ({
@@ -27,6 +28,10 @@ jest.mock("../processor/llmFactory", () => ({
 
 jest.mock("../tasks/taskValidator", () => ({
   assertTaskReadyForProcessing: (...args: any[]) => assertTaskReadyForProcessingMock(...args),
+}));
+
+jest.mock("../processor/taskPreparation", () => ({
+  prepareTaskFromRaw: (...args: any[]) => prepareTaskFromRawMock(...args),
 }));
 
 import type { AppConfig } from "../config";
@@ -66,6 +71,8 @@ const baseConfig: AppConfig = {
     clientConfig: { region: "ap-northeast-3" },
   },
   geminiApiKey: "test-key",
+  geminiModel: "gemini-2.5-flash",
+  geminiMaxInputToken: 4096,
   notifications: {
     errorWebhook: "",
     warnWebhook: "",
@@ -106,7 +113,7 @@ function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
     createdAt: "2025-01-01T00:00:00Z",
     updatedAt: "2025-01-01",
     processingMode: "single_chunk",
-    prompt_version: "2026-01-28.2",
+    prompt_version: "1.0",
     prompt_url: "s3://bucket/prompts/reduce/ISSUE-1.json",
     result_url: "s3://bucket/results/ISSUE-1_reduce.json",
     meeting: {
@@ -129,6 +136,7 @@ describe("retryAttempts", () => {
     jest.resetAllMocks();
     createLlmClientMock.mockReturnValue({ generate: jest.fn() });
     assertTaskReadyForProcessingMock.mockImplementation(() => {});
+    prepareTaskFromRawMock.mockReset();
   });
 
   it("increments retryAttempts even when error notifications fail", async () => {
@@ -160,5 +168,111 @@ describe("retryAttempts", () => {
     expect(bumpRetryAttemptsMock).not.toHaveBeenCalled();
     expect(notifyTaskErrorMock).not.toHaveBeenCalled();
     expect(notifyTaskWarningMock).not.toHaveBeenCalled();
+  });
+
+  it("prepares ingested tasks before processing", async () => {
+    const ingestedTask: TaskItem = buildTask({
+      status: "ingested",
+      llm: undefined,
+      llmModel: undefined,
+      processingMode: undefined,
+      prompt_url: undefined,
+      result_url: undefined,
+      prompt_version: undefined,
+      raw_url: "s3://bucket/raw/ISSUE-1.json",
+      raw_hash: "hash",
+    });
+
+    const preparedTask: TaskItem = buildTask({
+      status: "pending",
+      prompt_version: "1.0",
+    });
+
+    prepareTaskFromRawMock.mockResolvedValueOnce(preparedTask);
+
+    const result = await processTask(baseContext, ingestedTask);
+
+    expect(prepareTaskFromRawMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: ingestedTask,
+        status: "pending",
+      }),
+    );
+    expect(handleDirectTaskMock).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("remakes tasks when major prompt version changes", async () => {
+    const mismatchedTask: TaskItem = buildTask({
+      prompt_version: "2.0",
+      raw_url: "s3://bucket/raw/ISSUE-1.json",
+      raw_hash: "hash",
+    });
+
+    const preparedTask: TaskItem = buildTask({
+      status: "remake",
+      prompt_version: "1.0",
+    });
+
+    prepareTaskFromRawMock.mockResolvedValueOnce(preparedTask);
+
+    const result = await processTask(baseContext, mismatchedTask);
+
+    expect(prepareTaskFromRawMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: mismatchedTask,
+        status: "remake",
+      }),
+    );
+    expect(handleDirectTaskMock).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("remakes task with smaller maxInputToken on token limit errors", async () => {
+    const task: TaskItem = buildTask({
+      raw_url: "s3://bucket/raw/ISSUE-1.json",
+      maxInputToken: 4000,
+    });
+
+    handleDirectTaskMock.mockRejectedValueOnce(
+      new Error("Input token count exceeds context length limit"),
+    );
+
+    const remadeTask: TaskItem = buildTask({
+      status: "remake",
+      maxInputToken: 2800,
+    });
+    prepareTaskFromRawMock.mockResolvedValueOnce(remadeTask);
+
+    const result = await processTask(baseContext, task);
+
+    expect(prepareTaskFromRawMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task,
+        status: "remake",
+        maxInputToken: 2800,
+        retryAttempts: task.retryAttempts ?? 0,
+      }),
+    );
+    expect(result.status).toBe("skipped");
+    expect(bumpRetryAttemptsMock).not.toHaveBeenCalled();
+    expect(notifyTaskErrorMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to normal failure when token limit error lacks raw_url", async () => {
+    const task: TaskItem = buildTask({
+      raw_url: undefined,
+    });
+
+    handleDirectTaskMock.mockRejectedValueOnce(
+      new Error("Token limit exceeded"),
+    );
+
+    const result = await processTask(baseContext, task);
+
+    expect(prepareTaskFromRawMock).not.toHaveBeenCalled();
+    expect(result.status).toBe("failed");
+    expect(bumpRetryAttemptsMock).toHaveBeenCalledTimes(1);
+    expect(notifyTaskErrorMock).toHaveBeenCalledTimes(1);
   });
 });

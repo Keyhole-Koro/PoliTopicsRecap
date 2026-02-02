@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "2026-01-29.1";
+export const PROMPT_VERSION = "1.0";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -12,7 +12,7 @@ export const instruction_common = `【目的】
 - すべての要点に based_on_orders（発言 order 配列）を付与。
 - 余談や定型挨拶は除外。推測や創作は禁止。
 - summary / soft_language_summary / middle_summary は Markdown の機能を自由に使ってよい。
-- summary / soft_language_summary / middle_summary の本文には (order: 1) のような注記は書かない。order参照は本文末尾に `[[orders:1,2,3]]` のみ許可（数字・カンマ・ハイフンのみ、空白なし）。
+- summary / soft_language_summary / middle_summary の本文には (order: 1) のような注記は書かない。order参照は本文末尾に \`[[orders:1,2,3]]\` のみ許可（数字・カンマ・ハイフンのみ、空白なし）。
 - すべての出力に prompt_version を含める（現在値: ${PROMPT_VERSION}）。`;
 
 const no_code_fence_warning = "出力は必ず純粋なJSON文字列のみ（バックティックやコードブロック禁止）。";

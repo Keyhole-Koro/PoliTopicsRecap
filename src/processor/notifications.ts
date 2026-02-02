@@ -3,7 +3,8 @@ import { appConfig } from "../config";
 import type Article from "../dynamoDB/article";
 import type { TaskItem } from "../tasks/types";
 
-const shouldSkipTaskNotification = (task?: TaskItem | null): boolean => Boolean(task && task.retryAttempts >= 2)
+const shouldSkipTaskNotification = (task?: TaskItem | null): boolean =>
+  Boolean(task && (task.retryAttempts ?? 0) >= 2)
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 const sendNotification = async (...args: Parameters<typeof _sendNotification>) => {
@@ -24,10 +25,13 @@ function baseFields(task?: TaskItem): DiscordField[] {
   }
 
   if (task) {
+    const modeValue = task.processingMode ?? "n/a";
+    const llmParts = [task.llm, task.llmModel].filter(Boolean);
+    const llmValue = llmParts.length ? llmParts.join("/") : "n/a";
     fields.push(
       { name: "Task ID", value: task.pk, inline: true },
-      { name: "Mode", value: task.processingMode, inline: true },
-      { name: "LLM", value: `${task.llm}/${task.llmModel}`, inline: true },
+      { name: "Mode", value: String(modeValue), inline: true },
+      { name: "LLM", value: String(llmValue), inline: true },
     );
     if (task.meeting) {
       const meetingLabel = task.meeting.nameOfMeeting || task.meeting.issueID;

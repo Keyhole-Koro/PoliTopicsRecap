@@ -1,6 +1,6 @@
 import type { ChunkItem, ChunkStatus, ProcessingMode, TaskItem, TaskStatus } from "./types";
 
-const TASK_STATUSES: TaskStatus[] = ["pending", "completed"];
+const TASK_STATUSES: TaskStatus[] = ["ingested", "pending", "remake", "completed"];
 const CHUNK_STATUSES: ChunkStatus[] = ["notReady", "ready"];
 const PROCESSING_MODES: ProcessingMode[] = ["single_chunk", "chunked"];
 
@@ -13,19 +13,49 @@ export function asTaskItem(raw: unknown): TaskItem | null {
   } else {
     if (!isString(raw.pk)) pushIssue("pk", "expected string");
     if (!isTaskStatus(raw.status)) pushIssue("status", `unexpected value: ${String(raw.status)}`);
-    if (!isProcessingMode(raw.processingMode)) {
+    const status = raw.status as TaskStatus | undefined;
+    if (raw.processingMode !== undefined && !isProcessingMode(raw.processingMode)) {
       pushIssue("processingMode", `unexpected value: ${String(raw.processingMode)}`);
     }
-    if (!isString(raw.llm)) pushIssue("llm", "expected string");
-    if (!isString(raw.llmModel)) pushIssue("llmModel", "expected string");
-    if (!isFiniteNumber(raw.retryAttempts)) pushIssue("retryAttempts", "expected finite number");
+    if (raw.retryAttempts !== undefined && !isFiniteNumber(raw.retryAttempts)) {
+      pushIssue("retryAttempts", "expected finite number");
+    }
+    if (raw.maxInputToken !== undefined && !isFiniteNumber(raw.maxInputToken)) {
+      pushIssue("maxInputToken", "expected finite number");
+    }
     if (!isIsoDateString(raw.createdAt)) pushIssue("createdAt", "expected ISO date string");
     if (!isIsoDateString(raw.updatedAt)) pushIssue("updatedAt", "expected ISO date string");
-    if (!isString(raw.prompt_url) || !raw.prompt_url.startsWith("s3://")) {
-      pushIssue("prompt_url", "expected s3:// URL string");
-    }
-    if (!isString(raw.result_url) || !raw.result_url.startsWith("s3://")) {
-      pushIssue("result_url", "expected s3:// URL string");
+    if (status === "ingested") {
+      if (!isString(raw.raw_url) || !raw.raw_url.startsWith("s3://")) {
+        pushIssue("raw_url", "expected s3:// URL string");
+      }
+      if (raw.raw_hash !== undefined && !isString(raw.raw_hash)) {
+        pushIssue("raw_hash", "expected string");
+      }
+      if (raw.prompt_url !== undefined && (!isString(raw.prompt_url) || !raw.prompt_url.startsWith("s3://"))) {
+        pushIssue("prompt_url", "expected s3:// URL string");
+      }
+      if (raw.result_url !== undefined && (!isString(raw.result_url) || !raw.result_url.startsWith("s3://"))) {
+        pushIssue("result_url", "expected s3:// URL string");
+      }
+    } else {
+      if (!isString(raw.llm)) pushIssue("llm", "expected string");
+      if (!isString(raw.llmModel)) pushIssue("llmModel", "expected string");
+      if (!isProcessingMode(raw.processingMode)) {
+        pushIssue("processingMode", `unexpected value: ${String(raw.processingMode)}`);
+      }
+      if (!isString(raw.prompt_url) || !raw.prompt_url.startsWith("s3://")) {
+        pushIssue("prompt_url", "expected s3:// URL string");
+      }
+      if (!isString(raw.result_url) || !raw.result_url.startsWith("s3://")) {
+        pushIssue("result_url", "expected s3:// URL string");
+      }
+      if (raw.raw_url !== undefined && (!isString(raw.raw_url) || !raw.raw_url.startsWith("s3://"))) {
+        pushIssue("raw_url", "expected s3:// URL string");
+      }
+      if (raw.raw_hash !== undefined && !isString(raw.raw_hash)) {
+        pushIssue("raw_hash", "expected string");
+      }
     }
 
     validateAttachedAssets(raw.attachedAssets, pushIssue);

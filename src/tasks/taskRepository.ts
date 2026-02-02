@@ -6,7 +6,7 @@ import {
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 
-import type { TaskItem } from "./types";
+import type { TaskItem, ChunkItem, ProcessingMode, TaskStatus } from "./types";
 import { asTaskItem } from "./validators";
 
 export type TaskRepositoryConfig = {
@@ -14,20 +14,21 @@ export type TaskRepositoryConfig = {
   statusIndexName: string;
 };
 
-export async function fetchOldestPendingTask(
+async function fetchOldestTaskByStatus(
   doc: DynamoDBDocumentClient,
   cfg: TaskRepositoryConfig,
+  status: string,
 ): Promise<TaskItem | null> {
   let startKey: Record<string, any> | undefined = undefined;
   const exprNames = { "#status": "status" };
-  const exprValues = { ":pending": "pending", ":maxAttempts": 3 };
+  const exprValues = { ":status": status, ":maxAttempts": 3 };
 
   while (true) {
     const res: QueryCommandOutput = await doc.send(
       new QueryCommand({
         TableName: cfg.tableName,
         IndexName: cfg.statusIndexName,
-        KeyConditionExpression: "#status = :pending",
+        KeyConditionExpression: "#status = :status",
         FilterExpression: "attribute_not_exists(retryAttempts) OR retryAttempts < :maxAttempts",
         ExpressionAttributeNames: exprNames,
         ExpressionAttributeValues: exprValues,
@@ -48,21 +49,42 @@ export async function fetchOldestPendingTask(
   }
 }
 
-export async function countPendingTasks(
+export async function fetchOldestReadyTask(
   doc: DynamoDBDocumentClient,
   cfg: TaskRepositoryConfig,
+): Promise<TaskItem | null> {
+  const [pending, remake] = await Promise.all([
+    fetchOldestTaskByStatus(doc, cfg, "pending"),
+    fetchOldestTaskByStatus(doc, cfg, "remake"),
+  ]);
+  if (!pending) return remake;
+  if (!remake) return pending;
+  return pending.createdAt <= remake.createdAt ? pending : remake;
+}
+
+export async function fetchOldestIngestedTask(
+  doc: DynamoDBDocumentClient,
+  cfg: TaskRepositoryConfig,
+): Promise<TaskItem | null> {
+  return fetchOldestTaskByStatus(doc, cfg, "ingested");
+}
+
+async function countTasksByStatus(
+  doc: DynamoDBDocumentClient,
+  cfg: TaskRepositoryConfig,
+  status: string,
 ): Promise<number> {
   let count = 0;
   let startKey: Record<string, any> | undefined = undefined;
   const exprNames = { "#status": "status" };
-  const exprValues = { ":pending": "pending", ":maxAttempts": 3 };
+  const exprValues = { ":status": status, ":maxAttempts": 3 };
 
   while (true) {
     const res: QueryCommandOutput = await doc.send(
       new QueryCommand({
         TableName: cfg.tableName,
         IndexName: cfg.statusIndexName,
-        KeyConditionExpression: "#status = :pending",
+        KeyConditionExpression: "#status = :status",
         FilterExpression: "attribute_not_exists(retryAttempts) OR retryAttempts < :maxAttempts",
         ExpressionAttributeNames: exprNames,
         ExpressionAttributeValues: exprValues,
@@ -78,6 +100,17 @@ export async function countPendingTasks(
   }
 
   return count;
+}
+
+export async function countReadyTasks(
+  doc: DynamoDBDocumentClient,
+  cfg: TaskRepositoryConfig,
+): Promise<number> {
+  const [pending, remake] = await Promise.all([
+    countTasksByStatus(doc, cfg, "pending"),
+    countTasksByStatus(doc, cfg, "remake"),
+  ]);
+  return pending + remake;
 }
 
 export async function getTaskByIssue(
@@ -114,7 +147,7 @@ export async function markChunkReady(
       new UpdateCommand({
         TableName: cfg.tableName,
         Key: { pk: task.pk },
-        ConditionExpression: "#status = :pending",
+        ConditionExpression: "(#status = :pending OR #status = :remake)",
         UpdateExpression: `SET chunks[${index}].#chunkStatus = :ready, #updatedAt = :now`,
         ExpressionAttributeNames: {
           "#chunkStatus": "status",
@@ -123,6 +156,7 @@ export async function markChunkReady(
         },
         ExpressionAttributeValues: {
           ":pending": "pending",
+          ":remake": "remake",
           ":ready": "ready",
           ":now": now,
         },
@@ -148,7 +182,7 @@ export async function markTaskSucceeded(
       new UpdateCommand({
         TableName: cfg.tableName,
         Key: { pk: task.pk },
-        ConditionExpression: "#status = :pending",
+        ConditionExpression: "(#status = :pending OR #status = :remake)",
         UpdateExpression: "SET #status = :completed, #updatedAt = :now",
         ExpressionAttributeNames: {
           "#status": "status",
@@ -156,6 +190,7 @@ export async function markTaskSucceeded(
         },
         ExpressionAttributeValues: {
           ":pending": "pending",
+          ":remake": "remake",
           ":completed": "completed",
           ":now": now,
         },
@@ -185,6 +220,53 @@ export async function bumpRetryAttempts(
       ExpressionAttributeValues: {
         ":next": (task.retryAttempts ?? 0) + 1,
         ":now": now,
+      },
+    }),
+  );
+}
+
+export async function updateTaskForPrompt(
+  doc: DynamoDBDocumentClient,
+  cfg: TaskRepositoryConfig,
+  taskId: string,
+  updates: {
+    status: TaskStatus;
+    llm: string;
+    llmModel: string;
+    retryAttempts: number;
+    updatedAt: string;
+    processingMode: ProcessingMode;
+    prompt_version: string;
+    prompt_url: string;
+    result_url: string;
+    chunks: ChunkItem[];
+    maxInputToken: number;
+  },
+): Promise<void> {
+  await doc.send(
+    new UpdateCommand({
+      TableName: cfg.tableName,
+      Key: { pk: taskId },
+      ConditionExpression: "attribute_exists(pk)",
+      UpdateExpression:
+        "SET #status = :status, llm = :llm, llmModel = :llmModel, retryAttempts = :retryAttempts, #updatedAt = :updatedAt, #processingMode = :processingMode, prompt_version = :promptVersion, prompt_url = :promptUrl, result_url = :resultUrl, chunks = :chunks, maxInputToken = :maxInputToken",
+      ExpressionAttributeNames: {
+        "#status": "status",
+        "#updatedAt": "updatedAt",
+        "#processingMode": "processingMode",
+      },
+      ExpressionAttributeValues: {
+        ":status": updates.status,
+        ":llm": updates.llm,
+        ":llmModel": updates.llmModel,
+        ":retryAttempts": updates.retryAttempts,
+        ":updatedAt": updates.updatedAt,
+        ":processingMode": updates.processingMode,
+        ":promptVersion": updates.prompt_version,
+        ":promptUrl": updates.prompt_url,
+        ":resultUrl": updates.result_url,
+        ":chunks": updates.chunks,
+        ":maxInputToken": updates.maxInputToken,
       },
     }),
   );

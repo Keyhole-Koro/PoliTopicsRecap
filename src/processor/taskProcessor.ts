@@ -13,6 +13,7 @@ import storeData from "../dynamoDB/storeData";
 import type Article from "../dynamoDB/article";
 import { fetchObjectText, parseS3Uri, uploadObject } from "@utils/s3";
 import { appConfig } from "../config";
+import { buildReduceInput, buildSpeechInput, stripCodeFence } from "../prompts/promptInput";
 import {
   attachSpeakerMetadata,
   assertAttachedAssets,
@@ -43,7 +44,9 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
   
   try {
     assertAttachedAssets(task);
-    const promptText = await readS3Text(s3Client, task.prompt_url);
+    const promptUrl = requireTaskUrl(task, "prompt_url");
+    const resultUrl = requireTaskUrl(task, "result_url");
+    const promptText = await loadPromptText(s3Client, promptUrl, task);
     const attachedMap = await loadSpeakerMapFromAttachedAssets(s3Client, task.attachedAssets.speakerMetadataUrl);
     assertNonEmptySpeakerMap(attachedMap, "attached assets");
     
@@ -54,8 +57,8 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
     });
     console.log(`[TaskProcessor] LLM response for ${task.pk} (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
 
-    await writeS3Text(s3Client, task.result_url, llmResult.text);
-    console.log(`[TaskProcessor] Uploaded result to ${task.result_url}`);
+    await writeS3Text(s3Client, resultUrl, llmResult.text);
+    console.log(`[TaskProcessor] Uploaded result to ${resultUrl}`);
 
     const persistResult = await persistArticleIfPossible(
       docClient,
@@ -97,7 +100,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
   if (nextChunk) {
     console.log(`[TaskProcessor] Processing chunk ${nextChunk.id} for ${task.pk}`);
     try {
-      const promptText = await readS3Text(s3Client, nextChunk.prompt_url);
+      const promptText = await loadPromptText(s3Client, nextChunk.prompt_url, task);
       console.log(`[TaskProcessor] Fetched chunk prompt (${promptText.length} chars). Preview: ${promptText.slice(0, 100)}...`);
       
       const llmResult = await llmClient.generate({
@@ -119,7 +122,9 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
 
   console.log(`[TaskProcessor] All chunks ready for ${task.pk}. Running REDUCE phase.`);
   try {
-    const reducePrompt = await readS3Text(s3Client, task.prompt_url);
+    const promptUrl = requireTaskUrl(task, "prompt_url");
+    const resultUrl = requireTaskUrl(task, "result_url");
+    const reducePrompt = await loadPromptText(s3Client, promptUrl, task);
     console.log(`[TaskProcessor] Fetched reduce prompt (${reducePrompt.length} chars). Preview: ${reducePrompt.slice(0, 100)}...`);
     
     const attachedMap = await loadSpeakerMapFromAttachedAssets(s3Client, task.attachedAssets.speakerMetadataUrl);
@@ -131,8 +136,8 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
     });
     console.log(`[TaskProcessor] Reduce LLM response (${reduceResult.text.length} chars). Preview: ${reduceResult.text.slice(0, 100)}...`);
 
-    await writeS3Text(s3Client, task.result_url, reduceResult.text);
-    console.log(`[TaskProcessor] Uploaded reduce result to ${task.result_url}`);
+    await writeS3Text(s3Client, resultUrl, reduceResult.text);
+    console.log(`[TaskProcessor] Uploaded reduce result to ${resultUrl}`);
 
     const persistResult = await persistArticleIfPossible(
       docClient,
@@ -243,12 +248,93 @@ async function persistArticleIfPossible(
 }
 
 function sanitizeJsonPayload(payloadText: string): string {
-  const trimmed = payloadText.trim();
-  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
-  if (fenceMatch && fenceMatch[1]) {
-    return fenceMatch[1].trim();
+  return stripCodeFence(payloadText);
+}
+
+function requireTaskUrl(task: TaskItem, field: "prompt_url" | "result_url"): string {
+  const value = task[field];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`Task ${task.pk} missing required ${field}`);
   }
-  return trimmed;
+  return value;
+}
+
+async function loadPromptText(
+  client: S3Client,
+  uri: string,
+  task: TaskItem,
+): Promise<string> {
+  const rawText = await readS3Text(client, uri);
+  const payload = tryParseJson(rawText);
+  if (!payload) return rawText;
+
+  if (
+    payload.mode === "single_chunk" &&
+    typeof payload.singleChunkPromptTemplate === "string" &&
+    Array.isArray(payload.speeches)
+  ) {
+    const input = buildSpeechInput({
+      speeches: payload.speeches,
+      meeting: payload.meeting ?? task.meeting,
+      issueID: payload.meeting?.issueID ?? task.meeting?.issueID,
+    });
+    return appendInput(payload.singleChunkPromptTemplate, input);
+  }
+
+  if (payload.mode === "chunked" && typeof payload.reducePromptTemplate === "string") {
+    const chunkUrls: string[] =
+      (Array.isArray(payload.chunkResultUrls) ? payload.chunkResultUrls : undefined) ??
+      (Array.isArray(payload.chunks) ? payload.chunks.map((chunk: any) => chunk.result_url).filter(Boolean) : undefined) ??
+      (Array.isArray(task.chunks) ? task.chunks.map((chunk) => chunk.result_url).filter(Boolean) : []);
+
+    if (!chunkUrls.length) {
+      console.warn(`[TaskProcessor] Reduce prompt payload missing chunk results for ${task.pk}`);
+      return rawText;
+    }
+
+    const chunkResults = await Promise.all(
+      chunkUrls.map(async (chunkUrl, index) => ({
+        id: payload.chunks?.[index]?.id ?? task.chunks?.[index]?.id,
+        text: await readS3Text(client, chunkUrl),
+      })),
+    );
+
+    const input = buildReduceInput({
+      chunkResults,
+      meeting: payload.meeting ?? task.meeting,
+      issueID: payload.meeting?.issueID ?? task.meeting?.issueID,
+    });
+    return appendInput(payload.reducePromptTemplate, input);
+  }
+
+  if (typeof payload.prompt === "string" && Array.isArray(payload.speeches)) {
+    const input = buildSpeechInput({
+      speeches: payload.speeches,
+      meeting: payload.meeting ?? task.meeting,
+      issueID: payload.meeting?.issueID ?? task.meeting?.issueID,
+    });
+    return appendInput(payload.prompt, input);
+  }
+
+  return rawText;
+}
+
+function appendInput(prompt: string, input: string): string {
+  if (!input) return prompt;
+  if (prompt.endsWith("\n") || input.startsWith("\n")) {
+    return `${prompt}${input}`;
+  }
+  return `${prompt}\n${input}`;
+}
+
+function tryParseJson(text: string): any | null {
+  try {
+    const parsed = JSON.parse(text);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 // NOTE: This function uses 'assets' which is R2Client, to store invalid payloads.

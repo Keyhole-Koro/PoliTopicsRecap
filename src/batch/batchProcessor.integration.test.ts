@@ -10,8 +10,7 @@ import { createDocumentClient } from "@utils/dynamo";
 import { appConfig, setAppEnvironment } from "../config";
 import { RateLimiter } from "@utils/rateLimiter";
 import {
-  countPendingTasks,
-  fetchOldestPendingTask,
+  countReadyTasks,
   type TaskRepositoryConfig,
 } from "../tasks/taskRepository";
 import type { TaskItem } from "../tasks/types";
@@ -123,23 +122,23 @@ describe("Batch Processing Integration", () => {
   });
 
   describe("Task Counting", () => {
-    it("should count pending tasks correctly", async () => {
-      const initialCount = await countPendingTasks(docClient, repoConfig);
+    it("should count ready tasks correctly", async () => {
+      const initialCount = await countReadyTasks(docClient, repoConfig);
 
       // Create a test task
       await createTestTask();
 
-      const afterCount = await countPendingTasks(docClient, repoConfig);
+      const afterCount = await countReadyTasks(docClient, repoConfig);
       expect(afterCount).toBe(initialCount + 1);
     });
 
     it("should not count tasks with max retries", async () => {
-      const initialCount = await countPendingTasks(docClient, repoConfig);
+      const initialCount = await countReadyTasks(docClient, repoConfig);
 
       // Create a task with max retries
       await createTestTask({ retryAttempts: 3 });
 
-      const afterCount = await countPendingTasks(docClient, repoConfig);
+      const afterCount = await countReadyTasks(docClient, repoConfig);
       // Should not be counted because retryAttempts >= 3
       expect(afterCount).toBe(initialCount);
     });

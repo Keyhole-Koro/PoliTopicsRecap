@@ -71,6 +71,8 @@ export type AppConfig = {
   articleAssetBucketName: string
   r2: R2Config
   geminiApiKey: string
+  geminiModel: string
+  geminiMaxInputToken: number
   notifications: {
     errorWebhook: string
     warnWebhook: string
@@ -137,6 +139,8 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
       },
     },
     geminiApiKey: "dummy",
+    geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-2.5-flash",
+    geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 4096),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
@@ -195,6 +199,8 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
       },
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
+    geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-2.5-flash",
+    geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 50000),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
@@ -253,6 +259,8 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
       },
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
+    geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-2.5-flash",
+    geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 50000),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
@@ -314,6 +322,8 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
       },
     },
     geminiApiKey: "dummy",
+    geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-2.5-flash",
+    geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 4096),
     notifications: {
       errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR") || "",
       warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN") || "",

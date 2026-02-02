@@ -1,5 +1,5 @@
 import { QueryCommand } from "@aws-sdk/lib-dynamodb";
-import { fetchOldestPendingTask, type TaskRepositoryConfig } from "./taskRepository";
+import { fetchOldestReadyTask, type TaskRepositoryConfig } from "./taskRepository";
 import type { TaskItem } from "./types";
 
 const cfg: TaskRepositoryConfig = { tableName: "tasks", statusIndexName: "StatusIndex" };
@@ -14,7 +14,7 @@ function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
     createdAt: "2025-01-01T00:00:00Z",
     updatedAt: "2025-01-01",
     processingMode: "single_chunk",
-    prompt_version: "2026-01-28.2",
+    prompt_version: "1.0",
     prompt_url: "s3://bucket/prompts/ISSUE-1.json",
     result_url: "s3://bucket/results/ISSUE-1.json",
     meeting: {
@@ -32,16 +32,16 @@ function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
   };
 }
 
-describe("fetchOldestPendingTask", () => {
-  it("skips tasks with retryAttempts >= 3 and returns the next eligible task", async () => {
+describe("fetchOldestReadyTask", () => {
+  it("returns the oldest task between pending and remake statuses", async () => {
     const sendMock = jest
       .fn()
-      // First page filtered out (e.g., retryAttempts >= 3)
-      .mockResolvedValueOnce({ Items: [], LastEvaluatedKey: { pk: "ISSUE-0" } })
-      // Second page contains an eligible task
-      .mockResolvedValueOnce({ Items: [buildTask({ pk: "ISSUE-2", retryAttempts: 2 })] });
+      // pending
+      .mockResolvedValueOnce({ Items: [buildTask({ pk: "ISSUE-1", createdAt: "2025-01-02T00:00:00Z" })] })
+      // remake
+      .mockResolvedValueOnce({ Items: [buildTask({ pk: "ISSUE-2", status: "remake", createdAt: "2025-01-01T00:00:00Z" })] });
 
-    const task = await fetchOldestPendingTask({ send: sendMock } as any, cfg);
+    const task = await fetchOldestReadyTask({ send: sendMock } as any, cfg);
 
     expect(task?.pk).toBe("ISSUE-2");
     expect(sendMock).toHaveBeenCalledTimes(2);

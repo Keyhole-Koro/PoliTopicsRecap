@@ -3,8 +3,9 @@ import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import type { AppConfig } from "../config";
 import { RateLimiter } from "@utils/rateLimiter";
 import {
-  fetchOldestPendingTask,
-  countPendingTasks,
+  fetchOldestReadyTask,
+  fetchOldestIngestedTask,
+  countReadyTasks,
   type TaskRepositoryConfig,
 } from "../tasks/taskRepository";
 import { notifyBatchComplete } from "../processor/notifications";
@@ -36,14 +37,23 @@ export class BatchProcessor {
     const { config, docClient, repoConfig, rateLimiter, stats } = this.ctx;
 
     // Calculate max tasks to process
-    const pendingCount = await countPendingTasks(docClient, repoConfig);
-    const maxTasks = this.calculateMaxTasks(config, pendingCount);
-    console.log(`[BatchProcessor] Found ${pendingCount} pending tasks, will process up to ${maxTasks}`);
+    const readyCount = await countReadyTasks(docClient, repoConfig);
+    const maxTasks = this.calculateMaxTasks(config, readyCount);
+    console.log(`[BatchProcessor] Found ${readyCount} ready tasks, will process up to ${maxTasks}`);
 
     let consecutiveErrors = 0;
 
     while (stats.processed < maxTasks) {
-      // Check day limit
+      // Fetch next ready task (pending/remake) first
+      const task =
+        (await fetchOldestReadyTask(docClient, repoConfig)) ??
+        (await fetchOldestIngestedTask(docClient, repoConfig));
+      if (!task) {
+        console.log("[BatchProcessor] No more tasks");
+        break;
+      }
+
+      // Check day limit (LLM tasks only)
       if (rateLimiter.isDayLimitReached()) {
         console.log("[BatchProcessor] Daily rate limit reached, stopping");
         break;
@@ -53,13 +63,6 @@ export class BatchProcessor {
       const waitTime = await rateLimiter.waitIfNeeded();
       if (waitTime > 0) {
         console.log(`[BatchProcessor] Rate limited, waited ${waitTime}ms`);
-      }
-
-      // Fetch next task
-      const task = await fetchOldestPendingTask(docClient, repoConfig);
-      if (!task) {
-        console.log("[BatchProcessor] No more pending tasks");
-        break;
       }
 
       console.log(`[BatchProcessor] Processing task ${task.pk} (${stats.processed + 1}/${maxTasks})`);
@@ -95,10 +98,10 @@ export class BatchProcessor {
     await notifyBatchComplete(stats, "success");
   }
 
-  private calculateMaxTasks(config: AppConfig, pendingCount: number): number {
+  private calculateMaxTasks(config: AppConfig, readyCount: number): number {
     const { batch, rateLimit } = config;
     if (batch.maxTasksPerRun === "auto") {
-      return Math.max(rateLimit.requestsPerDay, pendingCount);
+      return Math.max(rateLimit.requestsPerDay, readyCount);
     }
     return batch.maxTasksPerRun;
   }

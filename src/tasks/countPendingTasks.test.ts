@@ -1,13 +1,13 @@
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import {
-  countPendingTasks,
-  fetchOldestPendingTask,
+  countReadyTasks,
+  fetchOldestReadyTask,
   type TaskRepositoryConfig,
 } from "./taskRepository";
 import { createDocumentClient } from "@utils/dynamo";
 import { appConfig, setAppEnvironment } from "../config";
 
-describe("countPendingTasks", () => {
+describe("countReadyTasks", () => {
   let docClient: DynamoDBDocumentClient;
   let repoConfig: TaskRepositoryConfig;
 
@@ -20,16 +20,16 @@ describe("countPendingTasks", () => {
     };
   });
 
-  it("should return 0 when no pending tasks exist", async () => {
+  it("should return 0 when no ready tasks exist", async () => {
     // This test requires LocalStack to be running with empty table
     // In a real test environment, we would seed the table first
-    const count = await countPendingTasks(docClient, repoConfig);
+    const count = await countReadyTasks(docClient, repoConfig);
     expect(typeof count).toBe("number");
     expect(count).toBeGreaterThanOrEqual(0);
   });
 });
 
-describe("fetchOldestPendingTask", () => {
+describe("fetchOldestReadyTask", () => {
   let docClient: DynamoDBDocumentClient;
   let repoConfig: TaskRepositoryConfig;
 
@@ -42,9 +42,9 @@ describe("fetchOldestPendingTask", () => {
     };
   });
 
-  it("should return null when no pending tasks exist", async () => {
+  it("should return null when no ready tasks exist", async () => {
     // Note: This test may return a task if LocalStack has data from other tests
-    const task = await fetchOldestPendingTask(docClient, repoConfig);
+    const task = await fetchOldestReadyTask(docClient, repoConfig);
     // We just verify it doesn't throw and returns either null or a task
     expect(task === null || typeof task === "object").toBe(true);
   });

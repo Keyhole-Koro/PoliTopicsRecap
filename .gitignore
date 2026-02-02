@@ -28,3 +28,6 @@ out.json
 .env
 
 .secrets
+
+
+.jest-cache

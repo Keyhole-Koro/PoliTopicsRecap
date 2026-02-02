@@ -1,4 +1,4 @@
-export type TaskStatus = "pending" | "completed";
+export type TaskStatus = "ingested" | "pending" | "remake" | "completed";
 export type ChunkStatus = "notReady" | "ready";
 export type ProcessingMode = "single_chunk" | "chunked";
 
@@ -26,16 +26,19 @@ export type AttachedAssets = {
 export type TaskItem = {
   pk: string;
   status: TaskStatus;
-  llm: string;
-  llmModel: string;
-  retryAttempts: number;
+  llm?: string;
+  llmModel?: string;
+  retryAttempts?: number;
   createdAt: string;
   updatedAt: string;
-  processingMode: ProcessingMode;
+  processingMode?: ProcessingMode;
   prompt_version?: string;
-  prompt_url: string;
+  prompt_url?: string;
+  raw_url?: string;
+  raw_hash?: string;
+  maxInputToken?: number;
   meeting: Meeting;
-  result_url: string;
+  result_url?: string;
   chunks?: ChunkItem[];
   attachedAssets: AttachedAssets;
 };
