@@ -26,7 +26,8 @@ jobs:
       TF_VAR_discord_webhook_error: ${{ secrets.DISCORD_WEBHOOK_ERROR }}
       TF_VAR_discord_webhook_warn: ${{ secrets.DISCORD_WEBHOOK_WARN }}
       TF_VAR_discord_webhook_batch: ${{ secrets.DISCORD_WEBHOOK_BATCH }}
-      TF_VAR_r2_endpoint_url: ${{ secrets.R2_ENDPOINT_URL }}
+      TF_VAR_r2_endpoint_url: ${{ secrets.R2_WRITE_ENDPOINT_URL }}
+      TF_VAR_r2_public_url_base: ${{ secrets.R2_PUBLIC_ASSET_URL }}
       TF_VAR_r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
       TF_VAR_r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}

@@ -166,8 +166,8 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
 }
 
 function buildStageConfig(): Omit<AppConfig, "environment"> {
-  const r2Endpoint = requireEnvAny(["R2_WRITE_ENDPOINT_URL", "R2_ENDPOINT_URL"]);
-  const r2PublicBase = requireEnvAny(["R2_PUBLIC_ASSET_URL", "R2_PUBLIC_URL_BASE"]);
+  const r2Endpoint = requireEnv("R2_WRITE_ENDPOINT_URL");
+  const r2PublicBase = requireEnv("R2_PUBLIC_ASSET_URL");
   return {
     aws: {
       region: "ap-northeast-3",
@@ -228,9 +228,9 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
 }
 
 function buildProdConfig(): Omit<AppConfig, "environment"> {
-  const r2Endpoint = requireEnvAny(["R2_WRITE_ENDPOINT_URL", "R2_ENDPOINT_URL"]);
+  const r2Endpoint = requireEnv("R2_WRITE_ENDPOINT_URL");
   const r2PublicBase =
-    optionalEnvAny(["R2_PUBLIC_ASSET_URL", "R2_PUBLIC_URL_BASE"]) || "https://asset.politopics.net";
+    optionalEnv("R2_PUBLIC_ASSET_URL") || "https://asset.politopics.net";
   return {
     aws: {
       region: "ap-northeast-3",
@@ -291,9 +291,9 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
 }
 
 function buildTestConfig(): Omit<AppConfig, "environment"> {
-  const r2Endpoint = optionalEnvAny(["R2_WRITE_ENDPOINT_URL", "R2_ENDPOINT_URL"]);
+  const r2Endpoint = optionalEnv("R2_WRITE_ENDPOINT_URL");
   const r2PublicBase =
-    optionalEnvAny(["R2_PUBLIC_ASSET_URL", "R2_PUBLIC_URL_BASE"]) ||
+    optionalEnv("R2_PUBLIC_ASSET_URL") ||
     "http://localhost:4566/politopics-articles-local";
   return {
     aws: {
@@ -362,13 +362,6 @@ function optionalEnv(name: string): string | undefined {
   return value && value.trim() !== "" ? value.trim() : undefined;
 }
 
-function optionalEnvAny(names: string[]): string | undefined {
-  for (const name of names) {
-    const value = optionalEnv(name);
-    if (value) return value;
-  }
-  return undefined;
-}
 
 function optionalEnvBool(name: string, defaultValue: boolean): boolean {
   const value = process.env[name];
@@ -392,11 +385,6 @@ function requireEnv(name: string, allowMissing = false): string {
   return value.trim();
 }
 
-function requireEnvAny(names: string[]): string {
-  const value = optionalEnvAny(names);
-  if (value) return value;
-  throw new Error(`Environment variable ${names.join(" or ")} is required`);
-}
 
 function resolveEnvironment(): AppEnvironment {
   if (!process.env.APP_ENVIRONMENT) {
