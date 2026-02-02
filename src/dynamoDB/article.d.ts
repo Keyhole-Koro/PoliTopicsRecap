@@ -20,7 +20,15 @@ export type Dialog = {
     };
     answer: string;
     answer_orders: number[];
-  };
+  } | {
+    ask: {
+      question: string;
+      who: string;
+      orders: number[];
+    };
+    answer: string;
+    answer_orders: number[];
+  }[];
   original_text: string;
   speaker: string;
   speakerYomi?: string | null;

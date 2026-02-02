@@ -199,7 +199,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
               createdAt,
               updatedAt,
               processingMode: "single_chunk",
-              prompt_version: "2.0",
+              prompt_version: "2.1",
               prompt_url: `s3://${bucket}/${promptKey}`,
               result_url: `s3://${bucket}/${resultKey}`,
               meeting: makeMeeting(issueID),
@@ -287,7 +287,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
               createdAt,
               updatedAt,
               processingMode: "chunked",
-              prompt_version: "2.0",
+              prompt_version: "2.1",
               prompt_url: `s3://${bucket}/${reducePromptKey}`,
               result_url: `s3://${bucket}/${reduceResultKey}`,
               meeting: makeMeeting(issueID),
@@ -514,7 +514,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
     function buildArticle(issueID: string) {
       return {
-        prompt_version: "2.0",
+        prompt_version: "2.1",
         id: issueID,
         title: "Test Committee Recap",
         date: "2025-01-01T00:00:00Z",
@@ -550,7 +550,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
     function buildChunkOutput(issueID: string) {
       return {
-        prompt_version: "2.0",
+        prompt_version: "2.1",
         id: issueID,
         middle_summary: [{ based_on_orders: [1], summary: "chunk summary" }],
         soft_language_summary: { based_on_orders: [1], summary: "chunk soft summary" },
@@ -571,7 +571,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
     function buildReduceOutput(issueID: string) {
       return {
-        prompt_version: "2.0",
+        prompt_version: "2.1",
         id: issueID,
         title: "Chunked Reduce Result",
         date: "2025-01-01T00:00:00Z",
