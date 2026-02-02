@@ -83,12 +83,12 @@ batch: {
 | `DISCORD_WEBHOOK_ERROR` | Error notification webhook                              | Yes               |
 | `DISCORD_WEBHOOK_WARN`  | Warning notification webhook                            | Yes               |
 | `DISCORD_WEBHOOK_BATCH` | Batch notification webhook                              | Yes               |
-| `R2_ENDPOINT_URL`       | Cloudflare R2 endpoint URL                              | Yes (prod/stage)  |
+| `R2_WRITE_ENDPOINT_URL` | Cloudflare R2 endpoint URL                              | Yes (prod/stage)  |
 | `R2_ACCESS_KEY_ID`      | R2 access key ID                                        | Yes (prod/stage)  |
 | `R2_SECRET_ACCESS_KEY`  | R2 secret access key                                    | Yes (prod/stage)  |
 | `R2_ARTICLE_BUCKET`     | R2 bucket for article assets                            | No (uses default) |
 | `R2_REGION`             | R2 region (default: "auto")                             | No                |
-| `R2_PUBLIC_URL_BASE`    | R2 public URL (default: "https://asset.politopics.net") | No                |
+| `R2_PUBLIC_ASSET_URL`   | R2 public URL (default: "https://asset.politopics.net") | No                |
 
 ## Storage Architecture
 

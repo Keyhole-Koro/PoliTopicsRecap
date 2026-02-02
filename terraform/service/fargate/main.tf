@@ -17,12 +17,12 @@ locals {
   }
 
   r2_env = local.r2_enabled ? {
-    R2_ENDPOINT_URL      = var.r2_endpoint_url
+    R2_WRITE_ENDPOINT_URL = var.r2_endpoint_url
     R2_REGION            = var.r2_region
     R2_ACCESS_KEY_ID     = var.r2_access_key_id
     R2_SECRET_ACCESS_KEY = var.r2_secret_access_key
     R2_ARTICLE_BUCKET    = var.r2_article_bucket
-    R2_PUBLIC_URL_BASE   = var.r2_public_url_base
+    R2_PUBLIC_ASSET_URL  = var.r2_public_url_base
   } : {}
 
   env_vars_raw = merge(local.base_env, local.r2_env, var.extra_environment_variables)

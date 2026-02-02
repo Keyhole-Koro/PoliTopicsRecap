@@ -83,12 +83,12 @@ batch: {
 | `DISCORD_WEBHOOK_ERROR` | エラー通知Webhook                                            | Yes                 |
 | `DISCORD_WEBHOOK_WARN`  | 警告通知Webhook                                              | Yes                 |
 | `DISCORD_WEBHOOK_BATCH` | バッチ通知Webhook                                            | Yes                 |
-| `R2_ENDPOINT_URL`       | Cloudflare R2エンドポイント                                  | Yes (prod/stage)    |
+| `R2_WRITE_ENDPOINT_URL` | Cloudflare R2エンドポイント                                  | Yes (prod/stage)    |
 | `R2_ACCESS_KEY_ID`      | R2アクセスキーID                                             | Yes (prod/stage)    |
 | `R2_SECRET_ACCESS_KEY`  | R2シークレットアクセスキー                                   | Yes (prod/stage)    |
 | `R2_ARTICLE_BUCKET`     | R2記事アセットバケット                                       | No (デフォルト使用) |
 | `R2_REGION`             | R2リージョン (デフォルト: "auto")                            | No                  |
-| `R2_PUBLIC_URL_BASE`    | R2パブリックURL (デフォルト: "https://asset.politopics.net") | No                  |
+| `R2_PUBLIC_ASSET_URL`   | R2パブリックURL (デフォルト: "https://asset.politopics.net") | No                  |
 
 ## ストレージアーキテクチャ
 
