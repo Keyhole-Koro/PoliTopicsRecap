@@ -1,6 +1,6 @@
 aws_region                 = "ap-northeast-3"
 environment                = "prod"
-prompt_bucket_name         = "politopics-data-collection-prompts-prod"
+prompt_bucket_name         = "politopics-llm-artifacts-prod"
 article_asset_bucket_name  = "politopics-articles-prod"
 politopics_table_name      = "politopics-prod"
 task_table_name            = "politopics-llm-tasks-prod"

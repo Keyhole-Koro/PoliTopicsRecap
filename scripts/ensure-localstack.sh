@@ -107,7 +107,7 @@ check_log_group() {
 echo "[ensure-localstack] Checking Recap LocalStack resources at $LOCALSTACK_URL"
 
 # Core resources required for batch processing
-check_bucket "politopics-prompts"
+check_bucket "politopics-llm-artifacts-local"
 check_bucket "politopics-articles-local"
 check_bucket "politopics-recap-local-state"
 check_table "politopics-local"

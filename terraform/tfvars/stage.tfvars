@@ -1,6 +1,6 @@
 aws_region                 = "ap-northeast-3"
 environment                = "stage"
-prompt_bucket_name         = "politopics-data-collection-prompts-stage"
+prompt_bucket_name         = "politopics-llm-artifacts-stage"
 article_asset_bucket_name  = "politopics-articles-stage"
 politopics_table_name      = "politopics-stage"
 task_table_name            = "politopics-llm-tasks-stage"

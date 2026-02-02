@@ -8,8 +8,9 @@ import {
   ObjectCannedACL,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
+import { appConfig } from '../config';
 
-export const PROMPT_BUCKET = 'politopics-prompts';
+export const PROMPT_BUCKET = appConfig.promptBucketName;
 
 /**
  * Parse an S3 URI like `s3://bucket/key...` into { bucket, key }.

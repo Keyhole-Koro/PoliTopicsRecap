@@ -43,7 +43,7 @@ variable "tags" {
 variable "prompt_bucket_name" {
   description = "S3 bucket name used for prompt storage"
   type        = string
-  default     = "politopics-prompts"
+  default     = "politopics-llm-artifacts-local"
 }
 
 variable "article_asset_bucket_name" {

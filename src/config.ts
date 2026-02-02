@@ -121,7 +121,7 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
     },
     taskTableName: "politopics-llm-tasks-local",
     taskStatusIndexName: "StatusIndex",
-    promptBucketName: "politopics-prompts",
+    promptBucketName: "politopics-llm-artifacts-local",
     articleTableName: "politopics-local",
     articleAssetBucketName: "politopics-articles-local",
     r2: {
@@ -178,7 +178,7 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     },
     taskTableName: "politopics-llm-tasks-stage",
     taskStatusIndexName: "StatusIndex",
-    promptBucketName: "politopics-prompts-stage",
+    promptBucketName: "politopics-llm-artifacts-stage",
     articleTableName: "politopics-stage",
     articleAssetBucketName: "politopics-articles-stage",
     r2: {
@@ -238,7 +238,7 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
     },
     taskTableName: "politopics-llm-tasks-prod",
     taskStatusIndexName: "StatusIndex",
-    promptBucketName: "politopics-prompts-prod",
+    promptBucketName: "politopics-llm-artifacts-prod",
     articleTableName: "politopics-prod",
     articleAssetBucketName: "politopics-articles-prod",
     r2: {
@@ -301,7 +301,7 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
     },
     taskTableName: optionalEnv("TASK_TABLE_NAME") || "politopics-llm-tasks-local",
     taskStatusIndexName: "StatusIndex",
-    promptBucketName: optionalEnv("PROMPT_BUCKET_NAME") || "politopics-prompts",
+    promptBucketName: optionalEnv("PROMPT_BUCKET_NAME") || "politopics-llm-artifacts-local",
     articleTableName: optionalEnv("ARTICLE_TABLE_NAME") || "politopics-local",
     articleAssetBucketName: optionalEnv("ARTICLE_ASSET_BUCKET_NAME") || "politopics-articles-local",
     r2: {

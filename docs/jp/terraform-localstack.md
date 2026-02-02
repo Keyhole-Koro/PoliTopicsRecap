@@ -57,7 +57,7 @@
 # LocalStack 内のすべての S3 バケットをリスト
 aws --no-cli-pager --endpoint-url http://localstack:4566 --region ap-northeast-3 s3api list-buckets
 
-aws --endpoint-url http://localstack:4566   s3 ls s3://politopics-prompts/demo/<path> \
+aws --endpoint-url http://localstack:4566   s3 ls s3://politopics-llm-artifacts-local/demo/<path> \
    --recursive \
    --human-readable \
    --summarize

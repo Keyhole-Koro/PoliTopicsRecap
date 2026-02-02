@@ -8,11 +8,12 @@ import {
   ObjectCannedACL,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
+import { appConfig } from '../config';
 
 // R2 is S3-compatible, so we reuse the S3Client but alias it for clarity.
 export type R2Client = S3Client;
 
-export const PROMPT_BUCKET = 'politopics-prompts';
+export const PROMPT_BUCKET = appConfig.promptBucketName;
 
 /**
  * Parse an R2 URI like `s3://bucket/key...` into { bucket, key }.
