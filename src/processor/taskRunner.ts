@@ -328,7 +328,7 @@ function extractErrorText(error: unknown): string {
   if (typeof error === "string") return error;
   if (error instanceof Error) {
     const parts = [error.name, error.message];
-    const anyErr = error as Record<string, unknown>;
+    const anyErr = error as unknown as Record<string, unknown>;
     if (anyErr.status) parts.push(String(anyErr.status));
     if (anyErr.statusText) parts.push(String(anyErr.statusText));
     if (anyErr.errorDetails) {
@@ -355,7 +355,7 @@ function extractErrorStatus(error: unknown): number | null {
 
 function serializeError(error: unknown): Record<string, unknown> | string {
   if (error instanceof Error) {
-    const anyErr = error as Record<string, unknown>;
+    const anyErr = error as unknown as Record<string, unknown>;
     return {
       name: error.name,
       message: error.message,
