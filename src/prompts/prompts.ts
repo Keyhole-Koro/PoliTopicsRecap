@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "1.0";
+export const PROMPT_VERSION = "2.0";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -18,6 +18,11 @@ export const instruction_common = `【目的】
 - 数値/期限/担当がある場合は GFM 表（| 区切り）で整理する。該当なしの場合は表を出さない。
 - JSON 文字列内の改行は \\n を使う（実際の改行・コードフェンス・HTMLは不可）。
 - dialogs の各発言には、発言の性質を表す reaction を必ず付与すること（賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ）。
+- dialogs の summary / soft_language は、要点を必要な分だけ箇条書き（-）で記述する。
+- 質問→回答が明確な場合、回答側の dialog に qa を付与する（質問側は reaction=質問のみで可）。
+  - qa.ask.question は「質問内容」そのものを記述する（例: "△△について今後の方針は？"）。
+  - qa.ask.who は質問者名、qa.ask.orders は質問の order 配列（number[]）。
+  - qa.answer は回答要旨、qa.answer_orders は回答の order 配列（number[]）。
 - summary / soft_language_summary / middle_summary の本文には (order: 1) のような注記は書かない。order参照は本文末尾に \`[[orders:1,2,3]]\` のみ許可（数字・カンマ・ハイフンのみ、空白なし）。
 - すべての出力に prompt_version を含める（現在値: ${PROMPT_VERSION}）。`;
 
@@ -78,8 +83,17 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
   "dialogs": [
     {
       "order": 1,
-      "summary": "発言内容の要約",
-      "soft_language": "原文を崩さずやさしく言い換えた文章",
+      "summary": "- 要点1\\n- 要点2",
+      "soft_language": "- やさしい言い換え1\\n- やさしい言い換え2",
+      "qa": {
+        "ask": {
+          "question": "△△について今後の方針は？",
+          "who": "〇〇議員",
+          "orders": [1,2]
+        },
+        "answer": "□□大臣が…と回答",
+        "answer_orders": [3]
+      },
       "reaction": "賛成" / 賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ
     }
   ],
@@ -171,8 +185,17 @@ export const output_format_single_chunk = `### 出力フォーマット（single
   "dialogs": [
     {
       "order": 1,
-      "summary": "発言内容の要約",
-      "soft_language": "原文を崩さずやさしく言い換えた文章",
+      "summary": "- 要点1\\n- 要点2",
+      "soft_language": "- やさしい言い換え1\\n- やさしい言い換え2",
+      "qa": {
+        "ask": {
+          "question": "△△について今後の方針は？",
+          "who": "〇〇議員",
+          "orders": [1,2]
+        },
+        "answer": "□□大臣が…と回答",
+        "answer_orders": [3]
+      },
       "reaction": "賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ"
     }
   ],

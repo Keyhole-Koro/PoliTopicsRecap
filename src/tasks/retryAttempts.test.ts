@@ -113,7 +113,7 @@ function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
     createdAt: "2025-01-01T00:00:00Z",
     updatedAt: "2025-01-01",
     processingMode: "single_chunk",
-    prompt_version: "1.0",
+    prompt_version: "2.0",
     prompt_url: "s3://bucket/prompts/reduce/ISSUE-1.json",
     result_url: "s3://bucket/results/ISSUE-1_reduce.json",
     meeting: {
@@ -185,7 +185,7 @@ describe("retryAttempts", () => {
 
     const preparedTask: TaskItem = buildTask({
       status: "pending",
-      prompt_version: "1.0",
+      prompt_version: "2.0",
     });
 
     prepareTaskFromRawMock.mockResolvedValueOnce(preparedTask);
@@ -204,14 +204,14 @@ describe("retryAttempts", () => {
 
   it("remakes tasks when major prompt version changes", async () => {
     const mismatchedTask: TaskItem = buildTask({
-      prompt_version: "2.0",
+      prompt_version: "1.1",
       raw_url: "s3://bucket/raw/ISSUE-1.json",
       raw_hash: "hash",
     });
 
     const preparedTask: TaskItem = buildTask({
       status: "remake",
-      prompt_version: "1.0",
+      prompt_version: "2.0",
     });
 
     prepareTaskFromRawMock.mockResolvedValueOnce(preparedTask);

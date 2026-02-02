@@ -11,6 +11,16 @@ export type Dialog = {
   order: number;
   summary: string;
   soft_language: string;
+  reaction?: "賛成" | "反対" | "質問" | "回答" | "中立";
+  qa?: {
+    ask: {
+      question: string;
+      who: string;
+      orders: number[];
+    };
+    answer: string;
+    answer_orders: number[];
+  };
   original_text: string;
   speaker: string;
   speakerYomi?: string | null;
