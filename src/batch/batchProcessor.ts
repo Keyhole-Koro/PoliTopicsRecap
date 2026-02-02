@@ -9,7 +9,7 @@ import {
   type TaskRepositoryConfig,
 } from "../tasks/taskRepository";
 import { notifyBatchComplete } from "../processor/notifications";
-import { processTask } from "../processor/taskRunner";
+import { processTask, requeueCompletedTasksWithMajorMismatch } from "../processor/taskRunner";
 
 export interface BatchStats {
   processed: number;
@@ -30,6 +30,8 @@ export interface BatchContext {
   stats: BatchStats;
 }
 
+const MAX_REQUEUE_COMPLETED = 50;
+
 export class BatchProcessor {
   constructor(private ctx: BatchContext) {}
 
@@ -37,8 +39,22 @@ export class BatchProcessor {
     const { config, docClient, repoConfig, rateLimiter, stats } = this.ctx;
 
     // Calculate max tasks to process
-    const readyCount = await countReadyTasks(docClient, repoConfig);
+    let readyCount = await countReadyTasks(docClient, repoConfig);
     const maxTasks = this.calculateMaxTasks(config, readyCount);
+    const requeueTarget = Math.max(0, maxTasks - readyCount);
+    const requeueLimit = Math.min(requeueTarget, MAX_REQUEUE_COMPLETED);
+    if (requeueLimit > 0) {
+      if (requeueTarget > MAX_REQUEUE_COMPLETED) {
+        console.log(
+          `[BatchProcessor] Requeue target capped at ${MAX_REQUEUE_COMPLETED} (requested ${requeueTarget})`,
+        );
+      }
+      const requeued = await requeueCompletedTasksWithMajorMismatch(this.ctx, requeueLimit);
+      if (requeued > 0) {
+        readyCount = await countReadyTasks(docClient, repoConfig);
+        console.log(`[BatchProcessor] Requeued ${requeued} completed tasks (major prompt mismatch)`);
+      }
+    }
     console.log(`[BatchProcessor] Found ${readyCount} ready tasks, will process up to ${maxTasks}`);
 
     let consecutiveErrors = 0;

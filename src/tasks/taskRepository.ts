@@ -113,6 +113,55 @@ export async function countReadyTasks(
   return pending + remake;
 }
 
+export async function fetchTasksByStatusPage(
+  doc: DynamoDBDocumentClient,
+  cfg: TaskRepositoryConfig,
+  status: string,
+  options?: {
+    startKey?: Record<string, any>;
+    limit?: number;
+    maxRetryAttempts?: number;
+  },
+): Promise<{ tasks: TaskItem[]; lastKey?: Record<string, any> }> {
+  const exprNames: Record<string, string> = { "#status": "status" };
+  const exprValues: Record<string, any> = { ":status": status };
+  const queryInput: {
+    TableName: string;
+    IndexName: string;
+    KeyConditionExpression: string;
+    ExpressionAttributeNames: Record<string, string>;
+    ExpressionAttributeValues: Record<string, any>;
+    ScanIndexForward: boolean;
+    Limit: number;
+    ExclusiveStartKey?: Record<string, any>;
+    FilterExpression?: string;
+  } = {
+    TableName: cfg.tableName,
+    IndexName: cfg.statusIndexName,
+    KeyConditionExpression: "#status = :status",
+    ExpressionAttributeNames: exprNames,
+    ExpressionAttributeValues: exprValues,
+    ScanIndexForward: true,
+    Limit: options?.limit ?? 25,
+  };
+
+  if (options?.maxRetryAttempts !== undefined) {
+    queryInput.FilterExpression = "attribute_not_exists(retryAttempts) OR retryAttempts < :maxAttempts";
+    exprValues[":maxAttempts"] = options.maxRetryAttempts;
+  }
+
+  if (options?.startKey) {
+    queryInput.ExclusiveStartKey = options.startKey;
+  }
+
+  const res = await doc.send(new QueryCommand(queryInput));
+  const tasks = (res.Items ?? [])
+    .map((item) => asTaskItem(item))
+    .filter((item): item is TaskItem => Boolean(item));
+
+  return { tasks, lastKey: res.LastEvaluatedKey };
+}
+
 export async function getTaskByIssue(
   doc: DynamoDBDocumentClient,
   cfg: TaskRepositoryConfig,

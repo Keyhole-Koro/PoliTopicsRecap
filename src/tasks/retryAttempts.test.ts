@@ -196,6 +196,7 @@ describe("retryAttempts", () => {
       expect.objectContaining({
         task: ingestedTask,
         status: "pending",
+        maxInputToken: baseConfig.geminiMaxInputToken,
       }),
     );
     expect(handleDirectTaskMock).toHaveBeenCalledTimes(1);
@@ -222,6 +223,7 @@ describe("retryAttempts", () => {
       expect.objectContaining({
         task: mismatchedTask,
         status: "remake",
+        maxInputToken: baseConfig.geminiMaxInputToken,
       }),
     );
     expect(handleDirectTaskMock).toHaveBeenCalledTimes(1);
@@ -251,7 +253,6 @@ describe("retryAttempts", () => {
         task,
         status: "remake",
         maxInputToken: 2800,
-        retryAttempts: task.retryAttempts ?? 0,
       }),
     );
     expect(result.status).toBe("skipped");

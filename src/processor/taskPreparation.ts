@@ -149,7 +149,9 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
 
   const now = new Date().toISOString();
   const llmModel = appConfig.geminiModel;
-  const retryAttempts = args.retryAttempts ?? 0;
+  const retryAttempts = status === "remake"
+    ? 0
+    : (args.retryAttempts ?? task.retryAttempts ?? 0);
   const next: TaskItem = {
     ...task,
     status,

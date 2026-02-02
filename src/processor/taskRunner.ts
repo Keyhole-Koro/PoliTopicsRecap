@@ -11,6 +11,7 @@ import {
 import {
   bumpRetryAttempts,
   fetchOldestReadyTask,
+  fetchTasksByStatusPage,
   type TaskRepositoryConfig,
 } from "../tasks/taskRepository";
 import type { TaskItem } from "../tasks/types";
@@ -49,6 +50,66 @@ export async function processNextPendingTask(
   return processTask(ctx, task);
 }
 
+export async function requeueCompletedTasksWithMajorMismatch(
+  ctx: TaskRunnerContext,
+  limit: number,
+): Promise<number> {
+  if (limit <= 0) return 0;
+
+  let requeued = 0;
+  let startKey: Record<string, any> | undefined = undefined;
+
+  while (requeued < limit) {
+    const pageLimit = Math.min(25, limit - requeued);
+    const { tasks, lastKey } = await fetchTasksByStatusPage(
+      ctx.docClient,
+      ctx.repoConfig,
+      "completed",
+      {
+        startKey,
+        limit: pageLimit,
+      },
+    );
+
+    if (tasks.length === 0) break;
+
+    for (const task of tasks) {
+      if (requeued >= limit) break;
+      if (!isMajorMismatch(PROMPT_VERSION, task.prompt_version)) {
+        continue;
+      }
+      if (!task.raw_url) {
+        console.warn(
+          `[TaskRunner] Completed task ${task.pk} has major prompt mismatch but no raw_url; skipping requeue`,
+        );
+        continue;
+      }
+      try {
+        const maxInputToken = computeMaxInputTokenForTask(task, ctx.config.geminiMaxInputToken);
+        await prepareTaskFromRaw({
+          task,
+          s3Client: ctx.s3Client,
+          docClient: ctx.docClient,
+          repoConfig: ctx.repoConfig,
+          status: "remake",
+          maxInputToken,
+        });
+        requeued += 1;
+      } catch (error) {
+        console.error("[TaskRunner] Failed to remake completed task", {
+          taskId: task.pk,
+          error: serializeError(error),
+        });
+      }
+    }
+
+    if (!lastKey) break;
+    startKey = lastKey;
+  }
+
+  return requeued;
+}
+
 export async function processTask(
   ctx: TaskRunnerContext,
   task: TaskItem,
@@ -61,12 +122,14 @@ export async function processTask(
 
   if (workingTask.status === "ingested") {
     try {
+      const maxInputToken = computeMaxInputTokenForTask(workingTask, ctx.config.geminiMaxInputToken);
       workingTask = await prepareTaskFromRaw({
         task: workingTask,
         s3Client: ctx.s3Client,
         docClient: ctx.docClient,
         repoConfig: ctx.repoConfig,
         status: "pending",
+        maxInputToken,
       });
     } catch (error) {
       console.error(`[TaskRunner] Failed to prepare ingested task ${workingTask.pk}`, {
@@ -79,12 +142,14 @@ export async function processTask(
   } else if (isMajorMismatch(PROMPT_VERSION, workingTask.prompt_version)) {
     if (workingTask.raw_url) {
       try {
+        const maxInputToken = computeMaxInputTokenForTask(workingTask, ctx.config.geminiMaxInputToken);
         workingTask = await prepareTaskFromRaw({
           task: workingTask,
           s3Client: ctx.s3Client,
           docClient: ctx.docClient,
           repoConfig: ctx.repoConfig,
           status: "remake",
+          maxInputToken,
         });
       } catch (error) {
         console.error(`[TaskRunner] Failed to remake task ${workingTask.pk}`, {
@@ -201,8 +266,9 @@ async function tryRemakeWithSmallerChunks(
   if (!task.raw_url) return null;
   if (!isTokenLimitError(error)) return null;
 
-  const currentMax = task.maxInputToken ?? ctx.config.geminiMaxInputToken;
-  const nextMax = computeReducedMaxInputToken(currentMax);
+  const currentMax = resolveBaseMaxInputToken(task, ctx.config.geminiMaxInputToken);
+  const reductionAttempts = (task.retryAttempts ?? 0) + 1;
+  const nextMax = applyRetryReduction(currentMax, reductionAttempts);
   if (!nextMax) {
     console.warn("[TaskRunner] Token limit error but cannot reduce maxInputToken further", {
       taskId: task.pk,
@@ -216,6 +282,7 @@ async function tryRemakeWithSmallerChunks(
     taskId: task.pk,
     currentMaxInputToken: currentMax,
     nextMaxInputToken: nextMax,
+    reductionAttempts,
   });
 
   try {
@@ -226,7 +293,6 @@ async function tryRemakeWithSmallerChunks(
       repoConfig: ctx.repoConfig,
       status: "remake",
       maxInputToken: nextMax,
-      retryAttempts: task.retryAttempts ?? 0,
     });
     return remadeTask;
   } catch (prepError) {
@@ -299,12 +365,27 @@ function buildTaskLogContext(task: TaskItem): Record<string, unknown> {
   };
 }
 
-function computeReducedMaxInputToken(current: number): number | null {
-  if (!Number.isFinite(current) || current <= MIN_INPUT_TOKENS) return null;
-  const reduced = Math.floor(current * TOKEN_REDUCTION_RATIO);
+function resolveBaseMaxInputToken(task: TaskItem, fallback: number): number {
+  if (typeof task.maxInputToken === "number" && Number.isFinite(task.maxInputToken)) {
+    return task.maxInputToken;
+  }
+  return fallback;
+}
+
+function applyRetryReduction(base: number, attempts: number): number | null {
+  if (!Number.isFinite(base) || base <= MIN_INPUT_TOKENS) return null;
+  if (!attempts || attempts <= 0) return base;
+  const reduced = Math.floor(base * Math.pow(TOKEN_REDUCTION_RATIO, attempts));
   const next = Math.max(MIN_INPUT_TOKENS, reduced);
-  if (next >= current) return null;
+  if (next >= base) return null;
   return next;
+}
+
+function computeMaxInputTokenForTask(task: TaskItem, fallback: number): number {
+  const base = resolveBaseMaxInputToken(task, fallback);
+  const attempts = task.retryAttempts ?? 0;
+  const reduced = applyRetryReduction(base, attempts);
+  return reduced ?? base;
 }
 
 function isTokenLimitError(error: unknown): boolean {
