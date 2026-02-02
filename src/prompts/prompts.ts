@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "2.1";
+export const PROMPT_VERSION = "2.5";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -18,12 +18,18 @@ export const instruction_common = `【目的】
 - 数値/期限/担当がある場合は GFM 表（| 区切り）で整理する。該当なしの場合は表を出さない。
 - JSON 文字列内の改行は \\n を使う（実際の改行・コードフェンス・HTMLは不可）。
 - dialogs の各発言には、発言の性質を表す reaction を必ず付与すること（賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ）。
-- dialogs の summary / soft_language は、要点を必要な分だけ箇条書き（-）で記述する。
+- dialogs の summary / soft_language は、要点を必要な分だけ箇条書き（-）で記述する。長くなる場合は「**主張**」「**説明**」「**質問**」「**回答**」「**根拠**」「**影響**」「**次の対応**」の短い見出しで整理し、見出しの下に箇条書きを置く（見出しはこの固定セットのみ）。
+- dialogs には summary_sections / soft_language_sections を追加してよい（推奨）。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ。
+- dialogs の summary / summary_sections / soft_language / soft_language_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は summary / summary_sections / soft_language / soft_language_sections に書かない。
+- summary_sections を使う場合、summary はセクションに含めない別の要点のみを短く入れる。同様に soft_language_sections を使う場合、soft_language はセクションに含めない別の要点のみを短く入れる。
+- soft_language は summary/summary_sections の言い換えだが、同一内容の二重記載は避け、要点の配分で重複を最小化する。
+- dialogs の soft_language は、日常語・です/ます調・短文でやさしく言い換える。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各項目は1文で短くし、冗長説明や強い断定・感情表現は禁止。
 - 質問→回答が明確な場合、回答側の dialog に qa（配列）を付与する（質問側は reaction=質問のみで可）。
   - qa は複数質問に対応するため配列にする。
   - qa[].ask.question は「質問内容」そのものを記述する（例: "△△について今後の方針は？"）。
   - qa[].ask.who は質問者名、qa[].ask.orders は質問の order 配列（number[]）。
   - qa[].answer は回答要旨、qa[].answer_orders は回答の order 配列（number[]）。
+  - qa[].ask.question / qa[].answer は1文で簡潔に。
 - summary / soft_language_summary / middle_summary の本文には (order: 1) のような注記は書かない。order参照は本文末尾に \`[[orders:1,2,3]]\` のみ許可（数字・カンマ・ハイフンのみ、空白なし）。
 - すべての出力に prompt_version を含める（現在値: ${PROMPT_VERSION}）。`;
 
@@ -84,8 +90,14 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
   "dialogs": [
     {
       "order": 1,
-      "summary": "- 要点1\\n- 要点2",
-      "soft_language": "- やさしい言い換え1\\n- やさしい言い換え2",
+      "summary": "**主張**\\n- 要点1",
+      "summary_sections": [
+        { "title": "説明", "bullets": ["要点2"] }
+      ],
+      "soft_language": "**主張**\\n- やさしい言い換え1",
+      "soft_language_sections": [
+        { "title": "説明", "bullets": ["やさしい言い換え2"] }
+      ],
       "qa": [
         {
           "ask": {
@@ -188,8 +200,14 @@ export const output_format_single_chunk = `### 出力フォーマット（single
   "dialogs": [
     {
       "order": 1,
-      "summary": "- 要点1\\n- 要点2",
-      "soft_language": "- やさしい言い換え1\\n- やさしい言い換え2",
+      "summary": "**主張**\\n- 要点1",
+      "summary_sections": [
+        { "title": "説明", "bullets": ["要点2"] }
+      ],
+      "soft_language": "**主張**\\n- やさしい言い換え1",
+      "soft_language_sections": [
+        { "title": "説明", "bullets": ["やさしい言い換え2"] }
+      ],
       "qa": [
         {
           "ask": {

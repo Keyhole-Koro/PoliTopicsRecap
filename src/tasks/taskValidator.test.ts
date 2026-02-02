@@ -34,7 +34,7 @@ function buildTask(overrides: Partial<TaskItem> = {}): TaskItem {
     createdAt: "2025-01-01T00:00:00Z",
     updatedAt: "2025-01-01T00:00:00Z",
     processingMode: "single_chunk",
-    prompt_version: "2.1",
+    prompt_version: "2.5",
     prompt_url: "s3://bucket/prompts/reduce/ISSUE-test.json",
     result_url: "s3://bucket/results/ISSUE-test_reduce.json",
     attachedAssets: {

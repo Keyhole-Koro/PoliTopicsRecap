@@ -15,25 +15,27 @@ flowchart LR
         RecapSchedule["EventBridge (Cron)<br>要約スケジュール"]
         RecapBatch["AWS Fargate タスク (Node.js)<br>RecapBatch"]
         S1["① バッチ開始<br>要約ジョブを起動"]
-        S2["② 未処理タスクを取得<br>TaskTable から読む"]
-        S3["③ 会議録を取得<br>PromptBucket から読む"]
-        S4["④ LLM で要約生成"]
-        S5["⑤ 結果を永続化"]
-        S6["⑥ タスクを完了に更新"]
+        S2["② Ready/ingested タスク取得<br>TaskTable から読む"]
+        S3["③ プロンプト/チャンク作成 (必要時)<br>pending/remake に更新"]
+        S4["④ raw/プロンプト/チャンク取得<br>LLMArtifactsBucket から読む"]
+        S5["⑤ LLM で要約生成"]
+        S6["⑥ 結果を永続化<br>R2 + ArticleTable + S3 results"]
+        S7["⑦ タスクを完了に更新"]
         AssetBucket[("Cloudflare R2 (S3 API)<br>AssetBucket")]
         TaskTable[("DynamoDB<br>TaskTable: llm_task_table")]
         ArticleTable[("DynamoDB<br>ArticleTable: politopics_article_table")]
-        PromptBucket[("Amazon S3<br>PromptBucket")]
+        LlmBucket[("Amazon S3<br>LLMArtifactsBucket<br>raw/prompts/results")]
   end
     RecapSchedule --> S1
     S1 --> RecapBatch
-    RecapBatch --> S2 & S3 & S4 & S5 & S6
+    RecapBatch --> S2 & S3 & S4 & S5 & S6 & S7
     S2 --> TaskTable
-    S3 --> PromptBucket
-    S4 --> GeminiAPI["外部<br>GeminiAPI<br>(LLM 要約)"] & RecapBatch
-    GeminiAPI --> S4
-    S5 --> AssetBucket & ArticleTable
-    S6 --> TaskTable
+    S3 --> LlmBucket & TaskTable
+    S4 --> LlmBucket
+    S5 --> GeminiAPI["外部<br>GeminiAPI<br>(LLM 要約)"] & RecapBatch
+    GeminiAPI --> S5
+    S6 --> AssetBucket & ArticleTable & LlmBucket
+    S7 --> TaskTable
 
      S1:::step
      S2:::step
@@ -41,6 +43,7 @@ flowchart LR
      S4:::step
      S5:::step
      S6:::step
+     S7:::step
     classDef step fill:#f9f9f9,stroke:#333,stroke-width:1.5px
 ```
 

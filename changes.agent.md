@@ -403,3 +403,32 @@ Files:
 - PoliTopicsRecap/src/prompts.for.llmtest.ts
 - docs/02_functional_spec.md
 - docs/jp/02_functional_spec.md
+
+Agent: Codex
+Date/Time: 2026-02-02 20:39 JST
+Keywords: prompts, dialog, soft_language, prompt_version, docs
+Topic: Make dialog paraphrases gentler and shorter
+Details:
+- Tightened prompt guidance for dialog summaries/soft_language to use short, gentle, plain language and concise Q&A.
+- Bumped prompt version to 2.5 and updated related tests.
+- Documented dialog summary brevity guidance in the functional spec.
+Files:
+- PoliTopicsRecap/src/dynamoDB/article.d.ts
+- PoliTopicsRecap/src/prompts/prompts.ts
+- PoliTopicsRecap/src/prompts.for.llmtest.ts
+- PoliTopicsRecap/src/tasks/taskRepository.test.ts
+- PoliTopicsRecap/src/tasks/taskValidator.test.ts
+- PoliTopicsRecap/src/tasks/tasks.localstack.test.ts
+- PoliTopicsRecap/src/tasks/retryAttempts.test.ts
+- docs/02_functional_spec.md
+- docs/jp/02_functional_spec.md
+- docs/08_db_design.md
+- docs/jp/08_db_design.md
+- PoliTopicsRecap/changes.agent.md
+
+### Changes After Review
+- Removed the fixed 3-bullet cap for dialog summaries and added optional short section labels (e.g., 主張/説明/質問/回答) when longer.
+- Reinforced short, gentle sentences for soft_language and bumped prompt_version to 2.5 with test updates.
+- Added optional dialog section arrays (summary_sections / soft_language_sections) to the prompt schema and docs for UI rendering.
+- Fixed dialog section titles to a defined schema set and required summary/sections/QA to avoid overlapping content.
+- Updated functional spec wording to match the new dialog guidance.

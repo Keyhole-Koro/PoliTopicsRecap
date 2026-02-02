@@ -15,25 +15,27 @@ flowchart LR
         RecapSchedule["EventBridge (Cron)<br>RecapSchedule"]
         RecapBatch["AWS Fargate Task (Node.js)<br>RecapBatch"]
         S1["① Start Batch<br>Trigger Recap Job"]
-        S2["② Fetch Pending Task<br>from TaskTable"]
-        S3["③ Load Transcript<br>from PromptBucket"]
-        S4["④ Summarize via LLM"]
-        S5["⑤ Persist Results"]
-        S6["⑥ Update Task Status as Completed"]
+        S2["② Fetch Ready/Ingested Tasks<br>from TaskTable"]
+        S3["③ Build Prompts/Chunks (if needed)<br>update task to pending/remake"]
+        S4["④ Load Raw/Prompt/Chunks<br>from LLMArtifactsBucket"]
+        S5["⑤ Summarize via LLM"]
+        S6["⑥ Persist Results<br>R2 assets + ArticleTable + S3 results"]
+        S7["⑦ Update Task Status as Completed"]
         AssetBucket[("Cloudflare R2 (S3 API)<br>AssetBucket")]
         TaskTable[("DynamoDB<br>TaskTable: llm_task_table")]
         ArticleTable[("DynamoDB<br>ArticleTable: politopics_article_table")]
-        PromptBucket[("Amazon S3<br>PromptBucket")]
+        LlmBucket[("Amazon S3<br>LLMArtifactsBucket<br>raw/prompts/results")]
   end
     RecapSchedule --> S1
     S1 --> RecapBatch
-    RecapBatch --> S2 & S3 & S4 & S5 & S6
+    RecapBatch --> S2 & S3 & S4 & S5 & S6 & S7
     S2 --> TaskTable
-    S3 --> PromptBucket
-    S4 --> GeminiAPI["External<br>GeminiAPI<br>(LLM Summarization)"] & RecapBatch
-    GeminiAPI --> S4
-    S5 --> AssetBucket & ArticleTable
-    S6 --> TaskTable
+    S3 --> LlmBucket & TaskTable
+    S4 --> LlmBucket
+    S5 --> GeminiAPI["External<br>GeminiAPI<br>(LLM Summarization)"] & RecapBatch
+    GeminiAPI --> S5
+    S6 --> AssetBucket & ArticleTable & LlmBucket
+    S7 --> TaskTable
 
      S1:::step
      S2:::step
@@ -41,6 +43,7 @@ flowchart LR
      S4:::step
      S5:::step
      S6:::step
+     S7:::step
     classDef step fill:#f9f9f9,stroke:#333,stroke-width:1.5px
 ```
 
