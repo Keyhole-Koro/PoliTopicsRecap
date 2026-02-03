@@ -19,7 +19,13 @@ export type DialogSectionTitle =
 
 export type DialogSection = {
   title: DialogSectionTitle;
-  bullets: string[];
+  bullets: DialogSectionBullet[];
+};
+
+export type DialogSectionBullet = {
+  point: string;
+  quote?: string;
+  detail?: string;
 };
 
 export type Dialog = {

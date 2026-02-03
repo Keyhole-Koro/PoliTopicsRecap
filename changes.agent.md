@@ -387,6 +387,17 @@ Details:
   - `PoliTopicsRecap/src/dynamoDB/dbKeys.ts`
   - `PoliTopicsRecap/src/dynamoDB/storeData.ts`
   - `PoliTopicsRecap/src/dynamoDB/storeData.test.ts`
+
+Agent: Codex
+Date/Time: 2026-02-03 11:20 JST
+Keywords: prompts, dialogs, schema
+Topic: Structure dialog bullets with quotes and details
+Details:
+- Updated dialog section bullets to be structured objects (point/quote/detail).
+- Adjusted prompt instructions/examples to require the structured format.
+- Files changed:
+  - `PoliTopicsRecap/src/prompts/prompts.ts`
+  - `PoliTopicsRecap/src/dynamoDB/article.d.ts`
 - docs/08_db_design.md
 - docs/jp/08_db_design.md
 

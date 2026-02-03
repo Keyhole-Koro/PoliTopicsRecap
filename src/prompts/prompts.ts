@@ -20,7 +20,9 @@ export const instruction_common = `【目的】
 - id は入力の [meta] にある内部IDをそのまま出力すること（issueIDと一致しない場合がある）。
 - dialogs の各発言には、発言の性質を表す reaction を必ず付与すること（賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ）。
 - dialogs は summary_sections のみで要点を表現する（summary / soft_language は出力しない）。
-- summary_sections は必須。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
+- summary_sections は必須。各要素は { "title": "主張", "bullets": [{ "point": "...", "quote": "...", "detail": "..." }] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
+- bullets の要素は **オブジェクト**。point は必須。quote / detail は任意だが、可能な限り両方埋めること。
+- quote は発言原文に忠実な短い引用（40文字以内）。detail は要点の補足（1〜2文）。
 - dialogs の summary_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は section に書かない。
 - dialogs は入力の [order N] ごとに **必ず1件ずつ** 出力する（欠落・重複は禁止）。order 値は入力の [order N] と完全一致させる。
 - soft_language_summary は箇条書きにせず、短い文章で書く（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各文は短くし、冗長説明や強い断定・感情表現は禁止。
@@ -94,9 +96,9 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
     {
       "order": 1,
       "summary_sections": [
-        { "title": "主張", "bullets": ["要点1"] },
-        { "title": "説明", "bullets": ["要点2"] },
-        { "title": "決定", "bullets": ["合意した方針"] }
+        { "title": "主張", "bullets": [{ "point": "要点1", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] },
+        { "title": "説明", "bullets": [{ "point": "要点2", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] },
+        { "title": "決定", "bullets": [{ "point": "合意した方針", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] }
       ],
       "qa": [
         {
@@ -201,9 +203,9 @@ export const output_format_single_chunk = `### 出力フォーマット（single
     {
       "order": 1,
       "summary_sections": [
-        { "title": "主張", "bullets": ["要点1"] },
-        { "title": "説明", "bullets": ["要点2"] },
-        { "title": "決定", "bullets": ["合意した方針"] }
+        { "title": "主張", "bullets": [{ "point": "要点1", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] },
+        { "title": "説明", "bullets": [{ "point": "要点2", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] },
+        { "title": "決定", "bullets": [{ "point": "合意した方針", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] }
       ],
       "qa": [
         {
