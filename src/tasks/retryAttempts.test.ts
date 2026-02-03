@@ -72,7 +72,8 @@ const baseConfig: AppConfig = {
   },
   geminiApiKey: "test-key",
   geminiModel: "gemini-2.5-flash",
-  geminiMaxInputToken: 4096,
+  geminiMaxInputToken: 64000,
+  geminiMaxOutputToken: 64000,
   notifications: {
     errorWebhook: "",
     warnWebhook: "",

@@ -103,6 +103,8 @@ batch: {
 | ----------------------- | ------------------------------------------------------------ | ------------------- |
 | `APP_ENVIRONMENT`       | 環境 (prod/stage/local)                                      | Yes                 |
 | `GEMINI_API_KEY`        | Gemini APIキー                                               | Yes (prod/stage)    |
+| `GEMINI_MAX_INPUT_TOKEN`  | Gemini入力上限 (prod/stageデフォルト: 64000)               | No                  |
+| `GEMINI_MAX_OUTPUT_TOKEN` | Gemini出力上限 (デフォルト: 64000)                          | No                  |
 | `DISCORD_WEBHOOK_ERROR` | エラー通知Webhook                                            | Yes                 |
 | `DISCORD_WEBHOOK_WARN`  | 警告通知Webhook                                              | Yes                 |
 | `DISCORD_WEBHOOK_BATCH` | バッチ通知Webhook                                            | Yes                 |

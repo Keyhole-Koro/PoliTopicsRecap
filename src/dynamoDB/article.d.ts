@@ -25,7 +25,6 @@ export type DialogSection = {
 export type Dialog = {
   order: number;
   summary_sections: DialogSection[];
-  soft_language_sections: DialogSection[];
   reaction?: "賛成" | "反対" | "質問" | "回答" | "中立";
   qa?: {
     ask: {

@@ -186,9 +186,6 @@ export function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: S
       ...(Array.isArray(dialog.summary_sections)
         ? dialog.summary_sections.flatMap((section) => section.bullets)
         : []),
-      ...(Array.isArray(dialog.soft_language_sections)
-        ? dialog.soft_language_sections.flatMap((section) => section.bullets)
-        : []),
     ];
     return candidates.find((value) => typeof value === "string" && value.trim().length > 0);
   };
@@ -200,9 +197,6 @@ export function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: S
     }
     if (!Array.isArray(dialog.summary_sections) || dialog.summary_sections.length === 0) {
       errors.push("Each dialog must include summary_sections");
-    }
-    if (!Array.isArray(dialog.soft_language_sections) || dialog.soft_language_sections.length === 0) {
-      errors.push("Each dialog must include soft_language_sections");
     }
 
     if (!hasValidOrder) {

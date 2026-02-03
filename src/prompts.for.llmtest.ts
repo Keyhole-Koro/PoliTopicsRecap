@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "3.6";
+export const PROMPT_VERSION = "6.0";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -12,10 +12,10 @@ export const instruction_common = `【目的】
 - すべての要点に based_on_orders（発言 order 配列）を付与。
 - 余談や定型挨拶は除外。推測や創作は禁止。
 - summary / middle_summary は Markdown の機能を自由に使ってよい。
-- dialogs は summary_sections / soft_language_sections のみで要点を表現する（summary / soft_language は出力しない）。
-- summary_sections / soft_language_sections は必須。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
-- dialogs の summary_sections / soft_language_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は両sectionに書かない。
-- soft_language_summary / soft_language_sections は箇条書きにせず、短い文章で書く（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各文は短くし、冗長説明や強い断定・感情表現は禁止。
+- dialogs は summary_sections のみで要点を表現する（summary / soft_language は出力しない）。
+- summary_sections は必須。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
+- dialogs の summary_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は section に書かない。
+- soft_language_summary は箇条書きにせず、短い文章で書く（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各文は短くし、冗長説明や強い断定・感情表現は禁止。
 - 質問→回答が明確な場合、回答側の dialog に qa（配列）を付与する（質問側は reaction=質問のみで可）。
   - qa は複数質問に対応するため配列にする。
   - qa[].ask.question は「質問内容」そのものを記述する。
@@ -76,11 +76,6 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
         { "title": "主張", "bullets": ["要点1"] },
         { "title": "説明", "bullets": ["要点2"] },
         { "title": "決定", "bullets": ["合意した方針"] }
-      ],
-      "soft_language_sections": [
-        { "title": "主張", "bullets": ["やさしい言い換え1です。"] },
-        { "title": "説明", "bullets": ["やさしい言い換え2です。"] },
-        { "title": "決定", "bullets": ["決まったことをやさしく書いた文です。"] }
       ],
       "qa": [
         {

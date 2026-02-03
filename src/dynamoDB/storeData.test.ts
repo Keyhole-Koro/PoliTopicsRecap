@@ -195,7 +195,6 @@ describe('storeData (mocked client)', () => {
     dialogs: [{
       order: 1,
       summary_sections: [{ title: "主張", bullets: ["Aliceが予算の遅れを指摘"] }],
-      soft_language_sections: [{ title: "主張", bullets: ["Aliceさんは落ち着いた口調で遅延を確認しました"] }],
       original_text: 'Aliceが予算の遅れを指摘して、対応が必要だよねって話だったよ。',
       speaker: 'Alice',
     }],
@@ -339,7 +338,6 @@ function buildArticle(id: string): Article {
     dialogs: [{
       order: 1,
       summary_sections: [{ title: "主張", bullets: ["Aliceが予算の遅れを指摘"] }],
-      soft_language_sections: [{ title: "主張", bullets: ["Aliceさんは落ち着いた口調で遅延を確認しました"] }],
       original_text: 'Aliceが予算の遅れを指摘して、対応が必要だよねって話だったよ。',
       speaker: 'Alice',
     }],

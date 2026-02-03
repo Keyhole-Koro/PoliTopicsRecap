@@ -54,6 +54,7 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
 
     const llmResult = await llmClient.generate({
       messages: [{ role: "user", content: promptText }],
+      maxOutputTokens: appConfig.geminiMaxOutputToken,
     });
     console.log(`[TaskProcessor] LLM response for ${task.pk} (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
 
@@ -105,6 +106,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
       
       const llmResult = await llmClient.generate({
         messages: [{ role: "user", content: promptText }],
+        maxOutputTokens: appConfig.geminiMaxOutputToken,
       });
       console.log(`[TaskProcessor] Chunk LLM response (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
 
@@ -133,6 +135,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
 
     const reduceResult = await llmClient.generate({
       messages: [{ role: "user", content: reducePrompt }],
+      maxOutputTokens: appConfig.geminiMaxOutputToken,
     });
     console.log(`[TaskProcessor] Reduce LLM response (${reduceResult.text.length} chars). Preview: ${reduceResult.text.slice(0, 100)}...`);
 
@@ -209,6 +212,7 @@ async function persistArticleIfPossible(
       throw new Error("Reduced payload is missing soft_language_summary");
     }
     const { prompt_version: _promptVersion, ...articlePayload } = rawArticle;
+    assertDialogOrdersComplete(articlePayload.dialogs, meeting);
     const normalizedKeyPoints = Array.isArray(articlePayload.key_points)
       ? articlePayload.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
       : [];
@@ -245,6 +249,51 @@ async function persistArticleIfPossible(
     }
     return { persisted: false, reason, payloadDumpUri };
   }
+}
+
+function assertDialogOrdersComplete(
+  dialogs: Article["dialogs"] | undefined,
+  meeting?: TaskItem["meeting"],
+): void {
+  const expectedCount = meeting?.numberOfSpeeches;
+  if (!expectedCount || !Number.isFinite(expectedCount) || expectedCount <= 0) {
+    return;
+  }
+  if (!Array.isArray(dialogs)) {
+    throw new Error(`Dialogs must be an array to validate orders (expected ${expectedCount})`);
+  }
+
+  const counts = new Map<number, number>();
+  for (const dialog of dialogs) {
+    const order = (dialog as { order?: number }).order;
+    if (typeof order !== "number" || !Number.isFinite(order)) {
+      continue;
+    }
+    counts.set(order, (counts.get(order) ?? 0) + 1);
+  }
+
+  const missing: number[] = [];
+  for (let i = 1; i <= expectedCount; i += 1) {
+    if (!counts.has(i)) missing.push(i);
+  }
+
+  const duplicates = Array.from(counts.entries())
+    .filter(([, count]) => count > 1)
+    .map(([order, count]) => `${order}(${count})`);
+  const extras = Array.from(counts.keys()).filter((order) => order < 1 || order > expectedCount);
+
+  if (missing.length === 0 && duplicates.length === 0 && extras.length === 0) {
+    return;
+  }
+
+  const issue = meeting?.issueID ?? "unknown";
+  const parts = [
+    `Dialog orders incomplete for ${issue}`,
+    missing.length ? `missing=${missing.join(",")}` : null,
+    duplicates.length ? `duplicates=${duplicates.join(",")}` : null,
+    extras.length ? `extras=${extras.join(",")}` : null,
+  ].filter(Boolean);
+  throw new Error(parts.join(" "));
 }
 
 function sanitizeJsonPayload(payloadText: string): string {

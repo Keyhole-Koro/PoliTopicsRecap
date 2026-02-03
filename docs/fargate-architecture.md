@@ -103,6 +103,8 @@ batch: {
 | ----------------------- | ------------------------------------------------------- | ----------------- |
 | `APP_ENVIRONMENT`       | Environment (prod/stage/local)                          | Yes               |
 | `GEMINI_API_KEY`        | Gemini API key                                          | Yes (prod/stage)  |
+| `GEMINI_MAX_INPUT_TOKEN`  | Gemini max input tokens (default: 64000 in prod/stage) | No               |
+| `GEMINI_MAX_OUTPUT_TOKEN` | Gemini max output tokens (default: 64000)               | No               |
 | `DISCORD_WEBHOOK_ERROR` | Error notification webhook                              | Yes               |
 | `DISCORD_WEBHOOK_WARN`  | Warning notification webhook                            | Yes               |
 | `DISCORD_WEBHOOK_BATCH` | Batch notification webhook                              | Yes               |
