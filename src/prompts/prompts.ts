@@ -22,9 +22,12 @@ export const instruction_common = `【目的】
 - dialogs は summary_sections のみで要点を表現する（summary / soft_language は出力しない）。
 - summary_sections は必須。各要素は { "title": "主張", "bullets": [{ "point": "...", "quote": "...", "detail": "..." }] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
 - bullets の要素は **オブジェクト**。point / quote / detail は**全て必須**で省略禁止。
-- quote は発言原文に忠実な引用。detail は要点の補足で、読者の理解補助が目的。
+- point は「要点」ではなく **「〜について…」の形で主題を示す**（例: "家計支援について、低所得層への直接支援が必要と述べた"）。
+- quote は発言原文に忠実な短い引用（40文字以内）。
+- detail は読者の理解補助を目的に **詳しめに1〜5行**（改行は \\n）で記述する。
 - dialogs の summary_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は section に書かない。
 - dialogs は入力の [order N] ごとに **必ず1件ずつ** 出力する（欠落・重複は禁止）。order 値は入力の [order N] と完全一致させる。
+- 内容が抽出できない場合でも **必ず dialog を出力**し、summary_sections の bullets は最低1件を作る（point/quote/detail は空欄禁止。例: point="要点抽出不可", quote="(原文から引用不可)", detail="原文が短く要点化が難しいため最低限の記載"）。
 - soft_language_summary は箇条書きにせず、短い文章で書く（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各文は短くし、冗長説明や強い断定・感情表現は禁止。
 - 質問→回答が明確な場合、回答側の dialog に qa（配列）を付与する（質問側は reaction=質問のみで可）。
   - qa は複数質問に対応するため配列にする。
