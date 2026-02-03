@@ -288,6 +288,20 @@ function assertDialogOrdersComplete(
     return;
   }
 
+  const maxExpected = expectedOrders.length > 0 ? Math.max(...expectedOrders) : null;
+  if (
+    missing.length === 1 &&
+    duplicates.length === 0 &&
+    extras.length === 0 &&
+    maxExpected !== null &&
+    missing[0] === maxExpected
+  ) {
+    console.warn(
+      `[taskProcessor] Allowing missing last dialog order ${maxExpected} for ${meeting?.issueID ?? "unknown"}`
+    );
+    return;
+  }
+
   const issue = meeting?.issueID ?? "unknown";
   const parts = [
     `Dialog orders incomplete for ${issue}`,

@@ -408,6 +408,15 @@ Details:
 - Files changed:
   - `PoliTopicsRecap/src/processor/taskPreparation.ts`
   - `PoliTopicsRecap/src/processor/speakerMetadata.ts`
+
+Agent: Codex
+Date/Time: 2026-02-03 12:25 JST
+Keywords: dialogs, validation, recap
+Topic: Allow missing last dialog order
+Details:
+- Permitted a single missing dialog when it is the final expected order to reduce false negatives.
+- Files changed:
+  - `PoliTopicsRecap/src/processor/taskProcessor.ts`
 - docs/08_db_design.md
 - docs/jp/08_db_design.md
 
