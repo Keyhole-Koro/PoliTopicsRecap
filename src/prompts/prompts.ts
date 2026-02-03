@@ -22,7 +22,7 @@ export const instruction_common = `【目的】
 - dialogs は summary_sections のみで要点を表現する（summary / soft_language は出力しない）。
 - summary_sections は必須。各要素は { "title": "主張", "bullets": [{ "point": "...", "quote": "...", "detail": "..." }] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
 - bullets の要素は **オブジェクト**。point / quote / detail は**全て必須**で省略禁止。
-- quote は発言原文に忠実な短い引用（40文字以内）。detail は要点の補足（1〜2文）で、読者の理解補助が目的。
+- quote は発言原文に忠実な引用。detail は要点の補足で、読者の理解補助が目的。
 - dialogs の summary_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は section に書かない。
 - dialogs は入力の [order N] ごとに **必ず1件ずつ** 出力する（欠落・重複は禁止）。order 値は入力の [order N] と完全一致させる。
 - soft_language_summary は箇条書きにせず、短い文章で書く（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各文は短くし、冗長説明や強い断定・感情表現は禁止。
@@ -96,9 +96,9 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
     {
       "order": 1,
       "summary_sections": [
-        { "title": "主張", "bullets": [{ "point": "要点1", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] },
-        { "title": "説明", "bullets": [{ "point": "要点2", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] },
-        { "title": "決定", "bullets": [{ "point": "合意した方針", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] }
+        { "title": "主張", "bullets": [{ "point": "要点1", "quote": "引用（過不足なく）", "detail": "補足（過不足なく）" }] },
+        { "title": "説明", "bullets": [{ "point": "要点2", "quote": "引用（過不足なく）", "detail": "補足（過不足なく）" }] },
+        { "title": "決定", "bullets": [{ "point": "合意した方針", "quote": "引用（過不足なく）", "detail": "補足（過不足なく）" }] }
       ],
       "qa": [
         {
@@ -203,9 +203,9 @@ export const output_format_single_chunk = `### 出力フォーマット（single
     {
       "order": 1,
       "summary_sections": [
-        { "title": "主張", "bullets": [{ "point": "要点1", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] },
-        { "title": "説明", "bullets": [{ "point": "要点2", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] },
-        { "title": "決定", "bullets": [{ "point": "合意した方針", "quote": "引用（短文）", "detail": "補足（1〜2文）" }] }
+        { "title": "主張", "bullets": [{ "point": "要点1", "quote": "引用（過不足なく）", "detail": "補足（過不足なく）" }] },
+        { "title": "説明", "bullets": [{ "point": "要点2", "quote": "引用（過不足なく）", "detail": "補足（過不足なく）" }] },
+        { "title": "決定", "bullets": [{ "point": "合意した方針", "quote": "引用（過不足なく）", "detail": "補足（過不足なく）" }] }
       ],
       "qa": [
         {

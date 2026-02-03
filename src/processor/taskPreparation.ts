@@ -204,7 +204,17 @@ async function readRawPayload(client: S3Client, uri: string): Promise<RawMeeting
 
 function normalizeSpeechArray(value: RawMeetingRecord["speechRecord"] | RawSpeechRecord[] | RawSpeechRecord | undefined): RawSpeechRecord[] {
   if (!value) return [];
-  return Array.isArray(value) ? value : [value];
+  const list = Array.isArray(value) ? value : [value];
+  const numericOrders = list
+    .map((speech) => Number(speech.speechOrder))
+    .filter((order) => Number.isFinite(order));
+  if (numericOrders.length === 0) return list;
+  const minOrder = Math.min(...numericOrders);
+  if (minOrder !== 0) return list;
+  return list.map((speech) => ({
+    ...speech,
+    speechOrder: Number(speech.speechOrder) + 1,
+  }));
 }
 
 function buildMeetingInfo(meeting: RawMeetingRecord, numberOfSpeeches: number) {

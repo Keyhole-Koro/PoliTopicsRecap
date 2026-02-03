@@ -97,16 +97,22 @@ export function extractSpeakerMapFromPrompt(promptText: string): SpeakerMap {
     throw new Error("Prompt speeches must be an array");
   }
 
+  const orders = payload.speeches
+    .map((speech) => ensureOrder(speech?.speechOrder, "prompt speechOrder", []))
+    .filter((value): value is number => typeof value === "number");
+  const offset = computeOrderOffset(orders);
+
   const errors: string[] = [];
   payload.speeches.forEach((speech, index) => {
-    const order = ensureOrder(speech?.speechOrder, `prompt speech[${index}].speechOrder`, errors);
+    const orderValue = ensureOrder(speech?.speechOrder, `prompt speech[${index}].speechOrder`, errors);
     const speaker = ensureString(speech?.speaker, `prompt speech[${index}].speaker`, errors);
     const originalText = ensureString(speech?.speech, `prompt speech[${index}].speech`, errors);
 
-    if (order === null || speaker === null || originalText === null) {
+    if (orderValue === null || speaker === null || originalText === null) {
       return;
     }
 
+    const order = orderValue + offset;
     map.set(order, {
       speaker,
       originalText,
@@ -133,9 +139,14 @@ export function extractSpeakerMapFromAttachedAssetsPayload(payloadText: string):
     throw new Error("Attached assets speeches must be an array");
   }
 
+  const orders = payload.speeches
+    .map((speech) => ensureOrder(speech?.order ?? speech?.speechOrder, "attached speechOrder", []))
+    .filter((value): value is number => typeof value === "number");
+  const offset = computeOrderOffset(orders);
+
   const errors: string[] = [];
   payload.speeches.forEach((speech, index) => {
-    const order = ensureOrder(speech?.order ?? speech?.speechOrder, `attached speech[${index}].order`, errors);
+    const orderValue = ensureOrder(speech?.order ?? speech?.speechOrder, `attached speech[${index}].order`, errors);
     const speaker = ensureString(speech?.speaker, `attached speech[${index}].speaker`, errors);
     const originalText = ensureString(
       speech?.originalText ?? speech?.speech,
@@ -143,10 +154,11 @@ export function extractSpeakerMapFromAttachedAssetsPayload(payloadText: string):
       errors,
     );
 
-    if (order === null || speaker === null || originalText === null) {
+    if (orderValue === null || speaker === null || originalText === null) {
       return;
     }
 
+    const order = orderValue + offset;
     map.set(order, {
       speaker,
       originalText,
@@ -171,6 +183,12 @@ export async function loadSpeakerMapFromAttachedAssets(
     console.warn("[speakerMetadata] Failed to read attached assets from S3", { url, error });
     return new Map();
   }
+}
+
+function computeOrderOffset(orders: number[]): number {
+  if (orders.length === 0) return 0;
+  const minOrder = Math.min(...orders);
+  return minOrder === 0 ? 1 : 0;
 }
 
 export function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: SpeakerMap): Article["dialogs"] {

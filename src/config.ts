@@ -281,8 +281,8 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
       executionEnv: optionalEnv("AWS_EXECUTION_ENV"),
     },
     rateLimit: {
-      requestsPerMinute: 1,
-      requestsPerDay: 15,
+      requestsPerMinute: 3,
+      requestsPerDay: 50,
       maxConsecutiveErrors: 3,
       cooldownOnErrorMs: 30000,
     },

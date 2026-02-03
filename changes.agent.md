@@ -398,6 +398,16 @@ Details:
 - Files changed:
   - `PoliTopicsRecap/src/prompts/prompts.ts`
   - `PoliTopicsRecap/src/dynamoDB/article.d.ts`
+
+Agent: Codex
+Date/Time: 2026-02-03 12:10 JST
+Keywords: orders, normalization, recap
+Topic: Normalize speech orders to 1-based indexing
+Details:
+- Shifted 0-based speech orders to 1-based when preparing prompts and building speaker maps.
+- Files changed:
+  - `PoliTopicsRecap/src/processor/taskPreparation.ts`
+  - `PoliTopicsRecap/src/processor/speakerMetadata.ts`
 - docs/08_db_design.md
 - docs/jp/08_db_design.md
 
