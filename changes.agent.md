@@ -375,6 +375,18 @@ Files:
 - PoliTopicsRecap/src/dynamoDB/dbKeys.ts
 - PoliTopicsRecap/src/dynamoDB/storeData.test.ts
 - PoliTopicsRecap/src/processor/taskProcessor.ts
+
+Agent: Codex
+Date/Time: 2026-02-03 10:15 JST
+Keywords: dynamodb, issue, index, recap, tests
+Topic: Add issueID thin index items for timeline queries
+Details:
+- Persisted ISSUE index items (`PK=ISSUE#<issueID>`) alongside other thin index entries.
+- Updated storeData tests to cover the new ISSUE index output.
+- Files changed:
+  - `PoliTopicsRecap/src/dynamoDB/dbKeys.ts`
+  - `PoliTopicsRecap/src/dynamoDB/storeData.ts`
+  - `PoliTopicsRecap/src/dynamoDB/storeData.test.ts`
 - docs/08_db_design.md
 - docs/jp/08_db_design.md
 

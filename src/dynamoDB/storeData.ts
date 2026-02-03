@@ -47,6 +47,7 @@ import {
   sessionKey,
   houseKey,
   meetingKey,
+  issueKey,
 } from "./dbKeys";
 import {
   persistArticleAsset,
@@ -216,6 +217,15 @@ export default async function storeData(
       PK: meetingKey(article.nameOfMeeting.trim()),
       SK: sk,
       kind: "MEETING_INDEX",
+      ...thinBase,
+    });
+  }
+
+  if (article.issueID?.trim()) {
+    idxItems.push({
+      PK: issueKey(article.issueID.trim()),
+      SK: sk,
+      kind: "ISSUE_INDEX",
       ...thinBase,
     });
   }

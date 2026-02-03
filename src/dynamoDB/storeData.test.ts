@@ -179,6 +179,7 @@ describe('storeData (LocalStack integration)', () => {
 describe('storeData (mocked client)', () => {
   const baseArticle: Article = {
     id: 'article-123',
+    issueID: 'ISSUE-123',
     title: 'Example Article',
     date: '2024-05-01T09:00:00.000Z',
     month: '2024-05',
@@ -256,7 +257,7 @@ describe('storeData (mocked client)', () => {
     expect(batchCall).toBeDefined();
     const batchInput = (batchCall![0] as BatchWriteCommand).input;
     const requests = batchInput.RequestItems?.ArticlesTable ?? [];
-    expect(requests).toHaveLength(7);
+    expect(requests).toHaveLength(8);
     const requestBodies = requests.map((item) => item.PutRequest?.Item);
     expect(requestBodies).toEqual(
       expect.arrayContaining([
@@ -282,6 +283,7 @@ describe('storeData (mocked client)', () => {
         expect.objectContaining({ PK: 'SESSION#0012', kind: 'SESSION_INDEX' }),
         expect.objectContaining({ PK: 'HOUSE#Lower House', kind: 'HOUSE_INDEX' }),
         expect.objectContaining({ PK: 'MEETING#Committee A', kind: 'MEETING_INDEX' }),
+        expect.objectContaining({ PK: 'ISSUE#ISSUE-123', kind: 'ISSUE_INDEX' }),
       ]),
     );
   });
@@ -308,12 +310,13 @@ describe('storeData (mocked client)', () => {
     const batchCall = send.mock.calls.find(([cmd]) => cmd instanceof BatchWriteCommand);
     expect(batchCall).toBeDefined();
     const requests = (batchCall![0] as BatchWriteCommand).input.RequestItems?.ArticlesTable ?? [];
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     const items = requests.map((item) => item.PutRequest?.Item);
     expect(items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ PK: 'IMAGEKIND#会議録', kind: 'IMAGEKIND_INDEX' }),
         expect.objectContaining({ PK: 'SESSION#0012', kind: 'SESSION_INDEX' }),
+        expect.objectContaining({ PK: 'ISSUE#ISSUE-123', kind: 'ISSUE_INDEX' }),
       ]),
     );
   });
