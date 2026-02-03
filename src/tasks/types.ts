@@ -1,5 +1,5 @@
 export type TaskStatus = "ingested" | "pending" | "remake" | "completed";
-export type ChunkStatus = "notReady" | "ready";
+export type ChunkStatus = "pending" | "completed";
 export type ProcessingMode = "single_chunk" | "chunked";
 
 export type Meeting = {

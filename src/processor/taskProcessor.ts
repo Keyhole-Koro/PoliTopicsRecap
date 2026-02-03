@@ -97,7 +97,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
     return;
   }
 
-  const nextChunk = task.chunks.find((chunk) => chunk.status !== "ready");
+  const nextChunk = task.chunks.find((chunk) => chunk.status !== "completed");
   if (nextChunk) {
     console.log(`[TaskProcessor] Processing chunk ${nextChunk.id} for ${task.pk}`);
     try {
@@ -114,7 +114,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
       console.log(`[TaskProcessor] Uploaded chunk result to ${nextChunk.result_url}`);
       
       await markChunkReady(docClient, repoConfig, task, nextChunk.id);
-      console.log(`[TaskProcessor] Marked chunk ${nextChunk.id} ready`);
+      console.log(`[TaskProcessor] Marked chunk ${nextChunk.id} completed`);
     } catch (err) {
       console.error(`[TaskProcessor] Chunk processing failed for ${nextChunk.id}`, err);
       throw err;
@@ -122,7 +122,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
     return;
   }
 
-  console.log(`[TaskProcessor] All chunks ready for ${task.pk}. Running REDUCE phase.`);
+  console.log(`[TaskProcessor] All chunks completed for ${task.pk}. Running REDUCE phase.`);
   try {
     const promptUrl = requireTaskUrl(task, "prompt_url");
     const resultUrl = requireTaskUrl(task, "result_url");

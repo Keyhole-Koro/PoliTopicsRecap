@@ -1,7 +1,7 @@
 import type { ChunkItem, ChunkStatus, ProcessingMode, TaskItem, TaskStatus } from "./types";
 
 const TASK_STATUSES: TaskStatus[] = ["ingested", "pending", "remake", "completed"];
-const CHUNK_STATUSES: ChunkStatus[] = ["notReady", "ready"];
+const CHUNK_STATUSES: ChunkStatus[] = ["pending", "completed"];
 const PROCESSING_MODES: ProcessingMode[] = ["single_chunk", "chunked"];
 
 export function asTaskItem(raw: unknown): TaskItem | null {
@@ -11,62 +11,63 @@ export function asTaskItem(raw: unknown): TaskItem | null {
   if (!isRecord(raw)) {
     pushIssue("root", "expected object");
   } else {
-    if (!isString(raw.pk)) pushIssue("pk", "expected string");
-    if (!isTaskStatus(raw.status)) pushIssue("status", `unexpected value: ${String(raw.status)}`);
-    const status = raw.status as TaskStatus | undefined;
-    if (raw.processingMode !== undefined && !isProcessingMode(raw.processingMode)) {
-      pushIssue("processingMode", `unexpected value: ${String(raw.processingMode)}`);
+    const record = normalizeTask(raw);
+    if (!isString(record.pk)) pushIssue("pk", "expected string");
+    if (!isTaskStatus(record.status)) pushIssue("status", `unexpected value: ${String(record.status)}`);
+    const status = record.status as TaskStatus | undefined;
+    if (record.processingMode !== undefined && !isProcessingMode(record.processingMode)) {
+      pushIssue("processingMode", `unexpected value: ${String(record.processingMode)}`);
     }
-    if (raw.retryAttempts !== undefined && !isFiniteNumber(raw.retryAttempts)) {
+    if (record.retryAttempts !== undefined && !isFiniteNumber(record.retryAttempts)) {
       pushIssue("retryAttempts", "expected finite number");
     }
-    if (raw.maxInputToken !== undefined && !isFiniteNumber(raw.maxInputToken)) {
+    if (record.maxInputToken !== undefined && !isFiniteNumber(record.maxInputToken)) {
       pushIssue("maxInputToken", "expected finite number");
     }
-    if (!isIsoDateString(raw.createdAt)) pushIssue("createdAt", "expected ISO date string");
-    if (!isIsoDateString(raw.updatedAt)) pushIssue("updatedAt", "expected ISO date string");
+    if (!isIsoDateString(record.createdAt)) pushIssue("createdAt", "expected ISO date string");
+    if (!isIsoDateString(record.updatedAt)) pushIssue("updatedAt", "expected ISO date string");
     if (status === "ingested") {
-      if (!isString(raw.raw_url) || !raw.raw_url.startsWith("s3://")) {
+      if (!isString(record.raw_url) || !record.raw_url.startsWith("s3://")) {
         pushIssue("raw_url", "expected s3:// URL string");
       }
-      if (raw.raw_hash !== undefined && !isString(raw.raw_hash)) {
+      if (record.raw_hash !== undefined && !isString(record.raw_hash)) {
         pushIssue("raw_hash", "expected string");
       }
-      if (raw.prompt_url !== undefined && (!isString(raw.prompt_url) || !raw.prompt_url.startsWith("s3://"))) {
+      if (record.prompt_url !== undefined && (!isString(record.prompt_url) || !record.prompt_url.startsWith("s3://"))) {
         pushIssue("prompt_url", "expected s3:// URL string");
       }
-      if (raw.result_url !== undefined && (!isString(raw.result_url) || !raw.result_url.startsWith("s3://"))) {
+      if (record.result_url !== undefined && (!isString(record.result_url) || !record.result_url.startsWith("s3://"))) {
         pushIssue("result_url", "expected s3:// URL string");
       }
     } else {
-      if (!isString(raw.llm)) pushIssue("llm", "expected string");
-      if (!isString(raw.llmModel)) pushIssue("llmModel", "expected string");
-      if (!isProcessingMode(raw.processingMode)) {
-        pushIssue("processingMode", `unexpected value: ${String(raw.processingMode)}`);
+      if (!isString(record.llm)) pushIssue("llm", "expected string");
+      if (!isString(record.llmModel)) pushIssue("llmModel", "expected string");
+      if (!isProcessingMode(record.processingMode)) {
+        pushIssue("processingMode", `unexpected value: ${String(record.processingMode)}`);
       }
-      if (!isString(raw.prompt_url) || !raw.prompt_url.startsWith("s3://")) {
+      if (!isString(record.prompt_url) || !record.prompt_url.startsWith("s3://")) {
         pushIssue("prompt_url", "expected s3:// URL string");
       }
-      if (!isString(raw.result_url) || !raw.result_url.startsWith("s3://")) {
+      if (!isString(record.result_url) || !record.result_url.startsWith("s3://")) {
         pushIssue("result_url", "expected s3:// URL string");
       }
-      if (raw.raw_url !== undefined && (!isString(raw.raw_url) || !raw.raw_url.startsWith("s3://"))) {
+      if (record.raw_url !== undefined && (!isString(record.raw_url) || !record.raw_url.startsWith("s3://"))) {
         pushIssue("raw_url", "expected s3:// URL string");
       }
-      if (raw.raw_hash !== undefined && !isString(raw.raw_hash)) {
+      if (record.raw_hash !== undefined && !isString(record.raw_hash)) {
         pushIssue("raw_hash", "expected string");
       }
     }
 
-    validateAttachedAssets(raw.attachedAssets, pushIssue);
-    validateMeeting(raw.meeting, pushIssue);
+    validateAttachedAssets(record.attachedAssets, pushIssue);
+    validateMeeting(record.meeting, pushIssue);
 
-    if (raw.processingMode === "chunked") {
-      if (!Array.isArray(raw.chunks) || raw.chunks.length === 0) {
+    if (record.processingMode === "chunked") {
+      if (!Array.isArray(record.chunks) || record.chunks.length === 0) {
         pushIssue("chunks", "expected non-empty array for chunked mode");
       } else {
-        for (let i = 0; i < raw.chunks.length; i += 1) {
-          validateChunkItem(raw.chunks[i], i, pushIssue);
+        for (let i = 0; i < record.chunks.length; i += 1) {
+          validateChunkItem(record.chunks[i], i, pushIssue);
         }
       }
     }
@@ -150,4 +151,24 @@ function validateChunkItem(value: unknown, index: number, push: (path: string, m
 
 function isChunkStatus(value: unknown): value is ChunkStatus {
   return typeof value === "string" && CHUNK_STATUSES.includes(value as ChunkStatus);
+}
+
+function normalizeTask(value: Record<string, any>): Record<string, any> {
+  if (!Array.isArray(value.chunks)) {
+    return value;
+  }
+  const chunks = value.chunks.map((chunk: any) => {
+    const status = normalizeChunkStatus(chunk?.status);
+    if (status === chunk?.status) {
+      return chunk;
+    }
+    return { ...chunk, status };
+  });
+  return { ...value, chunks };
+}
+
+function normalizeChunkStatus(status: unknown): ChunkStatus | unknown {
+  if (status === "notReady") return "pending";
+  if (status === "ready") return "completed";
+  return status;
 }

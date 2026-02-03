@@ -59,15 +59,15 @@ describe("attachSpeakerMetadata", () => {
     const mockDialogs: any = [
       {
         order: 1,
-        summary_sections: [{ title: "説明", bullets: ["Summary of speech 1"] }],
+        summary_sections: [{ title: "説明", bullets: [{ point: "Summary of speech 1", quote: "quote", detail: "detail" }] }],
       },
       {
         order: 2,
-        summary_sections: [{ title: "説明", bullets: ["Summary 2"] }],
+        summary_sections: [{ title: "説明", bullets: [{ point: "Summary 2", quote: "quote", detail: "detail" }] }],
       },
       {
         order: 3,
-        summary_sections: [{ title: "説明", bullets: ["Summary 3"] }],
+        summary_sections: [{ title: "説明", bullets: [{ point: "Summary 3", quote: "quote", detail: "detail" }] }],
         speakerYomi: "Existing Yomi",
         speakerGroup: "Existing Group"
       }
@@ -107,8 +107,8 @@ describe("attachSpeakerMetadata", () => {
     const speakerMap = extractSpeakerMapFromPrompt(mockPrompt);
 
     const dialogs: any = [
-      { order: 1, summary_sections: [{ title: "説明", bullets: ["ok"] }] },
-      { order: 2, summary_sections: [{ title: "説明", bullets: ["missing"] }] },
+      { order: 1, summary_sections: [{ title: "説明", bullets: [{ point: "ok", quote: "quote", detail: "detail" }] }] },
+      { order: 2, summary_sections: [{ title: "説明", bullets: [{ point: "missing", quote: "quote", detail: "detail" }] }] },
     ];
 
     expect(() => attachSpeakerMetadata(dialogs, speakerMap)).toThrow("Missing speaker metadata");

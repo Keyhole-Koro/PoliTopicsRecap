@@ -197,7 +197,7 @@ export async function markChunkReady(
         TableName: cfg.tableName,
         Key: { pk: task.pk },
         ConditionExpression: "(#status = :pending OR #status = :remake)",
-        UpdateExpression: `SET chunks[${index}].#chunkStatus = :ready, #updatedAt = :now`,
+        UpdateExpression: `SET chunks[${index}].#chunkStatus = :completed, #updatedAt = :now`,
         ExpressionAttributeNames: {
           "#chunkStatus": "status",
           "#status": "status",
@@ -206,7 +206,7 @@ export async function markChunkReady(
         ExpressionAttributeValues: {
           ":pending": "pending",
           ":remake": "remake",
-          ":ready": "ready",
+          ":completed": "completed",
           ":now": now,
         },
       }),

@@ -135,7 +135,7 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
         prompt_key: s3key,
         prompt_url: `s3://${promptBucket}/${s3key}`,
         result_url: `s3://${promptBucket}/${resultKey}`,
-        status: "notReady",
+        status: "pending",
       });
     }
 

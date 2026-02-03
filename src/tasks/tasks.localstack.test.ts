@@ -30,8 +30,8 @@ const generateContentMock = jest.fn();
  * [Odd] Uses Japanese speaker fixtures and updatedAt truncated to YYYY-MM-DD to mimic real data; S3 keys live under prompts/reduce/results.
  * [History] No recorded incident; regression guardrail.
  *
- * processes a chunked task, marks chunks ready, and writes reduce output
- * [Contract] Chunked tasks must progress notReady→ready→completed across runner invocations and emit reduce output plus article assets.
+ * processes a chunked task, marks chunks completed, and writes reduce output
+ * [Contract] Chunked tasks must progress pending→completed across runner invocations and emit reduce output plus article assets.
  * [Reason] Normal long-meeting flow depends on chunk readiness before reduce.
  * [Accident] Without this, chunked tasks could stall pending and never publish recaps.
  * [Odd] Single CHUNK#0 definition with sequential runner calls and mocked Gemini responses for chunk then reduce.
@@ -208,7 +208,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         );
 
         generateContentMock.mockResolvedValueOnce({
-          response: { text: () => JSON.stringify(buildArticle(taskId)) },
+          text: JSON.stringify(buildArticle(taskId)),
         });
 
         await processNextPendingTask(taskContext);
@@ -236,7 +236,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       }
     });
 
-    test("processes a chunked task, marks chunks ready, and writes reduce output", async () => {
+    test("processes a chunked task, marks chunks completed, and writes reduce output", async () => {
       const bucket = appConfig.promptBucketName;
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
@@ -298,7 +298,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
                   prompt_key: chunkDefinition.promptKey,
                   prompt_url: `s3://${bucket}/${chunkDefinition.promptKey}`,
                   result_url: `s3://${bucket}/${chunkDefinition.resultKey}`,
-                  status: "notReady",
+                  status: "pending",
                 },
               ],
             },
@@ -308,10 +308,10 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
         generateContentMock
           .mockResolvedValueOnce({
-            response: { text: () => JSON.stringify(buildChunkOutput(taskId)) },
+            text: JSON.stringify(buildChunkOutput(taskId)),
           })
           .mockResolvedValueOnce({
-            response: { text: () => JSON.stringify(buildReduceOutput(taskId)) },
+            text: JSON.stringify(buildReduceOutput(taskId)),
           });
 
         await processNextPendingTask(taskContext); // process chunk
@@ -320,7 +320,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         const stored = await getTask(tableName, taskId);
         expect(stored?.status).toBe("completed");
         const chunkStatuses = stored?.chunks?.map((c: any) => c.status) ?? [];
-        expect(chunkStatuses.every((status: string) => status === "ready")).toBe(true);
+        expect(chunkStatuses.every((status: string) => status === "completed")).toBe(true);
 
         const reduceOutput = await readObjectText(bucket, reduceResultKey);
         expect(JSON.parse(reduceOutput).id).toBe(taskId);
@@ -537,7 +537,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         dialogs: [
           {
             order: 1,
-            summary_sections: [{ title: "主張", bullets: ["委員長が開会を宣言"] }],
+            summary_sections: [{ title: "主張", bullets: [{ point: "委員長が開会を宣言", quote: "開会を宣言", detail: "開会の宣言を行った。" }] }],
             original_text: "委員長が開会を宣言した原文",
             speaker: "架空太郎",
             speakerYomi: "かくうたろう",
@@ -562,7 +562,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         dialogs: [
           {
             order: 1,
-            summary_sections: [{ title: "説明", bullets: ["chunk dialog"] }],
+            summary_sections: [{ title: "説明", bullets: [{ point: "chunk dialog", quote: "chunk", detail: "chunk detail" }] }],
             original_text: "chunk original text",
           },
         ],
@@ -592,7 +592,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         dialogs: [
           {
             order: 1,
-            summary_sections: [{ title: "説明", bullets: ["reduce dialog"] }],
+            summary_sections: [{ title: "説明", bullets: [{ point: "reduce dialog", quote: "reduce", detail: "reduce detail" }] }],
             original_text: "reduce original",
             speaker: "架空花子",
           },

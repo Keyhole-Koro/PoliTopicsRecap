@@ -329,8 +329,8 @@ async function handleTaskFailure(
 
 function buildTaskLogContext(task: TaskItem): Record<string, unknown> {
   const chunks = task.chunks ?? [];
-  const readyCount = chunks.filter((chunk) => chunk.status === "ready").length;
-  const nextChunk = chunks.find((chunk) => chunk.status !== "ready");
+  const readyCount = chunks.filter((chunk) => chunk.status === "completed").length;
+  const nextChunk = chunks.find((chunk) => chunk.status !== "completed");
 
   return {
     taskId: task.pk,

@@ -440,6 +440,24 @@ Details:
 - Added unit test covering countTokens usage with @google/genai.
 - Files changed:
   - `PoliTopicsRecap/src/llm/tokenCounter.test.ts`
+
+Agent: Codex
+Date/Time: 2026-02-03 14:05 JST
+Keywords: chunks, status, recap
+Topic: Normalize chunk status to pending/completed
+Details:
+- Switched chunk status values to pending/completed and mapped legacy ready/notReady in validators.
+- Ensured reduce runs only after all chunks are completed.
+- Updated tests and metadata fixtures for structured dialog bullets.
+- Files changed:
+  - `PoliTopicsRecap/src/tasks/types.ts`
+  - `PoliTopicsRecap/src/tasks/validators.ts`
+  - `PoliTopicsRecap/src/tasks/taskRepository.ts`
+  - `PoliTopicsRecap/src/processor/taskPreparation.ts`
+  - `PoliTopicsRecap/src/processor/taskProcessor.ts`
+  - `PoliTopicsRecap/src/processor/taskRunner.ts`
+  - `PoliTopicsRecap/src/processor/taskProcessor.metadata.test.ts`
+  - `PoliTopicsRecap/src/tasks/tasks.localstack.test.ts`
 - docs/08_db_design.md
 - docs/jp/08_db_design.md
 
