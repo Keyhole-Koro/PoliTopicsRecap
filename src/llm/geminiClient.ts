@@ -56,7 +56,17 @@ export class GeminiClient implements LlmClient {
       ? { contents, generationConfig }
       : { contents };
 
-    const result = await this.model.generateContent(payload);
+    let result;
+    try {
+      result = await this.model.generateContent(payload);
+    } catch (error) {
+      const err = error as { cause?: unknown };
+      console.error("[GeminiClient] generateContent failed", error);
+      if (err?.cause) {
+        console.error("[GeminiClient] cause:", err.cause);
+      }
+      throw error;
+    }
     const text = result.response?.text()?.trim();
     if (!text) {
       throw new Error('Gemini returned an empty response');
