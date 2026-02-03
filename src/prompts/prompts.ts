@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "6.0";
+export const PROMPT_VERSION = "6.1";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -21,6 +21,7 @@ export const instruction_common = `【目的】
 - dialogs は summary_sections のみで要点を表現する（summary / soft_language は出力しない）。
 - summary_sections は必須。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
 - dialogs の summary_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は section に書かない。
+- dialogs は入力の [order N] ごとに **必ず1件ずつ** 出力する（欠落・重複は禁止）。order 値は入力の [order N] と完全一致させる。
 - soft_language_summary は箇条書きにせず、短い文章で書く（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各文は短くし、冗長説明や強い断定・感情表現は禁止。
 - 質問→回答が明確な場合、回答側の dialog に qa（配列）を付与する（質問側は reaction=質問のみで可）。
   - qa は複数質問に対応するため配列にする。
@@ -38,6 +39,7 @@ export const instruction_chunk = `【chunkモードの出力指針】
 - dialogs/participants/terms/keywords: このchunkに現れた範囲で必要なもののみ。
 - title / category / description / date は出力しない（reduceで決定）。
  - 入力に [context before] / [context after] がある場合は、chunk外の前後発言。質問→回答などの関係把握に使ってよいが、dialogsはchunk内の発言のみ出力する。
+ - [chunk] 内の [order N] は **すべて dialogs に1件ずつ** 出力すること（欠落・重複禁止）。
 
 補足:
 - middle_summaryのsummaryには必ず論点の背景（誰が、どの立場で、何を主張/回答したか）を1文以上で含め、based_on_ordersの順序と自然に対応させること。
@@ -62,7 +64,8 @@ export const instruction_single_chunk = `【single_chunkモード（統合出力
 - summary は middle_summary の要点を昇華・統合した構造化要約とする。
 - chunk粒度と meeting粒度で内容を矛盾させない。
 - based_on_orders は該当するすべての要約・participantsに必ず付与する。
-- dialogs の reaction、数値・担当者・期限の明示など、共通の厳守事項はすべて維持する。`;
+- dialogs の reaction、数値・担当者・期限の明示など、共通の厳守事項はすべて維持する。
+- single_chunk でも [order N] ごとに dialogs を必ず1件ずつ出力する。欠落・重複は禁止。`;
 
 export const output_format_chunk = `### 出力フォーマット（chunk）
 
