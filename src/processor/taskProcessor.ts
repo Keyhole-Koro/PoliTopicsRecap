@@ -212,7 +212,11 @@ async function persistArticleIfPossible(
       throw new Error("Reduced payload is missing soft_language_summary");
     }
     const { prompt_version: _promptVersion, ...articlePayload } = rawArticle;
-    assertDialogOrdersComplete(articlePayload.dialogs, speakerMap, meeting);
+    const dialogsWithPlaceholders = fillMissingDialogOrders(
+      Array.isArray(articlePayload.dialogs) ? articlePayload.dialogs : [],
+      speakerMap,
+    );
+    assertDialogOrdersComplete(dialogsWithPlaceholders, speakerMap, meeting);
     const issueID = meeting?.issueID ?? (articlePayload as { issueID?: string }).issueID ?? rawArticle.id;
     const normalizedKeyPoints = Array.isArray(articlePayload.key_points)
       ? articlePayload.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
@@ -222,7 +226,7 @@ async function persistArticleIfPossible(
       id: task.pk,
       issueID,
       key_points: normalizedKeyPoints,
-      dialogs: attachSpeakerMetadata(articlePayload.dialogs ?? [], speakerMap),
+      dialogs: attachSpeakerMetadata(dialogsWithPlaceholders, speakerMap),
       date: articlePayload.date ?? meeting?.date,
       month: articlePayload.month ?? (meeting?.date ? meeting.date.slice(0, 7) : articlePayload.month),
       nameOfMeeting: articlePayload.nameOfMeeting ?? meeting?.nameOfMeeting ?? "",
@@ -322,6 +326,40 @@ function assertDialogOrdersComplete(
     extras.length ? `extras=${extras.join(",")}` : null,
   ].filter(Boolean);
   throw new Error(parts.join(" "));
+}
+
+function fillMissingDialogOrders(
+  dialogs: Article["dialogs"],
+  speakerMap: SpeakerMap,
+): Article["dialogs"] {
+  if (!Array.isArray(dialogs)) return [];
+  if (!(speakerMap instanceof Map) || speakerMap.size === 0) return dialogs;
+
+  const existingOrders = new Set<number>();
+  for (const dialog of dialogs) {
+    if (typeof dialog.order === "number" && Number.isFinite(dialog.order)) {
+      existingOrders.add(dialog.order);
+    }
+  }
+
+  const placeholders: Article["dialogs"] = [];
+  for (const order of speakerMap.keys()) {
+    if (existingOrders.has(order)) continue;
+    if (order !== 0 && order !== 1) continue;
+    const meta = speakerMap.get(order);
+    placeholders.push({
+      order,
+      summary_sections: [{ title: "説明", bullets: [{ point: "" }] }],
+      original_text: meta?.originalText ?? "",
+      speaker: meta?.speaker ?? "",
+      speakerYomi: meta?.speakerYomi ?? undefined,
+      speakerGroup: meta?.speakerGroup ?? undefined,
+      speakerPosition: meta?.speakerPosition ?? undefined,
+    });
+  }
+
+  if (placeholders.length === 0) return dialogs;
+  return [...dialogs, ...placeholders].sort((a, b) => a.order - b.order);
 }
 
 function sanitizeJsonPayload(payloadText: string): string {
