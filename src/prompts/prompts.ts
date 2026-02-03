@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "2.5";
+export const PROMPT_VERSION = "3.5";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
