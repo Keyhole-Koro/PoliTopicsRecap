@@ -266,7 +266,7 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
       },
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
-    geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
+    geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-pro-preview",
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
     notifications: {
