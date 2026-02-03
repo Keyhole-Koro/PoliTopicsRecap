@@ -212,7 +212,7 @@ async function persistArticleIfPossible(
       throw new Error("Reduced payload is missing soft_language_summary");
     }
     const { prompt_version: _promptVersion, ...articlePayload } = rawArticle;
-    assertDialogOrdersComplete(articlePayload.dialogs, meeting);
+    assertDialogOrdersComplete(articlePayload.dialogs, speakerMap, meeting);
     const normalizedKeyPoints = Array.isArray(articlePayload.key_points)
       ? articlePayload.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
       : [];
@@ -253,16 +253,18 @@ async function persistArticleIfPossible(
 
 function assertDialogOrdersComplete(
   dialogs: Article["dialogs"] | undefined,
+  speakerMap: SpeakerMap,
   meeting?: TaskItem["meeting"],
 ): void {
-  const expectedCount = meeting?.numberOfSpeeches;
-  if (!expectedCount || !Number.isFinite(expectedCount) || expectedCount <= 0) {
+  if (!(speakerMap instanceof Map) || speakerMap.size === 0) {
     return;
   }
   if (!Array.isArray(dialogs)) {
-    throw new Error(`Dialogs must be an array to validate orders (expected ${expectedCount})`);
+    throw new Error(`Dialogs must be an array to validate orders (expected ${speakerMap.size})`);
   }
 
+  const expectedOrders = Array.from(speakerMap.keys());
+  const expectedSet = new Set(expectedOrders);
   const counts = new Map<number, number>();
   for (const dialog of dialogs) {
     const order = (dialog as { order?: number }).order;
@@ -272,15 +274,12 @@ function assertDialogOrdersComplete(
     counts.set(order, (counts.get(order) ?? 0) + 1);
   }
 
-  const missing: number[] = [];
-  for (let i = 1; i <= expectedCount; i += 1) {
-    if (!counts.has(i)) missing.push(i);
-  }
+  const missing = expectedOrders.filter((order) => !counts.has(order));
 
   const duplicates = Array.from(counts.entries())
     .filter(([, count]) => count > 1)
     .map(([order, count]) => `${order}(${count})`);
-  const extras = Array.from(counts.keys()).filter((order) => order < 1 || order > expectedCount);
+  const extras = Array.from(counts.keys()).filter((order) => !expectedSet.has(order));
 
   if (missing.length === 0 && duplicates.length === 0 && extras.length === 0) {
     return;
