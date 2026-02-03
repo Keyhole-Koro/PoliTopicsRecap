@@ -98,10 +98,21 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
     processingMode = "single_chunk";
     chunks = [];
   } else {
+    const CONTEXT_WINDOW = 2;
     processingMode = "chunked";
     chunks = [];
     for (const pack of packs) {
       const chunkSpeeches = pack.indices.map((idx) => speeches[idx]).filter(Boolean);
+      const firstIndex = Math.min(...pack.indices);
+      const lastIndex = Math.max(...pack.indices);
+      const contextBefore =
+        Number.isFinite(firstIndex)
+          ? speeches.slice(Math.max(0, firstIndex - CONTEXT_WINDOW), firstIndex)
+          : [];
+      const contextAfter =
+        Number.isFinite(lastIndex)
+          ? speeches.slice(lastIndex + 1, lastIndex + 1 + CONTEXT_WINDOW)
+          : [];
       const s3key = `prompts/${task.pk}_${pack.indices.join("-")}.json`;
       const resultKey = `results/${task.pk}_${pack.indices.join("-")}_result.json`;
       await uploadJson({
@@ -112,6 +123,8 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
           prompt: chunkPromptTemplate,
           meeting: meetingInfo,
           speeches: chunkSpeeches,
+          contextBefore,
+          contextAfter,
           speechIds: pack.speech_ids,
           indices: pack.indices,
         },

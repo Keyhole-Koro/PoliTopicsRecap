@@ -310,6 +310,8 @@ async function loadPromptText(
   if (typeof payload.prompt === "string" && Array.isArray(payload.speeches)) {
     const input = buildSpeechInput({
       speeches: payload.speeches,
+      contextBefore: Array.isArray(payload.contextBefore) ? payload.contextBefore : undefined,
+      contextAfter: Array.isArray(payload.contextAfter) ? payload.contextAfter : undefined,
       meeting: payload.meeting ?? task.meeting,
       issueID: payload.meeting?.issueID ?? task.meeting?.issueID,
     });

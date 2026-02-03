@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "3.5";
+export const PROMPT_VERSION = "4.1";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -18,12 +18,10 @@ export const instruction_common = `【目的】
 - 数値/期限/担当がある場合は GFM 表（| 区切り）で整理する。該当なしの場合は表を出さない。
 - JSON 文字列内の改行は \\n を使う（実際の改行・コードフェンス・HTMLは不可）。
 - dialogs の各発言には、発言の性質を表す reaction を必ず付与すること（賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ）。
-- dialogs の summary / soft_language は、要点を必要な分だけ箇条書き（-）で記述する。長くなる場合は「**主張**」「**説明**」「**質問**」「**回答**」「**根拠**」「**影響**」「**次の対応**」の短い見出しで整理し、見出しの下に箇条書きを置く（見出しはこの固定セットのみ）。
-- dialogs には summary_sections / soft_language_sections を追加してよい（推奨）。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ。
-- dialogs の summary / summary_sections / soft_language / soft_language_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は summary / summary_sections / soft_language / soft_language_sections に書かない。
-- summary_sections を使う場合、summary はセクションに含めない別の要点のみを短く入れる。同様に soft_language_sections を使う場合、soft_language はセクションに含めない別の要点のみを短く入れる。
-- soft_language は summary/summary_sections の言い換えだが、同一内容の二重記載は避け、要点の配分で重複を最小化する。
-- dialogs の soft_language は、日常語・です/ます調・短文でやさしく言い換える。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各項目は1文で短くし、冗長説明や強い断定・感情表現は禁止。
+- dialogs は summary_sections / soft_language_sections のみで要点を表現する（summary / soft_language は出力しない）。
+- summary_sections / soft_language_sections は必須。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
+- dialogs の summary_sections / soft_language_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は両sectionに書かない。
+- soft_language_sections は summary_sections のやさしい言い換え（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各項目は1文で短くし、冗長説明や強い断定・感情表現は禁止。
 - 質問→回答が明確な場合、回答側の dialog に qa（配列）を付与する（質問側は reaction=質問のみで可）。
   - qa は複数質問に対応するため配列にする。
   - qa[].ask.question は「質問内容」そのものを記述する（例: "△△について今後の方針は？"）。
@@ -39,6 +37,7 @@ export const instruction_chunk = `【chunkモードの出力指針】
 - summary（必須）: このchunk範囲の詳細要約。
 - dialogs/participants/terms/keywords: このchunkに現れた範囲で必要なもののみ。
 - title / category / description / date は出力しない（reduceで決定）。
+ - 入力に [context before] / [context after] がある場合は、chunk外の前後発言。質問→回答などの関係把握に使ってよいが、dialogsはchunk内の発言のみ出力する。
 
 補足:
 - middle_summaryのsummaryには必ず論点の背景（誰が、どの立場で、何を主張/回答したか）を1文以上で含め、based_on_ordersの順序と自然に対応させること。
@@ -90,13 +89,15 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
   "dialogs": [
     {
       "order": 1,
-      "summary": "**主張**\\n- 要点1",
       "summary_sections": [
-        { "title": "説明", "bullets": ["要点2"] }
+        { "title": "主張", "bullets": ["要点1"] },
+        { "title": "説明", "bullets": ["要点2"] },
+        { "title": "決定", "bullets": ["合意した方針"] }
       ],
-      "soft_language": "**主張**\\n- やさしい言い換え1",
       "soft_language_sections": [
-        { "title": "説明", "bullets": ["やさしい言い換え2"] }
+        { "title": "主張", "bullets": ["やさしい言い換え1"] },
+        { "title": "説明", "bullets": ["やさしい言い換え2"] },
+        { "title": "決定", "bullets": ["決まったことをやさしく"] }
       ],
       "qa": [
         {
@@ -200,13 +201,15 @@ export const output_format_single_chunk = `### 出力フォーマット（single
   "dialogs": [
     {
       "order": 1,
-      "summary": "**主張**\\n- 要点1",
       "summary_sections": [
-        { "title": "説明", "bullets": ["要点2"] }
+        { "title": "主張", "bullets": ["要点1"] },
+        { "title": "説明", "bullets": ["要点2"] },
+        { "title": "決定", "bullets": ["合意した方針"] }
       ],
-      "soft_language": "**主張**\\n- やさしい言い換え1",
       "soft_language_sections": [
-        { "title": "説明", "bullets": ["やさしい言い換え2"] }
+        { "title": "主張", "bullets": ["やさしい言い換え1"] },
+        { "title": "説明", "bullets": ["やさしい言い換え2"] },
+        { "title": "決定", "bullets": ["決まったことをやさしく"] }
       ],
       "qa": [
         {

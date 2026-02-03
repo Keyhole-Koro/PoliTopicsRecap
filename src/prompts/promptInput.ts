@@ -38,17 +38,35 @@ export function buildSpeechInput(args: {
   speeches: RawSpeechRecord[];
   meeting?: Meeting;
   issueID?: string;
+  contextBefore?: RawSpeechRecord[];
+  contextAfter?: RawSpeechRecord[];
 }): string {
   const lines: string[] = [];
   lines.push(...buildMeetingHeaderLines(args.meeting));
 
-  if (lines.length > 0) {
-    lines.push("");
+  const hasContextBefore = Array.isArray(args.contextBefore) && args.contextBefore.length > 0;
+  const hasContextAfter = Array.isArray(args.contextAfter) && args.contextAfter.length > 0;
+  const includeChunkLabel = hasContextBefore || hasContextAfter;
+
+  const appendSpeechSection = (label: string | null, speeches: RawSpeechRecord[]): boolean => {
+    const sectionLines = speeches
+      .map((speech) => formatSpeechLine(speech))
+      .filter((line): line is string => Boolean(line));
+    if (sectionLines.length === 0) return false;
+    if (lines.length > 0) lines.push("");
+    if (label) lines.push(label);
+    lines.push(...sectionLines);
+    return true;
+  };
+
+  if (hasContextBefore) {
+    appendSpeechSection("[context before]", args.contextBefore ?? []);
   }
 
-  for (const speech of args.speeches) {
-    const line = formatSpeechLine(speech);
-    if (line) lines.push(line);
+  appendSpeechSection(includeChunkLabel ? "[chunk]" : null, args.speeches);
+
+  if (hasContextAfter) {
+    appendSpeechSection("[context after]", args.contextAfter ?? []);
   }
 
   const metaLines = buildMetaBlockLines(args.issueID ?? args.meeting?.issueID);

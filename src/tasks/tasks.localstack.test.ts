@@ -514,7 +514,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
     function buildArticle(issueID: string) {
       return {
-        prompt_version: "2.5",
+        prompt_version: "3.6",
         id: issueID,
         title: "Test Committee Recap",
         date: "2025-01-01T00:00:00Z",
@@ -532,8 +532,8 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         dialogs: [
           {
             order: 1,
-            summary: "委員長が開会を宣言",
-            soft_language: "委員長が穏やかに開始を伝えた",
+            summary_sections: [{ title: "主張", bullets: ["委員長が開会を宣言"] }],
+            soft_language_sections: [{ title: "主張", bullets: ["委員長が穏やかに開始を伝えた"] }],
             original_text: "委員長が開会を宣言した原文",
             speaker: "架空太郎",
             speakerYomi: "かくうたろう",
@@ -550,7 +550,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
     function buildChunkOutput(issueID: string) {
       return {
-        prompt_version: "2.5",
+        prompt_version: "3.6",
         id: issueID,
         middle_summary: [{ based_on_orders: [1], summary: "chunk summary" }],
         soft_language_summary: { based_on_orders: [1], summary: "chunk soft summary" },
@@ -558,8 +558,8 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         dialogs: [
           {
             order: 1,
-            summary: "chunk dialog",
-            soft_language: "chunk dialog soft",
+            summary_sections: [{ title: "説明", bullets: ["chunk dialog"] }],
+            soft_language_sections: [{ title: "説明", bullets: ["chunk dialog soft"] }],
             original_text: "chunk original text",
           },
         ],
@@ -571,7 +571,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
 
     function buildReduceOutput(issueID: string) {
       return {
-        prompt_version: "2.5",
+        prompt_version: "3.6",
         id: issueID,
         title: "Chunked Reduce Result",
         date: "2025-01-01T00:00:00Z",
@@ -589,8 +589,8 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         dialogs: [
           {
             order: 1,
-            summary: "reduce dialog",
-            soft_language: "reduce dialog soft",
+            summary_sections: [{ title: "説明", bullets: ["reduce dialog"] }],
+            soft_language_sections: [{ title: "説明", bullets: ["reduce dialog soft"] }],
             original_text: "reduce original",
             speaker: "架空花子",
           },

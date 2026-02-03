@@ -194,8 +194,8 @@ describe('storeData (mocked client)', () => {
     middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
     dialogs: [{
       order: 1,
-      summary: 'Aliceが予算の遅れを指摘',
-      soft_language: 'Aliceさんは落ち着いた口調で遅延を確認しました',
+      summary_sections: [{ title: "主張", bullets: ["Aliceが予算の遅れを指摘"] }],
+      soft_language_sections: [{ title: "主張", bullets: ["Aliceさんは落ち着いた口調で遅延を確認しました"] }],
       original_text: 'Aliceが予算の遅れを指摘して、対応が必要だよねって話だったよ。',
       speaker: 'Alice',
     }],
@@ -338,8 +338,8 @@ function buildArticle(id: string): Article {
     middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
     dialogs: [{
       order: 1,
-      summary: 'Aliceが予算の遅れを指摘',
-      soft_language: 'Aliceさんは落ち着いた口調で遅延を確認しました',
+      summary_sections: [{ title: "主張", bullets: ["Aliceが予算の遅れを指摘"] }],
+      soft_language_sections: [{ title: "主張", bullets: ["Aliceさんは落ち着いた口調で遅延を確認しました"] }],
       original_text: 'Aliceが予算の遅れを指摘して、対応が必要だよねって話だったよ。',
       speaker: 'Alice',
     }],
