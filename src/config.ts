@@ -232,8 +232,7 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
 
 function buildProdConfig(): Omit<AppConfig, "environment"> {
   const r2Endpoint = requireEnv("R2_WRITE_ENDPOINT_URL");
-  const r2PublicBase =
-    optionalEnv("R2_PUBLIC_ASSET_URL") || "https://asset.politopics.net";
+  const r2PublicBase = "https://asset.politopics.net";
   return {
     aws: {
       region: "ap-northeast-3",
