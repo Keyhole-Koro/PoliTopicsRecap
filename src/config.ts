@@ -201,7 +201,7 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
       },
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
-    geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-2.5-flash",
+    geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash",
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 50000),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
