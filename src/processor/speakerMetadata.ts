@@ -180,13 +180,29 @@ export function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: S
   const errors: string[] = [];
   assertNonEmptySpeakerMap(speakerMap, "dialogs", errors);
 
+  const buildFallbackText = (dialog: Article["dialogs"][number]): string | undefined => {
+    const candidates = [
+      dialog.original_text,
+      ...(Array.isArray(dialog.summary_sections)
+        ? dialog.summary_sections.flatMap((section) => section.bullets)
+        : []),
+      ...(Array.isArray(dialog.soft_language_sections)
+        ? dialog.soft_language_sections.flatMap((section) => section.bullets)
+        : []),
+    ];
+    return candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+  };
+
   dialogs.forEach((dialog) => {
     const hasValidOrder = typeof dialog.order === "number" && Number.isFinite(dialog.order);
     if (!hasValidOrder) {
       errors.push("Each dialog must include a numeric order");
     }
-    if (typeof dialog.summary !== "string") {
-      errors.push("Each dialog must include a summary");
+    if (!Array.isArray(dialog.summary_sections) || dialog.summary_sections.length === 0) {
+      errors.push("Each dialog must include summary_sections");
+    }
+    if (!Array.isArray(dialog.soft_language_sections) || dialog.soft_language_sections.length === 0) {
+      errors.push("Each dialog must include soft_language_sections");
     }
 
     if (!hasValidOrder) {
@@ -200,7 +216,8 @@ export function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: S
     }
 
     const speaker = meta.speaker ?? dialog.speaker;
-    const originalText = meta.originalText ?? dialog.original_text ?? dialog.summary;
+    const fallbackText = buildFallbackText(dialog);
+    const originalText = meta.originalText ?? dialog.original_text ?? fallbackText;
 
     if (typeof speaker !== "string" || speaker.length === 0) {
       errors.push(`Speaker is required for dialog order ${dialog.order}`);
@@ -219,7 +236,8 @@ export function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: S
     }
 
     const speaker = meta.speaker ?? dialog.speaker;
-    const originalText = meta.originalText ?? dialog.original_text ?? dialog.summary;
+    const fallbackText = buildFallbackText(dialog);
+    const originalText = meta.originalText ?? dialog.original_text ?? fallbackText;
 
     if (typeof speaker !== "string" || speaker.length === 0) {
       throw new Error(`Speaker is required for dialog order ${dialog.order}`);
