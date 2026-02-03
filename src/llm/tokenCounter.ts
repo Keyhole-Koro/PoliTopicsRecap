@@ -1,22 +1,22 @@
-import { GoogleGenerativeAI, type GenerativeModel } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { appConfig } from "../config";
 
-let cachedModel: GenerativeModel | null = null;
+let cachedClient: GoogleGenAI | null = null;
 
-function getModel(): GenerativeModel {
-  if (cachedModel) return cachedModel;
+function getClient(): GoogleGenAI {
+  if (cachedClient) return cachedClient;
   const apiKey = appConfig.geminiApiKey;
   if (!apiKey) {
     throw new Error("Gemini API key is required in config");
   }
-  const genAI = new GoogleGenerativeAI(apiKey);
-  cachedModel = genAI.getGenerativeModel({ model: appConfig.geminiModel });
-  return cachedModel;
+  cachedClient = new GoogleGenAI({ apiKey });
+  return cachedClient;
 }
 
 export async function countTokens(text: string): Promise<number> {
-  const model = getModel();
-  const response = await model.countTokens({
+  const client = getClient();
+  const response = await client.models.countTokens({
+    model: appConfig.geminiModel,
     contents: [{ role: "user", parts: [{ text }] }],
   });
   return response.totalTokens ?? 0;

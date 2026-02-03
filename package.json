@@ -43,7 +43,7 @@
     "@aws-sdk/client-scheduler": "^3.896.0",
     "@aws-sdk/client-sqs": "^3.864.0",
     "@aws-sdk/lib-dynamodb": "^3.817.0",
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^1.39.0",
     "@keyhole-koro/politopics-notification": "latest",
     "dotenv": "^16.5.0",
     "fs-extra": "^11.3.0",

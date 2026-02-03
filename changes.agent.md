@@ -417,6 +417,29 @@ Details:
 - Permitted a single missing dialog when it is the final expected order to reduce false negatives.
 - Files changed:
   - `PoliTopicsRecap/src/processor/taskProcessor.ts`
+
+Agent: Codex
+Date/Time: 2026-02-03 13:05 JST
+Keywords: gemini, sdk, deps
+Topic: Switch Gemini SDK to @google/genai
+Details:
+- Replaced @google/generative-ai usage with @google/genai in Gemini client and token counter.
+- Updated tests to mock the new SDK API shape.
+- Files changed:
+  - `PoliTopicsRecap/src/llm/geminiClient.ts`
+  - `PoliTopicsRecap/src/llm/tokenCounter.ts`
+  - `PoliTopicsRecap/src/llm/geminiClient.test.ts`
+  - `PoliTopicsRecap/src/tasks/tasks.localstack.test.ts`
+  - `PoliTopicsRecap/package.json`
+
+Agent: Codex
+Date/Time: 2026-02-03 13:20 JST
+Keywords: tests, gemini, token
+Topic: Add tokenCounter unit test
+Details:
+- Added unit test covering countTokens usage with @google/genai.
+- Files changed:
+  - `PoliTopicsRecap/src/llm/tokenCounter.test.ts`
 - docs/08_db_design.md
 - docs/jp/08_db_design.md
 

@@ -1,11 +1,12 @@
 const generateContentMock = jest.fn();
-const getGenerativeModelMock = jest.fn(() => ({ generateContent: generateContentMock }));
-const googleGenerativeAiCtorMock = jest.fn(() => ({
-  getGenerativeModel: getGenerativeModelMock,
+const googleGenAiCtorMock = jest.fn(() => ({
+  models: {
+    generateContent: generateContentMock,
+  },
 }));
 
-jest.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: googleGenerativeAiCtorMock,
+jest.mock("@google/genai", () => ({
+  GoogleGenAI: googleGenAiCtorMock,
 }));
 
 import { GeminiClient } from './geminiClient';
@@ -36,25 +37,18 @@ import { GeminiClient } from './geminiClient';
 describe('GeminiClient', () => {
   beforeEach(() => {
     generateContentMock.mockReset();
-    getGenerativeModelMock.mockClear();
-    googleGenerativeAiCtorMock.mockClear();
+    googleGenAiCtorMock.mockClear();
   });
 
   it('requires an API key and uses the default model', () => {
     new GeminiClient({ apiKey: 'test-api-key' });
 
-    expect(googleGenerativeAiCtorMock).toHaveBeenCalledWith('test-api-key');
-    expect(getGenerativeModelMock).toHaveBeenCalledWith({
-      model: 'gemini-2.5-pro',
-      systemInstruction: undefined,
-    });
+    expect(googleGenAiCtorMock).toHaveBeenCalledWith({ apiKey: "test-api-key" });
   });
 
   it('passes merged generation configs to generateContent and returns trimmed text', async () => {
     generateContentMock.mockResolvedValue({
-      response: {
-        text: () => '  generated text  ',
-      },
+      text: "  generated text  ",
     });
 
     const client = new GeminiClient({
@@ -70,16 +64,14 @@ describe('GeminiClient', () => {
       topP: 0.9,
     });
 
-    expect(getGenerativeModelMock).toHaveBeenCalledWith({
-      model: 'gemini-pro-custom',
-      systemInstruction: 'stay-formal',
-    });
     expect(generateContentMock).toHaveBeenCalledWith({
+      model: "gemini-pro-custom",
       contents: [{
-        role: 'user',
-        parts: [{ text: 'Hello' }],
+        role: "user",
+        parts: [{ text: "Hello" }],
       }],
-      generationConfig: {
+      config: {
+        systemInstruction: "stay-formal",
         temperature: 0.7,
         maxOutputTokens: 1000,
         topP: 0.9,

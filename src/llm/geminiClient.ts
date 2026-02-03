@@ -1,10 +1,4 @@
-import {
-  GoogleGenerativeAI,
-  type Content,
-  type GenerationConfig,
-  type GenerateContentRequest,
-  type GenerativeModel,
-} from '@google/generative-ai';
+import { GoogleGenAI } from "@google/genai";
 
 import type {
   LlmClient,
@@ -14,16 +8,32 @@ import type {
 } from './llmClient';
 import { appConfig } from "../config";
 
+type Content = {
+  role: "user" | "system";
+  parts: { text: string }[];
+};
+
+type GenerateContentConfig = {
+  systemInstruction?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  topP?: number;
+  topK?: number;
+  stopSequences?: string[];
+};
+
 export interface GeminiClientOptions {
   apiKey?: string;
   model?: string;
-  defaultGenerationConfig?: Partial<GenerationConfig>;
+  defaultGenerationConfig?: Partial<GenerateContentConfig>;
   systemInstruction?: string;
 }
 
 export class GeminiClient implements LlmClient {
-  private readonly model: GenerativeModel;
-  private readonly defaultGenerationConfig?: Partial<GenerationConfig>;
+  private readonly ai: GoogleGenAI;
+  private readonly model: string;
+  private readonly defaultGenerationConfig?: Partial<GenerateContentConfig>;
+  private readonly systemInstruction?: string;
 
   constructor(options: GeminiClientOptions = {}) {
     const apiKey = options.apiKey ?? appConfig.geminiApiKey;
@@ -31,13 +41,10 @@ export class GeminiClient implements LlmClient {
       throw new Error('Gemini API key is required in config');
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-
+    this.ai = new GoogleGenAI({ apiKey });
+    this.model = options.model ?? "gemini-2.5-pro";
+    this.systemInstruction = options.systemInstruction;
     this.defaultGenerationConfig = options.defaultGenerationConfig;
-    this.model = genAI.getGenerativeModel({
-      model: options.model ?? 'gemini-2.5-pro',
-      systemInstruction: options.systemInstruction,
-    });
   }
 
   async generate(request: LlmGenerateRequest): Promise<LlmGenerateResponse> {
@@ -50,24 +57,28 @@ export class GeminiClient implements LlmClient {
     const generationConfig = buildGenerationConfig(
       this.defaultGenerationConfig,
       request,
+      this.systemInstruction,
     );
 
-    const payload: GenerateContentRequest = generationConfig
-      ? { contents, generationConfig }
-      : { contents };
+    const payload = generationConfig
+      ? { model: this.model, contents, config: generationConfig }
+      : { model: this.model, contents };
 
-    let result;
+    let result: { text?: string } | undefined;
     try {
-      result = await this.model.generateContent(payload);
+      result = await this.ai.models.generateContent(payload);
     } catch (error) {
       const err = error as { cause?: unknown };
       console.error("[GeminiClient] generateContent failed", error);
       if (err?.cause) {
         console.error("[GeminiClient] cause:", err.cause);
       }
+      if (err?.cause instanceof Error && err.cause.stack) {
+        console.error("[GeminiClient] cause stack:", err.cause.stack);
+      }
       throw error;
     }
-    const text = result.response?.text()?.trim();
+    const text = typeof result?.text === "string" ? result.text.trim() : undefined;
     if (!text) {
       throw new Error('Gemini returned an empty response');
     }
@@ -91,14 +102,16 @@ function transformMessageToContent(message: LlmMessage): Content {
 }
 
 function buildGenerationConfig(
-  defaults: Partial<GenerationConfig> | undefined,
+  defaults: Partial<GenerateContentConfig> | undefined,
   request: LlmGenerateRequest,
-): GenerationConfig | undefined {
-  const merged: Partial<GenerationConfig> = {
+  systemInstruction?: string,
+): GenerateContentConfig | undefined {
+  const merged: Partial<GenerateContentConfig> = {
     ...defaults,
+    ...(systemInstruction ? { systemInstruction } : {}),
   };
 
-  const overrides: Partial<GenerationConfig> = {
+  const overrides: Partial<GenerateContentConfig> = {
     temperature: request.temperature,
     maxOutputTokens: request.maxOutputTokens,
     topP: request.topP,
@@ -117,5 +130,5 @@ function buildGenerationConfig(
     return undefined;
   }
 
-  return Object.fromEntries(sanitizedEntries) as GenerationConfig;
+  return Object.fromEntries(sanitizedEntries) as GenerateContentConfig;
 }

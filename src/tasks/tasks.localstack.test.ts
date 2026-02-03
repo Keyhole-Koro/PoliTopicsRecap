@@ -14,14 +14,13 @@ import {
   PutCommand,
 } from "@aws-sdk/lib-dynamodb";
 
-jest.mock("@google/generative-ai");
+jest.mock("@google/genai");
 
-const { GoogleGenerativeAI: googleGenerativeAiCtorMock } = jest.requireMock("@google/generative-ai") as {
-  GoogleGenerativeAI: jest.Mock;
+const { GoogleGenAI: googleGenAiCtorMock } = jest.requireMock("@google/genai") as {
+  GoogleGenAI: jest.Mock;
 };
 
 const generateContentMock = jest.fn();
-const getGenerativeModelMock = jest.fn();
 
 /*
  * processes a single_chunk task, stores reduce result, and marks it completed
@@ -151,13 +150,11 @@ describe("PoliTopics task consumer (LocalStack)", () => {
     beforeEach(async () => {
       await cleanupEnvironment();
       generateContentMock.mockReset();
-      getGenerativeModelMock.mockReset();
-      getGenerativeModelMock.mockImplementation(() => ({
-        generateContent: generateContentMock,
-      }));
-      googleGenerativeAiCtorMock.mockReset();
-      googleGenerativeAiCtorMock.mockImplementation(() => ({
-        getGenerativeModel: getGenerativeModelMock,
+      googleGenAiCtorMock.mockReset();
+      googleGenAiCtorMock.mockImplementation(() => ({
+        models: {
+          generateContent: generateContentMock,
+        },
       }));
     });
 
