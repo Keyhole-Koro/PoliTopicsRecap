@@ -184,7 +184,12 @@ export function attachSpeakerMetadata(dialogs: Article["dialogs"], speakerMap: S
     const candidates = [
       dialog.original_text,
       ...(Array.isArray(dialog.summary_sections)
-        ? dialog.summary_sections.flatMap((section) => section.bullets)
+        ? dialog.summary_sections.flatMap((section) =>
+            section.bullets.flatMap((bullet) => {
+              if (typeof bullet === "string") return bullet;
+              return [bullet.point, bullet.quote, bullet.detail].filter((value) => typeof value === "string");
+            })
+          )
         : []),
     ];
     return candidates.find((value) => typeof value === "string" && value.trim().length > 0);

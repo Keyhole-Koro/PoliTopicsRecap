@@ -195,7 +195,18 @@ describe('storeData (mocked client)', () => {
     middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
     dialogs: [{
       order: 1,
-      summary_sections: [{ title: "主張", bullets: ["Aliceが予算の遅れを指摘"] }],
+      summary_sections: [
+        {
+          title: "主張",
+          bullets: [
+            {
+              point: "Aliceが予算の遅れを指摘",
+              quote: "予算の遅れを指摘した",
+              detail: "執行の遅れを早期に是正する必要があると述べた。",
+            },
+          ],
+        },
+      ],
       original_text: 'Aliceが予算の遅れを指摘して、対応が必要だよねって話だったよ。',
       speaker: 'Alice',
     }],
@@ -340,7 +351,18 @@ function buildArticle(id: string): Article {
     middle_summary: [{ based_on_orders: [1], summary: '補正予算案で政府と野党が議論' }],
     dialogs: [{
       order: 1,
-      summary_sections: [{ title: "主張", bullets: ["Aliceが予算の遅れを指摘"] }],
+      summary_sections: [
+        {
+          title: "主張",
+          bullets: [
+            {
+              point: "Aliceが予算の遅れを指摘",
+              quote: "予算の遅れを指摘した",
+              detail: "執行の遅れを早期に是正する必要があると述べた。",
+            },
+          ],
+        },
+      ],
       original_text: 'Aliceが予算の遅れを指摘して、対応が必要だよねって話だったよ。',
       speaker: 'Alice',
     }],
