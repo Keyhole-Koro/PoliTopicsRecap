@@ -6,10 +6,12 @@ import {
   fetchOldestReadyTask,
   fetchOldestIngestedTask,
   countReadyTasks,
+  getTaskByIssue,
   type TaskRepositoryConfig,
 } from "../tasks/taskRepository";
 import { notifyBatchComplete } from "../processor/notifications";
-import { processTask, requeueCompletedTasksWithMajorMismatch } from "../processor/taskRunner";
+import { processTask, requeueCompletedTasksWithMajorMismatch, type TaskRunnerResult } from "../processor/taskRunner";
+import type { TaskItem } from "../tasks/types";
 
 export interface BatchStats {
   processed: number;
@@ -36,7 +38,7 @@ export class BatchProcessor {
   constructor(private ctx: BatchContext) {}
 
   async run(): Promise<void> {
-    const { config, docClient, repoConfig, rateLimiter, stats } = this.ctx;
+    const { config, docClient, repoConfig, stats } = this.ctx;
 
     // Calculate max tasks to process
     let readyCount = await countReadyTasks(docClient, repoConfig);
@@ -69,43 +71,37 @@ export class BatchProcessor {
         break;
       }
 
-      // Check day limit (LLM tasks only)
-      if (rateLimiter.isDayLimitReached()) {
+      console.log(`[BatchProcessor] Processing task ${task.pk} (${stats.processed + 1}/${maxTasks})`);
+      const loopResult = await this.processTaskWithChunkLoop(task);
+      if (loopResult.processed) {
+        if (loopResult.result.status === "succeeded") {
+          stats.succeeded++;
+          consecutiveErrors = 0;
+        } else if (loopResult.result.status === "failed") {
+          stats.failed++;
+          consecutiveErrors++;
+
+          if (consecutiveErrors >= config.rateLimit.maxConsecutiveErrors) {
+            console.error(
+              `[BatchProcessor] Max consecutive errors (${config.rateLimit.maxConsecutiveErrors}) reached, exiting`
+            );
+            await notifyBatchComplete(stats, "error");
+            throw new Error("Max consecutive errors reached");
+          }
+
+          // Cooldown before next attempt
+          await this.sleep(config.rateLimit.cooldownOnErrorMs);
+        } else {
+          stats.skipped++;
+        }
+
+        stats.processed++;
+      }
+
+      if (loopResult.stopBatch) {
         console.log("[BatchProcessor] Daily rate limit reached, stopping");
         break;
       }
-
-      // Wait for rate limit
-      const waitTime = await rateLimiter.waitIfNeeded();
-      if (waitTime > 0) {
-        console.log(`[BatchProcessor] Rate limited, waited ${waitTime}ms`);
-      }
-
-      console.log(`[BatchProcessor] Processing task ${task.pk} (${stats.processed + 1}/${maxTasks})`);
-
-      const result = await processTask(this.ctx, task);
-      if (result.status === "succeeded") {
-        stats.succeeded++;
-        consecutiveErrors = 0;
-      } else if (result.status === "failed") {
-        stats.failed++;
-        consecutiveErrors++;
-
-        if (consecutiveErrors >= config.rateLimit.maxConsecutiveErrors) {
-          console.error(
-            `[BatchProcessor] Max consecutive errors (${config.rateLimit.maxConsecutiveErrors}) reached, exiting`
-          );
-          await notifyBatchComplete(stats, "error");
-          throw new Error("Max consecutive errors reached");
-        }
-
-        // Cooldown before next attempt
-        await this.sleep(config.rateLimit.cooldownOnErrorMs);
-      } else {
-        stats.skipped++;
-      }
-
-      stats.processed++;
     }
 
     // Batch complete
@@ -124,6 +120,69 @@ export class BatchProcessor {
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async processTaskWithChunkLoop(
+    task: TaskItem,
+  ): Promise<{ result: TaskRunnerResult; stopBatch: boolean; processed: boolean }> {
+    let currentTask = task;
+    let lastResult: TaskRunnerResult = { task: currentTask, status: "skipped" };
+    let processed = false;
+    let maxPasses = this.computeChunkPassLimit(currentTask);
+    let pass = 0;
+
+    while (pass < maxPasses) {
+      if (this.ctx.rateLimiter.isDayLimitReached()) {
+        return { result: lastResult, stopBatch: true, processed };
+      }
+
+      const waitTime = await this.ctx.rateLimiter.waitIfNeeded();
+      if (waitTime > 0) {
+        console.log(`[BatchProcessor] Rate limited, waited ${waitTime}ms`);
+      }
+
+      lastResult = await processTask(this.ctx, currentTask);
+      processed = true;
+
+      if (lastResult.status !== "succeeded") {
+        return { result: lastResult, stopBatch: false, processed };
+      }
+
+      const updatedTask = await getTaskByIssue(
+        this.ctx.docClient,
+        this.ctx.repoConfig,
+        currentTask.pk,
+      );
+      if (!updatedTask) {
+        return { result: lastResult, stopBatch: false, processed };
+      }
+
+      currentTask = updatedTask;
+      maxPasses = Math.max(maxPasses, this.computeChunkPassLimit(currentTask));
+
+      if (currentTask.status === "completed") {
+        return { result: lastResult, stopBatch: false, processed };
+      }
+
+      if (currentTask.processingMode !== "chunked") {
+        return { result: lastResult, stopBatch: false, processed };
+      }
+
+      pass++;
+    }
+
+    console.warn(
+      `[BatchProcessor] Chunk loop exceeded limit for ${task.pk} (passes=${pass}, max=${maxPasses})`,
+    );
+    if (lastResult.status === "succeeded") {
+      lastResult = { ...lastResult, status: "skipped" };
+    }
+    return { result: lastResult, stopBatch: false, processed };
+  }
+
+  private computeChunkPassLimit(task: TaskItem): number {
+    const chunkCount = Array.isArray(task.chunks) ? task.chunks.length : 0;
+    return Math.max(1, chunkCount + 2);
   }
 
   private logSummary(stats: BatchStats, environment: string): void {

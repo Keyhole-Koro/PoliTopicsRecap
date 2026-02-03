@@ -29,31 +29,54 @@ EventBridge Scheduler (1日1回)
 
 ## 処理フロー
 
+```mermaid
+flowchart TD
+  A[起動] --> B[readyタスク数をカウント]
+  B --> C[maxTasks = max(RPD, ready)]
+  C --> D{major mismatch の完了タスクを再投入?}
+  D -->|Yes| E[上限まで再投入]
+  D -->|No| F
+  E --> F[processed < maxTasks の間ループ]
+
+  F --> G{次タスク取得}
+  G -->|なし| H[正常終了 (exit 0)]
+  G -->|あり| I[processTaskWithChunkLoop]
+
+  I --> J{日次上限?}
+  J -->|Yes| H
+  J -->|No| K[RateLimiter.waitIfNeeded]
+  K --> L[processTask]
+
+  L --> M{結果}
+  M -->|成功| N[Stats: succeeded]
+  M -->|失敗| O[Stats: failed + cooldown]
+  M -->|スキップ| P[Stats: skipped]
+
+  N --> Q[Stats: processed++]
+  O --> Q
+  P --> Q
+  Q --> F
 ```
-起動 → タスク数カウント → max(RPD, tasks)を上限に設定
-           │
-    ┌──────▼──────────────────────────────────────┐
-    │                                             │
-    ▼                                             │
-タスク取得 ──→ なし ──→ 正常終了 (exit 0)          │
-    │                                             │
-    ▼ あり                                        │
-Rate Limit待機                                    │
-    │                                             │
-    ▼                                             │
-タスク処理                                        │
-    │                                             │
-    ├── 成功 → カウンター増加、連続エラーリセット    │
-    │         上限到達? ──→ Yes ──→ 正常終了       │
-    │              │                              │
-    │              ▼ No                           │
-    │              └──────────────────────────────┘
-    │
-    └── 失敗 → 連続エラー増加
-              閾値超過? ──→ Yes ──→ エラー終了 (exit 1)
-                  │
-                  ▼ No
-              待機 → 次のタスクへ ────────────────┘
+
+## Chunkedタスクのサブフロー
+
+```mermaid
+flowchart TD
+  A[processTaskWithChunkLoop] --> B{日次上限?}
+  B -->|Yes| Z[バッチ停止]
+  B -->|No| C[RateLimiter.waitIfNeeded]
+  C --> D[processTask]
+  D --> E{結果}
+  E -->|失敗/スキップ| Y[結果を返す]
+  E -->|成功| F[タスク状態を再取得]
+  F --> G{completed?}
+  G -->|Yes| Y
+  G -->|No| H{processingMode = chunked?}
+  H -->|No| Y
+  H -->|Yes| I{未完了chunkあり?}
+  I -->|Yes| B
+  I -->|No| J[reduce処理 (processTask内)]
+  J --> B
 ```
 
 ## 設定

@@ -29,31 +29,54 @@ EventBridge Scheduler (1日1回 / Once daily)
 
 ## Processing Flow
 
+```mermaid
+flowchart TD
+  A[Start] --> B[Count ready tasks]
+  B --> C[Set maxTasks = max(RPD, ready)]
+  C --> D{Requeue completed w/ major prompt mismatch?}
+  D -->|Yes| E[Requeue up to cap]
+  D -->|No| F
+  E --> F[Loop while processed < maxTasks]
+
+  F --> G{Fetch next task}
+  G -->|None| H[Exit 0]
+  G -->|Found| I[processTaskWithChunkLoop]
+
+  I --> J{Day limit reached?}
+  J -->|Yes| H
+  J -->|No| K[RateLimiter.waitIfNeeded]
+  K --> L[processTask]
+
+  L --> M{Result}
+  M -->|succeeded| N[Stats: succeeded]
+  M -->|failed| O[Stats: failed + cooldown]
+  M -->|skipped| P[Stats: skipped]
+
+  N --> Q[Stats: processed++]
+  O --> Q
+  P --> Q
+  Q --> F
 ```
-起動 → タスク数カウント → max(RPD, tasks)を上限に設定
-           │
-    ┌──────▼──────────────────────────────────────┐
-    │                                             │
-    ▼                                             │
-タスク取得 ──→ なし ──→ 正常終了 (exit 0)          │
-    │                                             │
-    ▼ あり                                        │
-Rate Limit待機                                    │
-    │                                             │
-    ▼                                             │
-タスク処理                                        │
-    │                                             │
-    ├── 成功 → カウンター増加、連続エラーリセット    │
-    │         上限到達? ──→ Yes ──→ 正常終了       │
-    │              │                              │
-    │              ▼ No                           │
-    │              └──────────────────────────────┘
-    │
-    └── 失敗 → 連続エラー増加
-              閾値超過? ──→ Yes ──→ エラー終了 (exit 1)
-                  │
-                  ▼ No
-              待機 → 次のタスクへ ────────────────┘
+
+## Chunked Task Subflow
+
+```mermaid
+flowchart TD
+  A[processTaskWithChunkLoop] --> B{Day limit reached?}
+  B -->|Yes| Z[Stop batch]
+  B -->|No| C[RateLimiter.waitIfNeeded]
+  C --> D[processTask]
+  D --> E{Result}
+  E -->|failed/skipped| Y[Return result]
+  E -->|succeeded| F[Reload task state]
+  F --> G{Task completed?}
+  G -->|Yes| Y
+  G -->|No| H{processingMode = chunked?}
+  H -->|No| Y
+  H -->|Yes| I{More chunks?}
+  I -->|Yes| B
+  I -->|No| J[Reduce phase inside processTask]
+  J --> B
 ```
 
 ## Configuration
