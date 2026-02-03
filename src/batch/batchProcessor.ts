@@ -6,7 +6,7 @@ import {
   fetchOldestReadyTask,
   fetchOldestIngestedTask,
   countReadyTasks,
-  getTaskByIssue,
+  getTaskById,
   type TaskRepositoryConfig,
 } from "../tasks/taskRepository";
 import { notifyBatchComplete } from "../processor/notifications";
@@ -148,7 +148,7 @@ export class BatchProcessor {
         return { result: lastResult, stopBatch: false, processed };
       }
 
-      const updatedTask = await getTaskByIssue(
+      const updatedTask = await getTaskById(
         this.ctx.docClient,
         this.ctx.repoConfig,
         currentTask.pk,

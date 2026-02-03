@@ -17,6 +17,7 @@ export const instruction_common = `【目的】
 - middle_summary.summary は **ラベル** ＋短い箇条書きを必須とし、1トピック内に留める。
 - 数値/期限/担当がある場合は GFM 表（| 区切り）で整理する。該当なしの場合は表を出さない。
 - JSON 文字列内の改行は \\n を使う（実際の改行・コードフェンス・HTMLは不可）。
+- id は入力の [meta] にある内部IDをそのまま出力すること（issueIDと一致しない場合がある）。
 - dialogs の各発言には、発言の性質を表す reaction を必ず付与すること（賛成 / 反対 / 質問 / 回答 / 中立 のいずれか1つ）。
 - dialogs は summary_sections のみで要点を表現する（summary / soft_language は出力しない）。
 - summary_sections は必須。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
@@ -71,7 +72,7 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
 
 {
   "prompt_version": "${PROMPT_VERSION}",
-  "id": "文字列 (議事録ID 例: issueID)",
+  "id": "文字列 (内部ID。入力の[meta]にあるIDをそのまま出力)",
 
   "middle_summary": [
     {
@@ -130,7 +131,7 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
 
 {
   "prompt_version": "${PROMPT_VERSION}",
-  "id": "文字列 (議事録ID 例: issueID)",
+  "id": "文字列 (内部ID。入力の[meta]にあるIDをそのまま出力)",
 
   "title": "要点がひと目で分かる見出し（最終）",
   "category": "会議全体を表すカテゴリ（主要テーマや種別を簡潔に）",
@@ -167,7 +168,7 @@ export const output_format_single_chunk = `### 出力フォーマット（single
 
 {
   "prompt_version": "${PROMPT_VERSION}",
-  "id": "文字列 (議事録ID 例: issueID)",
+  "id": "文字列 (内部ID。入力の[meta]にあるIDをそのまま出力)",
 
   "title": "single chunkから導く会議全体の見出し",
   "category": "会議全体を表すカテゴリ",

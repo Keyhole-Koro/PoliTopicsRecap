@@ -24,6 +24,7 @@ export const instruction_common = `【目的】
   - qa[].answer は回答要旨、qa[].answer_orders は回答の order 配列（number[]）。
   - qa[].ask.question / qa[].answer は1文で簡潔に。
 - summary / soft_language_summary / middle_summary の本文には (order: 1) のような注記は書かない。order参照は本文末尾に \`[[orders:1,2,3]]\` のみ許可（数字・カンマ・ハイフンのみ、空白なし）。
+- id は入力の [meta] にある内部IDをそのまま出力すること（issueIDと一致しない場合がある）。
 - すべての出力に prompt_version を含める（現在値: ${PROMPT_VERSION}）。`;
 
 const no_code_fence_warning = "出力は必ず純粋なJSON文字列のみ（バックティックやコードブロック禁止）。";
@@ -53,7 +54,7 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
 
 {
   "prompt_version": "${PROMPT_VERSION}",
-  "id": "文字列 (議事録ID 例: issueID)",
+  "id": "文字列 (内部ID。入力の[meta]にあるIDをそのまま出力)",
 
   "middle_summary": [
     {
@@ -111,7 +112,7 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
 
 {
   "prompt_version": "${PROMPT_VERSION}",
-  "id": "文字列 (議事録ID 例: issueID)",
+  "id": "文字列 (内部ID。入力の[meta]にあるIDをそのまま出力)",
 
   "title": "要点がひと目で分かる見出し（最終）",
   "category": "会議全体を表すカテゴリ（主要テーマや種別を簡潔に）",
@@ -173,10 +174,10 @@ export const TEST_PROMPT_INPUT = `会議名: 予算委員会 第3号
 [order 5] 与党議員が中小企業向け利子補給制度の実績と拡充計画を質問。
 [order 6] 経産省が対象業種を広げ、金利補助率を1.5%→2.0%に引き上げる案を報告。
 [order 7] 複数委員が防災投資の長期計画とKPI開示を求め、政府は夏までに骨子をまとめると説明。`;
-export const buildTestReduceInput = (issueID: string): string => {
+export const buildTestReduceInput = (taskId: string): string => {
   return `${TEST_PROMPT_INPUT}
 
 [meta]
-議事録ID: ${issueID}
+内部ID: ${taskId}
 上記IDを必ずそのまま"id"として出力すること。`;
 };

@@ -78,7 +78,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
     };
     const articleAssetBucket = appConfig.articleAssetBucketName || appConfig.promptBucketName;
     const assetBaseUrl = appConfig.r2.publicUrlBase.replace(/\/+$/, "");
-    const expectedAssetUrl = (issueID: string) => `${assetBaseUrl}/articles/${issueID}/asset.json`;
+    const expectedAssetUrl = (taskId: string) => `${assetBaseUrl}/articles/${taskId}/asset.json`;
     const taskContext = {
       config: appConfig,
       docClient: dynamoDoc,
@@ -166,9 +166,10 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
       const issueID = uniqueIssue();
-      const promptKey = `prompts/reduce/${issueID}_minute.txt`;
-      const resultKey = `results/${issueID}_minute_reduce.json`;
-      const attachedKey = `attachedAssets/${issueID}.json`;
+      const taskId = buildTaskId(issueID);
+      const promptKey = `prompts/reduce/${taskId}_minute.txt`;
+      const resultKey = `results/${taskId}_minute_reduce.json`;
+      const attachedKey = `attachedAssets/${taskId}.json`;
 
       try {
         await putPrompt(promptKey, "Summarize the speeches.");
@@ -191,7 +192,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
           new PutCommand({
             TableName: tableName,
             Item: {
-              pk: issueID,
+              pk: taskId,
               status: "pending",
               llm: "gemini",
               llmModel: "gemini-2.5-flash",
@@ -206,25 +207,26 @@ describe("PoliTopics task consumer (LocalStack)", () => {
               attachedAssets: { speakerMetadataUrl: `s3://${bucket}/${attachedKey}` },
             },
           }),
-          `Put pending task ${issueID}`,
+          `Put pending task ${taskId}`,
         );
 
         generateContentMock.mockResolvedValueOnce({
-          response: { text: () => JSON.stringify(buildArticle(issueID)) },
+          response: { text: () => JSON.stringify(buildArticle(taskId)) },
         });
 
         await processNextPendingTask(taskContext);
 
-        const stored = await getTask(tableName, issueID);
+        const stored = await getTask(tableName, taskId);
         expect(stored?.status).toBe("completed");
 
         const reduceOutput = await readObjectText(bucket, resultKey);
         console.log("Reduce output:", reduceOutput);
-        expect(JSON.parse(reduceOutput).id).toBe(issueID);
+        expect(JSON.parse(reduceOutput).id).toBe(taskId);
 
-        const articleItem = await getArticle(articleTableName, issueID);
+        const articleItem = await getArticle(articleTableName, taskId);
         expect(articleItem?.title).toContain("Test Committee");
-        expect(articleItem?.asset_url).toBe(expectedAssetUrl(issueID));
+        expect(articleItem?.asset_url).toBe(expectedAssetUrl(taskId));
+        expect(articleItem?.issueID).toBe(issueID);
 
         const asset = await readArticleAsset(articleItem?.asset_url);
         expect(asset?.dialogs?.[0]?.speaker).toBe("架空太郎");
@@ -233,7 +235,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
         expect(asset?.dialogs?.[0]?.speakerPosition).toBeUndefined();
       } finally {
         await deleteKeys(bucket, [promptKey, resultKey, attachedKey]);
-        await deleteTask(tableName, issueID);
+        await deleteTask(tableName, taskId);
       }
     });
 
@@ -242,19 +244,20 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       const tableName = appConfig.taskTableName;
       const articleTableName = appConfig.articleTableName;
       const issueID = uniqueIssue();
+      const taskId = buildTaskId(issueID);
       const chunkDefinition = {
         id: "CHUNK#0",
-        promptKey: `prompts/chunks/${issueID}_0.txt`,
-        resultKey: `results/chunks/${issueID}_0.json`,
+        promptKey: `prompts/chunks/${taskId}_0.txt`,
+        resultKey: `results/chunks/${taskId}_0.json`,
         promptBody: [
           "[order 1] 内閣府が防災予算の増額を報告。",
           "[order 2] 委員が進捗管理の仕組みを質問。",
           "[order 3] 大臣が年度内に指針を示すと回答。",
         ].join("\n"),
       };
-      const reducePromptKey = `prompts/reduce/${issueID}_chunked.txt`;
-      const reduceResultKey = `results/${issueID}_chunked_reduce.json`;
-      const attachedKey = `attachedAssets/${issueID}.json`;
+      const reducePromptKey = `prompts/reduce/${taskId}_chunked.txt`;
+      const reduceResultKey = `results/${taskId}_chunked_reduce.json`;
+      const attachedKey = `attachedAssets/${taskId}.json`;
 
       try {
         await putPrompt(chunkDefinition.promptKey, chunkDefinition.promptBody);
@@ -279,7 +282,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
           new PutCommand({
             TableName: tableName,
             Item: {
-              pk: issueID,
+              pk: taskId,
               status: "pending",
               llm: "gemini",
               llmModel: "gemini-2.5-flash",
@@ -303,30 +306,31 @@ describe("PoliTopics task consumer (LocalStack)", () => {
               ],
             },
           }),
-          `Put chunked task ${issueID}`,
+          `Put chunked task ${taskId}`,
         );
 
         generateContentMock
           .mockResolvedValueOnce({
-            response: { text: () => JSON.stringify(buildChunkOutput(issueID)) },
+            response: { text: () => JSON.stringify(buildChunkOutput(taskId)) },
           })
           .mockResolvedValueOnce({
-            response: { text: () => JSON.stringify(buildReduceOutput(issueID)) },
+            response: { text: () => JSON.stringify(buildReduceOutput(taskId)) },
           });
 
         await processNextPendingTask(taskContext); // process chunk
         await processNextPendingTask(taskContext); // process reduce
 
-        const stored = await getTask(tableName, issueID);
+        const stored = await getTask(tableName, taskId);
         expect(stored?.status).toBe("completed");
         const chunkStatuses = stored?.chunks?.map((c: any) => c.status) ?? [];
         expect(chunkStatuses.every((status: string) => status === "ready")).toBe(true);
 
         const reduceOutput = await readObjectText(bucket, reduceResultKey);
-        expect(JSON.parse(reduceOutput).id).toBe(issueID);
+        expect(JSON.parse(reduceOutput).id).toBe(taskId);
 
-        const articleItem = await getArticle(articleTableName, issueID);
-        expect(articleItem?.asset_url).toBe(expectedAssetUrl(issueID));
+        const articleItem = await getArticle(articleTableName, taskId);
+        expect(articleItem?.asset_url).toBe(expectedAssetUrl(taskId));
+        expect(articleItem?.issueID).toBe(issueID);
       } finally {
         await deleteKeys(bucket, [
           chunkDefinition.promptKey,
@@ -335,7 +339,7 @@ describe("PoliTopics task consumer (LocalStack)", () => {
           reduceResultKey,
           attachedKey,
         ]);
-        await deleteTask(tableName, issueID);
+        await deleteTask(tableName, taskId);
       }
     });
 
@@ -456,34 +460,34 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       return JSON.parse(text);
     }
 
-    async function getTask(tableName: string, issueID: string) {
+    async function getTask(tableName: string, taskId: string) {
       const res = await safeDynamoSend(
         new GetCommand({
           TableName: tableName,
-          Key: { pk: issueID },
+          Key: { pk: taskId },
         }),
-        `GetTask ${issueID}`,
+        `GetTask ${taskId}`,
       );
       return res.Item;
     }
 
-    async function deleteTask(tableName: string, issueID: string) {
+    async function deleteTask(tableName: string, taskId: string) {
       await safeDynamoSend(
         new DeleteCommand({
           TableName: tableName,
-          Key: { pk: issueID },
+          Key: { pk: taskId },
         }),
-        `DeleteTask ${issueID}`,
+        `DeleteTask ${taskId}`,
       );
     }
 
-    async function getArticle(tableName: string, issueID: string) {
+    async function getArticle(tableName: string, taskId: string) {
       const res = await safeDynamoSend(
         new GetCommand({
           TableName: tableName,
-          Key: { PK: `A#${issueID}`, SK: "META" },
+          Key: { PK: `A#${taskId}`, SK: "META" },
         }),
-        `GetArticle ${issueID}`,
+        `GetArticle ${taskId}`,
       );
       return res.Item;
     }
@@ -512,10 +516,14 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       return `ISSUE-${Math.random().toString(36).slice(2, 10)}`;
     }
 
-    function buildArticle(issueID: string) {
+    function buildTaskId(issueID: string): string {
+      return `TASK-${issueID}`;
+    }
+
+    function buildArticle(taskId: string) {
       return {
         prompt_version: "6.1",
-        id: issueID,
+        id: taskId,
         title: "Test Committee Recap",
         date: "2025-01-01T00:00:00Z",
         month: "2025-01",
@@ -547,10 +555,10 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       };
     }
 
-    function buildChunkOutput(issueID: string) {
+    function buildChunkOutput(taskId: string) {
       return {
         prompt_version: "6.1",
-        id: issueID,
+        id: taskId,
         middle_summary: [{ based_on_orders: [1], summary: "chunk summary" }],
         soft_language_summary: { based_on_orders: [1], summary: "chunk soft summary" },
         summary: { based_on_orders: [1], summary: "chunk summary detail" },
@@ -567,10 +575,10 @@ describe("PoliTopics task consumer (LocalStack)", () => {
       };
     }
 
-    function buildReduceOutput(issueID: string) {
+    function buildReduceOutput(taskId: string) {
       return {
         prompt_version: "6.1",
-        id: issueID,
+        id: taskId,
         title: "Chunked Reduce Result",
         date: "2025-01-01T00:00:00Z",
         month: "2025-01",

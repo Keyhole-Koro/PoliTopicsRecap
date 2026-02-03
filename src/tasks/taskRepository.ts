@@ -162,15 +162,15 @@ export async function fetchTasksByStatusPage(
   return { tasks, lastKey: res.LastEvaluatedKey };
 }
 
-export async function getTaskByIssue(
+export async function getTaskById(
   doc: DynamoDBDocumentClient,
   cfg: TaskRepositoryConfig,
-  issueID: string,
+  taskId: string,
 ): Promise<TaskItem | null> {
   const res = await doc.send(
     new GetCommand({
       TableName: cfg.tableName,
-      Key: { pk: issueID },
+      Key: { pk: taskId },
     }),
   );
   return asTaskItem(res.Item);

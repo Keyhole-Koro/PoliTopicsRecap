@@ -213,11 +213,14 @@ async function persistArticleIfPossible(
     }
     const { prompt_version: _promptVersion, ...articlePayload } = rawArticle;
     assertDialogOrdersComplete(articlePayload.dialogs, speakerMap, meeting);
+    const issueID = meeting?.issueID ?? (articlePayload as { issueID?: string }).issueID ?? rawArticle.id;
     const normalizedKeyPoints = Array.isArray(articlePayload.key_points)
       ? articlePayload.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
       : [];
     const withFallbacks: Article = {
       ...articlePayload,
+      id: task.pk,
+      issueID,
       key_points: normalizedKeyPoints,
       dialogs: attachSpeakerMetadata(articlePayload.dialogs ?? [], speakerMap),
       date: articlePayload.date ?? meeting?.date,
@@ -324,7 +327,7 @@ async function loadPromptText(
     const input = buildSpeechInput({
       speeches: payload.speeches,
       meeting: payload.meeting ?? task.meeting,
-      issueID: payload.meeting?.issueID ?? task.meeting?.issueID,
+      taskId: task.pk,
     });
     return appendInput(payload.singleChunkPromptTemplate, input);
   }
@@ -350,7 +353,7 @@ async function loadPromptText(
     const input = buildReduceInput({
       chunkResults,
       meeting: payload.meeting ?? task.meeting,
-      issueID: payload.meeting?.issueID ?? task.meeting?.issueID,
+      taskId: task.pk,
     });
     return appendInput(payload.reducePromptTemplate, input);
   }
@@ -361,7 +364,7 @@ async function loadPromptText(
       contextBefore: Array.isArray(payload.contextBefore) ? payload.contextBefore : undefined,
       contextAfter: Array.isArray(payload.contextAfter) ? payload.contextAfter : undefined,
       meeting: payload.meeting ?? task.meeting,
-      issueID: payload.meeting?.issueID ?? task.meeting?.issueID,
+      taskId: task.pk,
     });
     return appendInput(payload.prompt, input);
   }

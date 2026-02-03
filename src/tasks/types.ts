@@ -24,7 +24,7 @@ export type AttachedAssets = {
 };
 
 export type TaskItem = {
-  pk: string;
+  pk: string; // internal task ID (hash of session + house + issueID)
   status: TaskStatus;
   llm?: string;
   llmModel?: string;

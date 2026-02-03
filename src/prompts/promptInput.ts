@@ -37,7 +37,7 @@ export function formatSpeechLine(speech: RawSpeechRecord): string | null {
 export function buildSpeechInput(args: {
   speeches: RawSpeechRecord[];
   meeting?: Meeting;
-  issueID?: string;
+  taskId?: string;
   contextBefore?: RawSpeechRecord[];
   contextAfter?: RawSpeechRecord[];
 }): string {
@@ -69,7 +69,7 @@ export function buildSpeechInput(args: {
     appendSpeechSection("[context after]", args.contextAfter ?? []);
   }
 
-  const metaLines = buildMetaBlockLines(args.issueID ?? args.meeting?.issueID);
+  const metaLines = buildMetaBlockLines(args.taskId ?? args.meeting?.issueID);
   if (metaLines.length > 0) {
     lines.push("");
     lines.push(...metaLines);
@@ -81,7 +81,7 @@ export function buildSpeechInput(args: {
 export function buildReduceInput(args: {
   chunkResults: ChunkResultInput[];
   meeting?: Meeting;
-  issueID?: string;
+  taskId?: string;
 }): string {
   const lines: string[] = [];
   lines.push(...buildMeetingHeaderLines(args.meeting));
@@ -97,7 +97,7 @@ export function buildReduceInput(args: {
     lines.push("");
   });
 
-  const metaLines = buildMetaBlockLines(args.issueID ?? args.meeting?.issueID);
+  const metaLines = buildMetaBlockLines(args.taskId ?? args.meeting?.issueID);
   if (metaLines.length > 0) {
     lines.push(...metaLines);
   }
@@ -121,12 +121,12 @@ function buildMeetingHeaderLines(meeting?: Meeting): string[] {
   return lines;
 }
 
-function buildMetaBlockLines(issueID?: string): string[] {
-  const normalizedId = trimOrEmpty(issueID);
+function buildMetaBlockLines(taskId?: string): string[] {
+  const normalizedId = trimOrEmpty(taskId);
   if (!normalizedId) return [];
   return [
     "[meta]",
-    `議事録ID: ${normalizedId}`,
+    `内部ID: ${normalizedId}`,
     "上記IDを必ずそのまま\"id\"として出力すること。",
   ];
 }

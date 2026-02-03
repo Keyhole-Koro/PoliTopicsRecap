@@ -36,6 +36,7 @@ jest.mock("../processor/taskPreparation", () => ({
 
 import type { AppConfig } from "../config";
 import { processTask } from "../processor/taskRunner";
+import { PROMPT_VERSION } from "../prompts/prompts";
 import type { TaskItem } from "./types";
 
 /*
@@ -235,6 +236,7 @@ describe("retryAttempts", () => {
     const task: TaskItem = buildTask({
       raw_url: "s3://bucket/raw/ISSUE-1.json",
       maxInputToken: 4000,
+      prompt_version: PROMPT_VERSION,
     });
 
     handleDirectTaskMock.mockRejectedValueOnce(

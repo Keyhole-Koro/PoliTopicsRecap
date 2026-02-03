@@ -432,3 +432,30 @@ Files:
 - Added optional dialog section arrays (summary_sections / soft_language_sections) to the prompt schema and docs for UI rendering.
 - Fixed dialog section titles to a defined schema set and required summary/sections/QA to avoid overlapping content.
 - Updated functional spec wording to match the new dialog guidance.
+
+Agent: Codex
+Date/Time: 2026-02-03 15:42 JST
+Keywords: task-id, uid, prompts, tests, docs
+Topic: Use internal task UID across recap prompts and task flows
+Details:
+- Updated prompt metadata/instructions to treat `id` as the internal task UID (not issueID) and aligned prompt input builders.
+- Renamed task lookup helper to reflect task ID semantics and kept task processing keyed on `pk`.
+- Refreshed LocalStack and metadata tests to use separate taskId/issueID and require dialog summary_sections.
+- Updated system/DB docs and glossary to document task UID hashing and issueID as metadata.
+Files changed:
+- `PoliTopicsRecap/src/prompts/promptInput.ts`
+- `PoliTopicsRecap/src/prompts/prompts.ts`
+- `PoliTopicsRecap/src/prompts.for.llmtest.ts`
+- `PoliTopicsRecap/src/processor/taskProcessor.ts`
+- `PoliTopicsRecap/src/tasks/types.ts`
+- `PoliTopicsRecap/src/tasks/taskRepository.ts`
+- `PoliTopicsRecap/src/batch/batchProcessor.ts`
+- `PoliTopicsRecap/src/tasks/tasks.localstack.test.ts`
+- `PoliTopicsRecap/src/processor/taskProcessor.metadata.test.ts`
+- `PoliTopicsRecap/src/tasks/retryAttempts.test.ts`
+- `docs/01_project_overview.md`
+- `docs/jp/01_project_overview.md`
+- `docs/system_overview.md`
+- `docs/jp/system_overview.md`
+- `docs/08_db_design.md`
+- `docs/jp/08_db_design.md`

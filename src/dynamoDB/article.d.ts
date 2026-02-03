@@ -72,6 +72,7 @@ export type Term = {
 
 export default interface Article {
   id: string;
+  issueID?: string;
   title: string;
   date: string;  // ISO string or "YYYY-MM-DD" (will be normalized to ISO UTC)
   month: string; // "YYYY-MM" (will be normalized to align with `date`)

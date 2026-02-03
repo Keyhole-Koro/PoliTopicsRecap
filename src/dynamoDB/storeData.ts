@@ -130,6 +130,7 @@ export default async function storeData(
   const thinBase = {
     type: "THIN_INDEX",
     articleId: article.id,
+    issueID: article.issueID,
     title: article.title,
     description: article.description,
     categories: article.categories ?? [],
