@@ -12,8 +12,8 @@ export const instruction_common = `【目的】
 - middle_summary は「1トピック=1要点」。重複回避、結論/対立/未決/宿題/担当/期限/金額を明示できる範囲で。
 - すべての要点に based_on_orders（発言 order 配列）を付与。
 - 余談や定型挨拶は除外。推測や創作は禁止。
-- summary / soft_language_summary は Markdown を必ず活用する（見出し＋箇条書きは必須）。プレーンテキストのみは禁止。
-- summary / soft_language_summary は見出し（## / ###）＋箇条書き（-）を必須とし、視認性を優先する。
+- summary は Markdown を必ず活用する（見出し＋箇条書きは必須）。プレーンテキストのみは禁止。
+- summary は見出し（## / ###）＋箇条書き（-）を必須とし、視認性を優先する。
 - middle_summary.summary は **ラベル** ＋短い箇条書きを必須とし、1トピック内に留める。
 - 数値/期限/担当がある場合は GFM 表（| 区切り）で整理する。該当なしの場合は表を出さない。
 - JSON 文字列内の改行は \\n を使う（実際の改行・コードフェンス・HTMLは不可）。
@@ -21,7 +21,7 @@ export const instruction_common = `【目的】
 - dialogs は summary_sections / soft_language_sections のみで要点を表現する（summary / soft_language は出力しない）。
 - summary_sections / soft_language_sections は必須。各要素は { "title": "主張", "bullets": ["要点1", "要点2"] } の配列で、title は固定セットのみ（「主張」「説明」「質問」「回答」「根拠」「影響」「次の対応」「決定」）。
 - dialogs の summary_sections / soft_language_sections / qa は内容を重複させない。qa がある場合、質問・回答の内容は両sectionに書かない。
-- soft_language_sections は summary_sections のやさしい言い換え（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各項目は1文で短くし、冗長説明や強い断定・感情表現は禁止。
+- soft_language_summary / soft_language_sections は箇条書きにせず、短い文章で書く（です/ます調・短文）。硬い制度語は可能なら言い換え、必要なら短い補足（例:「歳出=使うお金」）を括弧で添える。各文は短くし、冗長説明や強い断定・感情表現は禁止。
 - 質問→回答が明確な場合、回答側の dialog に qa（配列）を付与する（質問側は reaction=質問のみで可）。
   - qa は複数質問に対応するため配列にする。
   - qa[].ask.question は「質問内容」そのものを記述する（例: "△△について今後の方針は？"）。
@@ -79,7 +79,7 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
 
   "soft_language_summary": {
     "based_on_orders": [1,2,3],
-    "summary": "## このchunkのポイント\\n- ... [[orders:1,2]]\\n- ... [[orders:3]]\\n## 生活への影響\\n- ... [[orders:2,3]]"
+    "summary": "このchunkのポイントは...です。[[orders:1,2]]\\n生活への影響は...です。[[orders:2,3]]"
   },
   "summary": {
     "based_on_orders": [1,2,3],
@@ -95,9 +95,9 @@ export const output_format_chunk = `### 出力フォーマット（chunk）
         { "title": "決定", "bullets": ["合意した方針"] }
       ],
       "soft_language_sections": [
-        { "title": "主張", "bullets": ["やさしい言い換え1"] },
-        { "title": "説明", "bullets": ["やさしい言い換え2"] },
-        { "title": "決定", "bullets": ["決まったことをやさしく"] }
+        { "title": "主張", "bullets": ["やさしい言い換え1です。"] },
+        { "title": "説明", "bullets": ["やさしい言い換え2です。"] },
+        { "title": "決定", "bullets": ["決まったことをやさしく書いた文です。"] }
       ],
       "qa": [
         {
@@ -151,7 +151,7 @@ export const output_format_reduce = `### 出力フォーマット（reduce）
   },
   "soft_language_summary": {
     "based_on_orders": [1,2,3,4,5],
-    "summary": "## 会議の全体像\\n- ... [[orders:1,2]]\\n- ... [[orders:3,4]]\\n## 暮らしへの影響\\n- ... [[orders:4,5]]"
+    "summary": "会議の全体像は...です。[[orders:1,2]]\\n暮らしへの影響は...です。[[orders:4,5]]"
   },
 
   "participants": [
@@ -191,7 +191,7 @@ export const output_format_single_chunk = `### 出力フォーマット（single
 
   "soft_language_summary": {
     "based_on_orders": [1,2,3],
-    "summary": "## 会議の全体像\\n- ... [[orders:1,2]]\\n- ... [[orders:3]]\\n## 暮らしへの影響\\n- ... [[orders:2,3]]"
+    "summary": "会議の全体像は...です。[[orders:1,2]]\\n暮らしへの影響は...です。[[orders:2,3]]"
   },
   "summary": {
     "based_on_orders": [1,2,3,4,5],
@@ -207,9 +207,9 @@ export const output_format_single_chunk = `### 出力フォーマット（single
         { "title": "決定", "bullets": ["合意した方針"] }
       ],
       "soft_language_sections": [
-        { "title": "主張", "bullets": ["やさしい言い換え1"] },
-        { "title": "説明", "bullets": ["やさしい言い換え2"] },
-        { "title": "決定", "bullets": ["決まったことをやさしく"] }
+        { "title": "主張", "bullets": ["やさしい言い換え1です。"] },
+        { "title": "説明", "bullets": ["やさしい言い換え2です。"] },
+        { "title": "決定", "bullets": ["決まったことをやさしく書いた文です。"] }
       ],
       "qa": [
         {
