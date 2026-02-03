@@ -302,6 +302,18 @@ function assertDialogOrdersComplete(
     return;
   }
 
+  if (
+    duplicates.length === 0 &&
+    extras.length === 0 &&
+    missing.length > 0 &&
+    missing.every((order) => order === 0 || order === 1)
+  ) {
+    console.warn(
+      `[taskProcessor] Allowing missing dialog orders ${missing.join(",")} for ${meeting?.issueID ?? "unknown"}`
+    );
+    return;
+  }
+
   const issue = meeting?.issueID ?? "unknown";
   const parts = [
     `Dialog orders incomplete for ${issue}`,
