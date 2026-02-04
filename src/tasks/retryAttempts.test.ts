@@ -75,6 +75,9 @@ const baseConfig: AppConfig = {
   geminiModel: "gemini-2.5-flash",
   geminiMaxInputToken: 64000,
   geminiMaxOutputToken: 64000,
+  chunkPackingTokenBudgetRatio: 0.85,
+  singleChunkMaxSpeeches: 40,
+  singleChunkMaxTokenUsageRatio: 0.5,
   notifications: {
     errorWebhook: "",
     warnWebhook: "",

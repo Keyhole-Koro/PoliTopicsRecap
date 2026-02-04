@@ -69,6 +69,7 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
       meeting,
       attachedMap,
       task,
+      llmClient,
     );
 
     if (!persistResult.persisted) {
@@ -150,6 +151,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
       meeting,
       speakerMap,
       task,
+      llmClient,
     );
 
     if (!persistResult.persisted) {
@@ -189,6 +191,9 @@ type PersistResult =
   | { persisted: true; article: Article }
   | { persisted: false; reason: string; payloadDumpUri?: string };
 
+const DIALOG_RECOVERY_MAX_ATTEMPTS = 2;
+const DIALOG_RECOVERY_BATCH_SIZE = 25;
+
 async function persistArticleIfPossible(
   docClient: DynamoDBDocumentClient,
   tableName: string,
@@ -197,6 +202,7 @@ async function persistArticleIfPossible(
   meeting: TaskItem["meeting"],
   speakerMap: SpeakerMap,
   task: TaskItem,
+  llmClient: LlmClient,
 ): Promise<PersistResult> {
   try {
     const jsonText = sanitizeJsonPayload(payloadText);
@@ -216,7 +222,14 @@ async function persistArticleIfPossible(
       Array.isArray(articlePayload.dialogs) ? articlePayload.dialogs : [],
       speakerMap,
     );
-    assertDialogOrdersComplete(dialogsWithPlaceholders, speakerMap, meeting);
+    const dialogsWithRecovery = await recoverMissingDialogOrders({
+      dialogs: dialogsWithPlaceholders,
+      speakerMap,
+      llmClient,
+      meeting,
+      taskId: task.pk,
+    });
+    assertDialogOrdersComplete(dialogsWithRecovery, speakerMap, meeting);
     const issueID = meeting?.issueID ?? (articlePayload as { issueID?: string }).issueID ?? rawArticle.id;
     const normalizedKeyPoints = Array.isArray(articlePayload.key_points)
       ? articlePayload.key_points.map((point) => (typeof point === "string" ? point.trim() : "")).filter(Boolean)
@@ -226,7 +239,7 @@ async function persistArticleIfPossible(
       id: task.pk,
       issueID,
       key_points: normalizedKeyPoints,
-      dialogs: attachSpeakerMetadata(dialogsWithPlaceholders, speakerMap),
+      dialogs: attachSpeakerMetadata(dialogsWithRecovery, speakerMap),
       date: articlePayload.date ?? meeting?.date,
       month: articlePayload.month ?? (meeting?.date ? meeting.date.slice(0, 7) : articlePayload.month),
       nameOfMeeting: articlePayload.nameOfMeeting ?? meeting?.nameOfMeeting ?? "",
@@ -258,13 +271,244 @@ async function persistArticleIfPossible(
   }
 }
 
+type RecoverMissingDialogOrdersArgs = {
+  dialogs: Article["dialogs"];
+  speakerMap: SpeakerMap;
+  llmClient: LlmClient;
+  meeting?: TaskItem["meeting"];
+  taskId: string;
+};
+
+async function recoverMissingDialogOrders(args: RecoverMissingDialogOrdersArgs): Promise<Article["dialogs"]> {
+  const { speakerMap, llmClient, meeting, taskId } = args;
+  if (!(speakerMap instanceof Map) || speakerMap.size === 0) {
+    return args.dialogs;
+  }
+
+  let currentDialogs = Array.isArray(args.dialogs) ? args.dialogs : [];
+  for (let attempt = 1; attempt <= DIALOG_RECOVERY_MAX_ATTEMPTS; attempt += 1) {
+    const check = inspectDialogOrders(currentDialogs, speakerMap);
+    if (check.missing.length === 0 || check.duplicates.length > 0 || check.extras.length > 0) {
+      return currentDialogs;
+    }
+    if (isAllowedDialogOrderGap(check, meeting)) {
+      return currentDialogs;
+    }
+
+    const batches = chunkNumbers(check.missing, DIALOG_RECOVERY_BATCH_SIZE);
+    let recoveredAny = false;
+    for (const missingBatch of batches) {
+      const recovered = await generateMissingDialogsFromLlm({
+        missingOrders: missingBatch,
+        speakerMap,
+        llmClient,
+        meeting,
+      });
+      if (recovered.length === 0) {
+        continue;
+      }
+      currentDialogs = mergeDialogsByOrder(currentDialogs, recovered);
+      recoveredAny = true;
+    }
+
+    const postCheck = inspectDialogOrders(currentDialogs, speakerMap);
+    console.warn("[taskProcessor] Missing dialog recovery attempt result", {
+      taskId,
+      issueID: meeting?.issueID ?? "unknown",
+      attempt,
+      remainingMissing: postCheck.missing,
+      recoveredAny,
+    });
+
+    if (postCheck.missing.length === 0 || !recoveredAny) {
+      return currentDialogs;
+    }
+  }
+  return currentDialogs;
+}
+
+type GenerateMissingDialogsArgs = {
+  missingOrders: number[];
+  speakerMap: SpeakerMap;
+  llmClient: LlmClient;
+  meeting?: TaskItem["meeting"];
+};
+
+async function generateMissingDialogsFromLlm(args: GenerateMissingDialogsArgs): Promise<Article["dialogs"]> {
+  const { missingOrders, speakerMap, llmClient, meeting } = args;
+  if (!missingOrders.length) return [];
+
+  const prompt = buildDialogRecoveryPrompt(missingOrders, speakerMap, meeting);
+  const llmResult = await llmClient.generate({
+    messages: [{ role: "user", content: prompt }],
+    maxOutputTokens: Math.min(appConfig.geminiMaxOutputToken, 3000),
+  });
+  const parsed = tryParseJson(sanitizeJsonPayload(llmResult.text));
+  const dialogCandidate = Array.isArray(parsed)
+    ? parsed
+    : parsed && Array.isArray((parsed as { dialogs?: unknown[] }).dialogs)
+      ? (parsed as { dialogs: unknown[] }).dialogs
+      : [];
+
+  return normalizeRecoveredDialogs(dialogCandidate, missingOrders);
+}
+
+function buildDialogRecoveryPrompt(
+  missingOrders: number[],
+  speakerMap: SpeakerMap,
+  meeting?: TaskItem["meeting"],
+): string {
+  const lines = missingOrders
+    .map((order) => {
+      const meta = speakerMap.get(order);
+      const speaker = meta?.speaker?.trim() || "不明";
+      const text = (meta?.originalText ?? "").trim();
+      return `[order ${order}] speaker=${speaker}\n${text}`;
+    })
+    .join("\n\n");
+
+  const issue = meeting?.issueID ?? "unknown";
+  return `次の発言だけを補填してください。missing dialog order を埋めるための再生成タスクです。
+
+制約:
+- 出力は JSON のみ。コードフェンス禁止。
+- 形式: {"dialogs":[...]} のみ。
+- dialogs は指定された order を1件ずつ、重複なしで出力。
+- order / summary_sections / reaction のみを出力（speakerやoriginal_textは不要）。
+- summary_sections は最低1要素、bullets も最低1要素。
+- bullets の point/quote/detail は空文字禁止。
+- reaction は "賛成" | "反対" | "質問" | "回答" | "中立" のいずれか。
+
+対象 issueID: ${issue}
+対象 order: ${missingOrders.join(",")}
+
+入力:
+${lines}
+`;
+}
+
+function normalizeRecoveredDialogs(rawDialogs: unknown[], missingOrders: number[]): Article["dialogs"] {
+  const missingSet = new Set(missingOrders);
+  const out: Article["dialogs"] = [];
+  for (const raw of rawDialogs) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const candidate = raw as Record<string, unknown>;
+    const order = Number(candidate.order);
+    if (!Number.isFinite(order) || !missingSet.has(order)) continue;
+    const summary_sections = normalizeSummarySections(candidate.summary_sections);
+    if (summary_sections.length === 0) continue;
+    const reaction = normalizeReaction(candidate.reaction);
+    out.push({
+      order,
+      summary_sections,
+      reaction,
+      original_text: "",
+      speaker: "",
+    });
+  }
+  return out;
+}
+
+function normalizeSummarySections(value: unknown): Article["dialogs"][number]["summary_sections"] {
+  if (!Array.isArray(value)) return [];
+  const sections: Article["dialogs"][number]["summary_sections"] = [];
+  for (const section of value) {
+    if (typeof section !== "object" || section === null) continue;
+    const candidate = section as Record<string, unknown>;
+    const title = typeof candidate.title === "string" ? candidate.title : "";
+    if (!isDialogSectionTitle(title)) continue;
+    if (!Array.isArray(candidate.bullets)) continue;
+    const bullets = candidate.bullets
+      .map((bullet) => {
+        if (typeof bullet !== "object" || bullet === null) return null;
+        const entry = bullet as Record<string, unknown>;
+        const point = typeof entry.point === "string" ? entry.point.trim() : "";
+        const quote = typeof entry.quote === "string" ? entry.quote.trim() : "";
+        const detail = typeof entry.detail === "string" ? entry.detail.trim() : "";
+        if (!point || !quote || !detail) return null;
+        return { point, quote, detail };
+      })
+      .filter((bullet): bullet is NonNullable<typeof bullet> => bullet !== null);
+    if (!bullets.length) continue;
+    sections.push({ title, bullets });
+  }
+  return sections;
+}
+
+function normalizeReaction(value: unknown): Article["dialogs"][number]["reaction"] | undefined {
+  if (value !== "賛成" && value !== "反対" && value !== "質問" && value !== "回答" && value !== "中立") {
+    return undefined;
+  }
+  return value;
+}
+
+function isDialogSectionTitle(value: string): value is NonNullable<Article["dialogs"][number]["summary_sections"]>[number]["title"] {
+  return (
+    value === "主張" ||
+    value === "説明" ||
+    value === "質問" ||
+    value === "回答" ||
+    value === "根拠" ||
+    value === "影響" ||
+    value === "次の対応" ||
+    value === "決定"
+  );
+}
+
+function mergeDialogsByOrder(dialogs: Article["dialogs"], recovered: Article["dialogs"]): Article["dialogs"] {
+  if (!recovered.length) return dialogs;
+  const existing = new Set<number>();
+  for (const dialog of dialogs) {
+    if (typeof dialog.order === "number" && Number.isFinite(dialog.order)) {
+      existing.add(dialog.order);
+    }
+  }
+  const additions = recovered.filter((dialog) => !existing.has(dialog.order));
+  if (!additions.length) return dialogs;
+  return [...dialogs, ...additions].sort((a, b) => a.order - b.order);
+}
+
+function chunkNumbers(values: number[], size: number): number[][] {
+  if (size <= 0 || values.length === 0) return [values];
+  const out: number[][] = [];
+  for (let i = 0; i < values.length; i += size) {
+    out.push(values.slice(i, i + size));
+  }
+  return out;
+}
+
 function assertDialogOrdersComplete(
   dialogs: Article["dialogs"] | undefined,
   speakerMap: SpeakerMap,
   meeting?: TaskItem["meeting"],
 ): void {
-  if (!(speakerMap instanceof Map) || speakerMap.size === 0) {
+  const check = inspectDialogOrders(dialogs, speakerMap);
+  if (check.missing.length === 0 && check.duplicates.length === 0 && check.extras.length === 0) {
     return;
+  }
+
+  if (isAllowedDialogOrderGap(check, meeting)) return;
+
+  const issue = meeting?.issueID ?? "unknown";
+  const parts = [
+    `Dialog orders incomplete for ${issue}`,
+    check.missing.length ? `missing=${check.missing.join(",")}` : null,
+    check.duplicates.length ? `duplicates=${check.duplicates.join(",")}` : null,
+    check.extras.length ? `extras=${check.extras.join(",")}` : null,
+  ].filter(Boolean);
+  throw new Error(parts.join(" "));
+}
+
+type DialogOrderInspection = {
+  missing: number[];
+  duplicates: string[];
+  extras: number[];
+  maxExpected: number | null;
+};
+
+function inspectDialogOrders(dialogs: Article["dialogs"] | undefined, speakerMap: SpeakerMap): DialogOrderInspection {
+  if (!(speakerMap instanceof Map) || speakerMap.size === 0) {
+    return { missing: [], duplicates: [], extras: [], maxExpected: null };
   }
   if (!Array.isArray(dialogs)) {
     throw new Error(`Dialogs must be an array to validate orders (expected ${speakerMap.size})`);
@@ -282,50 +526,41 @@ function assertDialogOrdersComplete(
   }
 
   const missing = expectedOrders.filter((order) => !counts.has(order));
-
   const duplicates = Array.from(counts.entries())
     .filter(([, count]) => count > 1)
     .map(([order, count]) => `${order}(${count})`);
   const extras = Array.from(counts.keys()).filter((order) => !expectedSet.has(order));
-
-  if (missing.length === 0 && duplicates.length === 0 && extras.length === 0) {
-    return;
-  }
-
   const maxExpected = expectedOrders.length > 0 ? Math.max(...expectedOrders) : null;
+
+  return { missing, duplicates, extras, maxExpected };
+}
+
+function isAllowedDialogOrderGap(check: DialogOrderInspection, meeting?: TaskItem["meeting"]): boolean {
   if (
-    missing.length === 1 &&
-    duplicates.length === 0 &&
-    extras.length === 0 &&
-    maxExpected !== null &&
-    missing[0] === maxExpected
+    check.missing.length === 1 &&
+    check.duplicates.length === 0 &&
+    check.extras.length === 0 &&
+    check.maxExpected !== null &&
+    check.missing[0] === check.maxExpected
   ) {
     console.warn(
-      `[taskProcessor] Allowing missing last dialog order ${maxExpected} for ${meeting?.issueID ?? "unknown"}`
+      `[taskProcessor] Allowing missing last dialog order ${check.maxExpected} for ${meeting?.issueID ?? "unknown"}`
     );
-    return;
+    return true;
   }
 
   if (
-    duplicates.length === 0 &&
-    extras.length === 0 &&
-    missing.length > 0 &&
-    missing.every((order) => order === 0 || order === 1)
+    check.duplicates.length === 0 &&
+    check.extras.length === 0 &&
+    check.missing.length > 0 &&
+    check.missing.every((order) => order === 0 || order === 1)
   ) {
     console.warn(
-      `[taskProcessor] Allowing missing dialog orders ${missing.join(",")} for ${meeting?.issueID ?? "unknown"}`
+      `[taskProcessor] Allowing missing dialog orders ${check.missing.join(",")} for ${meeting?.issueID ?? "unknown"}`
     );
-    return;
+    return true;
   }
-
-  const issue = meeting?.issueID ?? "unknown";
-  const parts = [
-    `Dialog orders incomplete for ${issue}`,
-    missing.length ? `missing=${missing.join(",")}` : null,
-    duplicates.length ? `duplicates=${duplicates.join(",")}` : null,
-    extras.length ? `extras=${extras.join(",")}` : null,
-  ].filter(Boolean);
-  throw new Error(parts.join(" "));
+  return false;
 }
 
 function fillMissingDialogOrders(

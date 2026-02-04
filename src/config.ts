@@ -74,6 +74,9 @@ export type AppConfig = {
   geminiModel: string
   geminiMaxInputToken: number
   geminiMaxOutputToken: number
+  chunkPackingTokenBudgetRatio: number
+  singleChunkMaxSpeeches: number
+  singleChunkMaxTokenUsageRatio: number
   notifications: {
     errorWebhook: string
     warnWebhook: string
@@ -143,6 +146,9 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
+    chunkPackingTokenBudgetRatio: optionalEnvNumber("CHUNK_PACKING_TOKEN_BUDGET_RATIO", 0.85),
+    singleChunkMaxSpeeches: optionalEnvNumber("SINGLE_CHUNK_MAX_SPEECHES", 40),
+    singleChunkMaxTokenUsageRatio: optionalEnvNumber("SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO", 0.5),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
@@ -206,6 +212,9 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
+    chunkPackingTokenBudgetRatio: optionalEnvNumber("CHUNK_PACKING_TOKEN_BUDGET_RATIO", 0.85),
+    singleChunkMaxSpeeches: optionalEnvNumber("SINGLE_CHUNK_MAX_SPEECHES", 40),
+    singleChunkMaxTokenUsageRatio: optionalEnvNumber("SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO", 0.5),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
@@ -269,6 +278,9 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-pro-preview",
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
+    chunkPackingTokenBudgetRatio: optionalEnvNumber("CHUNK_PACKING_TOKEN_BUDGET_RATIO", 0.85),
+    singleChunkMaxSpeeches: optionalEnvNumber("SINGLE_CHUNK_MAX_SPEECHES", 40),
+    singleChunkMaxTokenUsageRatio: optionalEnvNumber("SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO", 0.5),
     notifications: {
       errorWebhook: requireEnv("DISCORD_WEBHOOK_ERROR"),
       warnWebhook: requireEnv("DISCORD_WEBHOOK_WARN"),
@@ -337,6 +349,9 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
+    chunkPackingTokenBudgetRatio: optionalEnvNumber("CHUNK_PACKING_TOKEN_BUDGET_RATIO", 0.85),
+    singleChunkMaxSpeeches: optionalEnvNumber("SINGLE_CHUNK_MAX_SPEECHES", 40),
+    singleChunkMaxTokenUsageRatio: optionalEnvNumber("SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO", 0.5),
     notifications: {
       errorWebhook: optionalEnv("DISCORD_WEBHOOK_ERROR") || "",
       warnWebhook: optionalEnv("DISCORD_WEBHOOK_WARN") || "",

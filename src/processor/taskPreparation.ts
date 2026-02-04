@@ -46,13 +46,17 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
   if (availableTokens <= 0) {
     throw new Error("Chunk prompt exceeds available token budget");
   }
+  const packingRatio = clampRatio(appConfig.chunkPackingTokenBudgetRatio, 0.85);
+  const singleChunkTokenRatio = clampRatio(appConfig.singleChunkMaxTokenUsageRatio, 0.5);
+  const singleChunkMaxSpeeches = Math.max(1, Math.floor(appConfig.singleChunkMaxSpeeches));
+  const packingTokenBudget = Math.max(1, Math.floor(availableTokens * packingRatio));
 
   const orderLens = await buildOrderLenByTokens({
     speeches,
     countFn: countTokens,
     buildText: (speech) => formatSpeechLine(speech) ?? "",
   });
-  const packs = packIndexSets(orderLens, availableTokens);
+  const packs = packIndexSets(orderLens, packingTokenBudget);
   if (!packs.length) {
     throw new Error(`Unable to create chunk packs within token budget for ${task.pk}`);
   }
@@ -65,7 +69,23 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
 
   const promptBucket = appConfig.promptBucketName;
   const reducePromptKeyBase = `prompts/reduce/${task.pk}`;
-  const singleChunkMode = packs.length === 1 && !packs[0].oversized;
+  const singleChunkMode =
+    packs.length === 1 &&
+    !packs[0].oversized &&
+    speeches.length <= singleChunkMaxSpeeches &&
+    packs[0].totalLen <= Math.floor(availableTokens * singleChunkTokenRatio);
+
+  if (packs.length === 1 && !singleChunkMode) {
+    console.log("[TaskPreparation] Forcing chunked mode despite single pack", {
+      taskId: task.pk,
+      speechCount: speeches.length,
+      singleChunkSpeechLimit: singleChunkMaxSpeeches,
+      packTokens: packs[0].totalLen,
+      singleChunkTokenLimit: Math.floor(availableTokens * singleChunkTokenRatio),
+      packingTokenBudget,
+      availableTokens,
+    });
+  }
 
   let promptUrl = "";
   let resultUrl = "";
@@ -232,4 +252,11 @@ async function getPromptTokenCost(promptText: string): Promise<number> {
   if (cachedPromptTokenCost !== null) return cachedPromptTokenCost;
   cachedPromptTokenCost = await countTokens(promptText);
   return cachedPromptTokenCost;
+}
+
+function clampRatio(value: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  if (value <= 0) return fallback;
+  if (value > 1) return 1;
+  return value;
 }
