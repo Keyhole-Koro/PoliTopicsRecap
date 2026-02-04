@@ -17,6 +17,7 @@ export type ChunkItem = {
   prompt_url: string;
   result_url: string;
   status: ChunkStatus;
+  based_on_orders?: number[];
 };
 
 export type AttachedAssets = {

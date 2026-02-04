@@ -144,6 +144,11 @@ function validateChunkItem(value: unknown, index: number, push: (path: string, m
   if (!isString(value.result_url) || !value.result_url.startsWith("s3://")) {
     push(`${basePath}.result_url`, "expected s3:// URL string");
   }
+  if (value.based_on_orders !== undefined) {
+    if (!Array.isArray(value.based_on_orders) || value.based_on_orders.some((o: unknown) => !isFiniteNumber(o))) {
+      push(`${basePath}.based_on_orders`, "expected number[]");
+    }
+  }
   if (!isChunkStatus(value.status)) {
     push(`${basePath}.status`, `unexpected value: ${String(value.status)}`);
   }

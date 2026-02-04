@@ -63,12 +63,20 @@ Highlights
 ## Environment
 - `APP_ENVIRONMENT` (`local`|`stage`|`prod`|`ghaTest`|`localstackTest`)
 - `GEMINI_API_KEY`
+- `GEMINI_MAX_INPUT_TOKEN`, `GEMINI_MAX_OUTPUT_TOKEN`
+- `CHUNK_PACKING_TOKEN_BUDGET_RATIO` (default `0.85`)
+- `SINGLE_CHUNK_MAX_SPEECHES` (default `40`)
+- `SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO` (default `0.5`)
 - `TASK_TABLE_NAME`, `TASK_STATUS_INDEX_NAME`
 - `PROMPT_BUCKET_NAME` (S3)
 - `ARTICLE_TABLE_NAME`, `ARTICLE_ASSET_BUCKET_NAME` (R2 bucket name)
 - R2 access: `R2_WRITE_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ARTICLE_BUCKET`, `R2_PUBLIC_ASSET_URL`
 - Notifications: `DISCORD_WEBHOOK_ERROR`, `DISCORD_WEBHOOK_WARN`, `DISCORD_WEBHOOK_BATCH`
 - AWS: `AWS_REGION` (default `ap-northeast-3`), `AWS_ENDPOINT_URL` for LocalStack
+
+Chunking notes:
+- `single_chunk` is used only for small meetings (speech-count/token-ratio thresholds).
+- In `chunked` mode, each chunk stores `based_on_orders` and reduce input includes that coverage metadata.
 
 Tip: from repo root, `source ../scripts/export_test_env.sh` to populate LocalStack defaults before running tests.
 

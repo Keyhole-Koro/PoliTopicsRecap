@@ -4,6 +4,7 @@ import type { Meeting } from "../tasks/types";
 type ChunkResultInput = {
   id?: string;
   text: string;
+  based_on_orders?: number[];
 };
 
 const trimOrEmpty = (value?: string | null): string => (typeof value === "string" ? value.trim() : "");
@@ -93,6 +94,9 @@ export function buildReduceInput(args: {
   args.chunkResults.forEach((chunk, index) => {
     const label = chunk.id ? chunk.id : `chunk-${index + 1}`;
     lines.push(`[chunk ${label}]`);
+    if (Array.isArray(chunk.based_on_orders) && chunk.based_on_orders.length > 0) {
+      lines.push(`[chunk orders] ${chunk.based_on_orders.join(",")}`);
+    }
     lines.push(stripCodeFence(chunk.text));
     lines.push("");
   });

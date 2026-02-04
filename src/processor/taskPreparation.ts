@@ -156,6 +156,9 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
         prompt_url: `s3://${promptBucket}/${s3key}`,
         result_url: `s3://${promptBucket}/${resultKey}`,
         status: "pending",
+        based_on_orders: chunkSpeeches
+          .map((speech) => Number(speech.speechOrder))
+          .filter((order) => Number.isFinite(order)),
       });
     }
 

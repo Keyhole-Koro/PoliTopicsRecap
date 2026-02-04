@@ -63,12 +63,20 @@ flowchart LR
 ## 環境変数
 - `APP_ENVIRONMENT` (`local`|`stage`|`prod`|`ghaTest`|`localstackTest`)
 - `GEMINI_API_KEY`
+- `GEMINI_MAX_INPUT_TOKEN`, `GEMINI_MAX_OUTPUT_TOKEN`
+- `CHUNK_PACKING_TOKEN_BUDGET_RATIO` (デフォルト `0.85`)
+- `SINGLE_CHUNK_MAX_SPEECHES` (デフォルト `40`)
+- `SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO` (デフォルト `0.5`)
 - `TASK_TABLE_NAME`, `TASK_STATUS_INDEX_NAME`
 - `PROMPT_BUCKET_NAME` (S3)
 - `ARTICLE_TABLE_NAME`, `ARTICLE_ASSET_BUCKET_NAME` (R2 バケット名)
 - R2: `R2_WRITE_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ARTICLE_BUCKET`, `R2_PUBLIC_ASSET_URL`
 - 通知: `DISCORD_WEBHOOK_ERROR`, `DISCORD_WEBHOOK_WARN`, `DISCORD_WEBHOOK_BATCH`
 - AWS: `AWS_REGION` (デフォルト `ap-northeast-3`), LocalStack 用 `AWS_ENDPOINT_URL`
+
+チャンク化メモ:
+- `single_chunk` は小規模会議（発言数/トークン比率しきい値）に限定して使用。
+- `chunked` では各 chunk に `based_on_orders` を保持し、reduce 入力へ範囲情報を渡す。
 
 ヒント: リポジトリルートで `source ../scripts/export_test_env.sh` を実行すると、LocalStack 用の主要デフォルトが一括で設定されます。
 

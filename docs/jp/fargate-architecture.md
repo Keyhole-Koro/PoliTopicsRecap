@@ -95,6 +95,15 @@ batch: {
   maxTasksPerRun: number | "auto"; // 'auto' = max(requestsPerDay, ペンディングタスク数)
   gracefulShutdownTimeoutMs: number; // シャットダウン待機時間 (デフォルト: 10000ms)
 }
+
+chunking: {
+  // 利用可能な入力トークンに対するチャンク分割比率
+  CHUNK_PACKING_TOKEN_BUDGET_RATIO: number; // デフォルト: 0.85
+  // single_chunk を許可する最大発言数
+  SINGLE_CHUNK_MAX_SPEECHES: number; // デフォルト: 40
+  // single_chunk を許可する最大トークン使用率
+  SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO: number; // デフォルト: 0.5
+}
 ```
 
 ### 環境変数
@@ -105,6 +114,9 @@ batch: {
 | `GEMINI_API_KEY`        | Gemini APIキー                                               | Yes (prod/stage)    |
 | `GEMINI_MAX_INPUT_TOKEN`  | Gemini入力上限 (prod/stageデフォルト: 64000)               | No                  |
 | `GEMINI_MAX_OUTPUT_TOKEN` | Gemini出力上限 (デフォルト: 64000)                          | No                  |
+| `CHUNK_PACKING_TOKEN_BUDGET_RATIO` | 利用可能入力トークンに対するチャンク分割比率 (デフォルト: 0.85) | No |
+| `SINGLE_CHUNK_MAX_SPEECHES` | `single_chunk` を許可する最大発言数 (デフォルト: 40) | No |
+| `SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO` | `single_chunk` を許可する最大トークン使用率 (デフォルト: 0.5) | No |
 | `DISCORD_WEBHOOK_ERROR` | エラー通知Webhook                                            | Yes                 |
 | `DISCORD_WEBHOOK_WARN`  | 警告通知Webhook                                              | Yes                 |
 | `DISCORD_WEBHOOK_BATCH` | バッチ通知Webhook                                            | Yes                 |
@@ -116,6 +128,11 @@ batch: {
 | `R2_PUBLIC_ASSET_URL`   | R2パブリックURL (デフォルト: "https://asset.politopics.net") | No                  |
 
 ## ストレージアーキテクチャ
+
+タスクチャンクのメタデータ:
+- `chunks[].based_on_orders` に各 chunk がカバーする発言 order を保持。
+- reduce プロンプト組み立て時にこの情報を入力（`[chunk orders] ...`）へ渡す。
+- 旧タスクで `based_on_orders` が無い場合は、chunk 出力本文や URL パターンからフォールバック推定する。
 
 ### Cloudflare R2 連携
 

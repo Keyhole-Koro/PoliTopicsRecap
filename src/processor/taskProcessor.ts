@@ -643,10 +643,19 @@ async function loadPromptText(
     }
 
     const chunkResults = await Promise.all(
-      chunkUrls.map(async (chunkUrl, index) => ({
-        id: payload.chunks?.[index]?.id ?? task.chunks?.[index]?.id,
-        text: await readS3Text(client, chunkUrl),
-      })),
+      chunkUrls.map(async (chunkUrl, index) => {
+        const text = await readS3Text(client, chunkUrl);
+        return {
+          id: payload.chunks?.[index]?.id ?? task.chunks?.[index]?.id,
+          text,
+          based_on_orders: resolveChunkBasedOnOrders({
+            chunkText: text,
+            payloadChunk: payload.chunks?.[index],
+            taskChunk: task.chunks?.[index],
+            chunkUrl,
+          }),
+        };
+      }),
     );
 
     const input = buildReduceInput({
@@ -687,6 +696,81 @@ function tryParseJson(text: string): any | null {
   } catch {
     return null;
   }
+}
+
+function resolveChunkBasedOnOrders(args: {
+  chunkText: string;
+  payloadChunk?: { based_on_orders?: unknown };
+  taskChunk?: { based_on_orders?: unknown };
+  chunkUrl: string;
+}): number[] {
+  const direct =
+    normalizeOrderArray(args.payloadChunk?.based_on_orders) ??
+    normalizeOrderArray(args.taskChunk?.based_on_orders);
+  if (direct && direct.length > 0) return direct;
+
+  const parsedFromChunk = extractOrdersFromChunkResult(args.chunkText);
+  if (parsedFromChunk.length > 0) return parsedFromChunk;
+
+  return parseOrdersFromChunkLocator(args.chunkUrl);
+}
+
+function extractOrdersFromChunkResult(text: string): number[] {
+  const parsed = tryParseJson(stripCodeFence(text));
+  if (!parsed || typeof parsed !== "object") return [];
+  const source = parsed as {
+    dialogs?: Array<{ order?: unknown }>;
+    middle_summary?: Array<{ based_on_orders?: unknown }>;
+    summary?: { based_on_orders?: unknown };
+    soft_language_summary?: { based_on_orders?: unknown };
+  };
+
+  const orders = new Set<number>();
+  if (Array.isArray(source.dialogs)) {
+    for (const dialog of source.dialogs) {
+      const order = Number(dialog?.order);
+      if (Number.isFinite(order)) orders.add(order);
+    }
+  }
+  if (Array.isArray(source.middle_summary)) {
+    for (const item of source.middle_summary) {
+      const arr = normalizeOrderArray(item?.based_on_orders) ?? [];
+      for (const order of arr) orders.add(order);
+    }
+  }
+  const summaryOrders = normalizeOrderArray(source.summary?.based_on_orders) ?? [];
+  for (const order of summaryOrders) orders.add(order);
+  const softOrders = normalizeOrderArray(source.soft_language_summary?.based_on_orders) ?? [];
+  for (const order of softOrders) orders.add(order);
+
+  return Array.from(orders).sort((a, b) => a - b);
+}
+
+function parseOrdersFromChunkLocator(locator: string): number[] {
+  const leaf = locator.split("/").pop() ?? "";
+  const suffixRemoved = leaf
+    .replace(/\.json$/i, "")
+    .replace(/_result$/i, "");
+  const chunks = suffixRemoved.match(/\d+(?:-\d+)*/g);
+  if (!chunks || chunks.length === 0) return [];
+  const last = chunks[chunks.length - 1];
+  const indices = last
+    .split("-")
+    .map((part) => Number(part))
+    .filter((n) => Number.isFinite(n));
+  if (indices.length === 0) return [];
+  return indices
+    .map((n) => n + 1)
+    .sort((a, b) => a - b);
+}
+
+function normalizeOrderArray(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const numbers = value
+    .map((entry) => Number(entry))
+    .filter((entry) => Number.isFinite(entry));
+  if (!numbers.length) return [];
+  return Array.from(new Set(numbers)).sort((a, b) => a - b);
 }
 
 // NOTE: This function uses 'assets' which is R2Client, to store invalid payloads.

@@ -95,6 +95,15 @@ batch: {
   maxTasksPerRun: number | "auto"; // 'auto' = max(requestsPerDay, pending tasks)
   gracefulShutdownTimeoutMs: number; // シャットダウン待機時間 (default: 10000)
 }
+
+chunking: {
+  // chunk packing uses this ratio of available input tokens
+  CHUNK_PACKING_TOKEN_BUDGET_RATIO: number; // default: 0.85
+  // single_chunk is allowed only when speech count is below this threshold
+  SINGLE_CHUNK_MAX_SPEECHES: number; // default: 40
+  // single_chunk is allowed only when estimated token usage is below this ratio
+  SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO: number; // default: 0.5
+}
 ```
 
 ### Environment Variables
@@ -105,6 +114,9 @@ batch: {
 | `GEMINI_API_KEY`        | Gemini API key                                          | Yes (prod/stage)  |
 | `GEMINI_MAX_INPUT_TOKEN`  | Gemini max input tokens (default: 64000 in prod/stage) | No               |
 | `GEMINI_MAX_OUTPUT_TOKEN` | Gemini max output tokens (default: 64000)               | No               |
+| `CHUNK_PACKING_TOKEN_BUDGET_RATIO` | Ratio of available input tokens used for chunk packing (default: 0.85) | No |
+| `SINGLE_CHUNK_MAX_SPEECHES` | Max speech count to allow `single_chunk` (default: 40) | No |
+| `SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO` | Max token usage ratio to allow `single_chunk` (default: 0.5) | No |
 | `DISCORD_WEBHOOK_ERROR` | Error notification webhook                              | Yes               |
 | `DISCORD_WEBHOOK_WARN`  | Warning notification webhook                            | Yes               |
 | `DISCORD_WEBHOOK_BATCH` | Batch notification webhook                              | Yes               |
@@ -116,6 +128,11 @@ batch: {
 | `R2_PUBLIC_ASSET_URL`   | R2 public URL (default: "https://asset.politopics.net") | No                |
 
 ## Storage Architecture
+
+Task chunk metadata:
+- `chunks[].based_on_orders` stores the covered speech orders for each chunk.
+- During reduce prompt assembly, Recap passes this coverage into input (`[chunk orders] ...`).
+- Backward compatibility: when old tasks do not have `based_on_orders`, Recap falls back to parsing chunk outputs and URL patterns.
 
 ### Cloudflare R2 Integration
 
