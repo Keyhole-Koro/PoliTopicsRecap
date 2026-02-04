@@ -143,10 +143,17 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
     await writeS3Text(s3Client, resultUrl, reduceResult.text);
     console.log(`[TaskProcessor] Uploaded reduce result to ${resultUrl}`);
 
+    const payloadForPersistence = await enrichReducePayloadWithChunkDialogs({
+      reducePayloadText: reduceResult.text,
+      task,
+      s3Client,
+      promptUrl,
+    });
+
     const persistResult = await persistArticleIfPossible(
       docClient,
       articleTableName,
-      reduceResult.text,
+      payloadForPersistence,
       articleAssets,
       meeting,
       speakerMap,
@@ -696,6 +703,118 @@ function tryParseJson(text: string): any | null {
   } catch {
     return null;
   }
+}
+
+async function enrichReducePayloadWithChunkDialogs(args: {
+  reducePayloadText: string;
+  task: TaskItem;
+  s3Client: S3Client;
+  promptUrl: string;
+}): Promise<string> {
+  const parsedReduce = tryParseJson(sanitizeJsonPayload(args.reducePayloadText));
+  if (!parsedReduce || typeof parsedReduce !== "object") {
+    return args.reducePayloadText;
+  }
+
+  const reduceRecord = parsedReduce as Record<string, unknown>;
+  if (Array.isArray(reduceRecord.dialogs) && reduceRecord.dialogs.length > 0) {
+    return args.reducePayloadText;
+  }
+
+  const chunkUrls = await resolveChunkResultUrls(args.s3Client, args.task, args.promptUrl);
+  if (chunkUrls.length === 0) {
+    console.warn("[TaskProcessor] Unable to enrich reduce payload: no chunk result URLs", { taskId: args.task.pk });
+    return args.reducePayloadText;
+  }
+
+  const mergedDialogs = await collectDialogsFromChunkResults(args.s3Client, chunkUrls, args.task.pk);
+  if (mergedDialogs.length === 0) {
+    console.warn("[TaskProcessor] Unable to enrich reduce payload: chunk dialogs were empty", { taskId: args.task.pk });
+    return args.reducePayloadText;
+  }
+
+  const enriched = {
+    ...reduceRecord,
+    dialogs: mergedDialogs,
+  };
+  return JSON.stringify(enriched);
+}
+
+async function resolveChunkResultUrls(
+  s3Client: S3Client,
+  task: TaskItem,
+  promptUrl: string,
+): Promise<string[]> {
+  const fromTask = (task.chunks ?? [])
+    .map((chunk) => chunk.result_url)
+    .filter((url): url is string => typeof url === "string" && url.length > 0);
+  if (fromTask.length > 0) return fromTask;
+
+  try {
+    const rawPrompt = await readS3Text(s3Client, promptUrl);
+    const payload = tryParseJson(rawPrompt);
+    if (!payload || typeof payload !== "object") return [];
+    const record = payload as { chunkResultUrls?: unknown; chunks?: Array<{ result_url?: unknown }> };
+    if (Array.isArray(record.chunkResultUrls)) {
+      return record.chunkResultUrls.filter((url): url is string => typeof url === "string" && url.length > 0);
+    }
+    if (Array.isArray(record.chunks)) {
+      return record.chunks
+        .map((chunk) => chunk.result_url)
+        .filter((url): url is string => typeof url === "string" && url.length > 0);
+    }
+  } catch (error) {
+    console.warn("[TaskProcessor] Failed to resolve chunk URLs from prompt payload", {
+      taskId: task.pk,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return [];
+}
+
+async function collectDialogsFromChunkResults(
+  s3Client: S3Client,
+  chunkResultUrls: string[],
+  taskId: string,
+): Promise<Article["dialogs"]> {
+  const results = await Promise.all(
+    chunkResultUrls.map(async (url) => {
+      try {
+        const text = await readS3Text(s3Client, url);
+        const parsed = tryParseJson(sanitizeJsonPayload(text));
+        if (!parsed || typeof parsed !== "object") return [];
+        const record = parsed as { dialogs?: unknown };
+        if (!Array.isArray(record.dialogs)) return [];
+        return record.dialogs;
+      } catch (error) {
+        console.warn("[TaskProcessor] Failed to read chunk result during reduce enrichment", {
+          taskId,
+          chunkResultUrl: url,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return [];
+      }
+    }),
+  );
+
+  const byOrder = new Map<number, Article["dialogs"][number]>();
+  for (const dialogList of results) {
+    for (const rawDialog of dialogList) {
+      if (!rawDialog || typeof rawDialog !== "object") continue;
+      const candidate = rawDialog as Partial<Article["dialogs"][number]>;
+      const order = Number(candidate.order);
+      if (!Number.isFinite(order)) continue;
+      if (!Array.isArray(candidate.summary_sections)) continue;
+      if (!byOrder.has(order)) {
+        byOrder.set(order, {
+          ...candidate,
+          order,
+        } as Article["dialogs"][number]);
+      }
+    }
+  }
+
+  return Array.from(byOrder.values()).sort((a, b) => a.order - b.order);
 }
 
 function resolveChunkBasedOnOrders(args: {
