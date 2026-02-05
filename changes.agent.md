@@ -542,3 +542,13 @@ Files changed:
 - `docs/jp/system_overview.md`
 - `docs/08_db_design.md`
 - `docs/jp/08_db_design.md`
+
+Agent: Codex
+Date/Time: 2026-02-05 09:30 JST
+Keywords: s3, chunking, keys, hashing
+Topic: Shorten chunk prompt/result S3 keys with hashed suffixes
+Details:
+- Replace chunk key suffixes derived from full index lists with a compact hash-based suffix to avoid S3 key length errors.
+- Preserve key readability with first/last index and count while guaranteeing bounded length.
+Files changed:
+- `PoliTopicsRecap/src/processor/taskPreparation.ts`

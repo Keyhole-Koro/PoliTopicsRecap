@@ -1,5 +1,6 @@
 import type { S3Client } from "@aws-sdk/client-s3";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { createHash } from "crypto";
 
 import { appConfig } from "../config";
 import { uploadJson, parseS3Uri, fetchJsonObject } from "@utils/s3";
@@ -133,8 +134,9 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
         Number.isFinite(lastIndex)
           ? speeches.slice(lastIndex + 1, lastIndex + 1 + CONTEXT_WINDOW)
           : [];
-      const s3key = `prompts/${task.pk}_${pack.indices.join("-")}.json`;
-      const resultKey = `results/${task.pk}_${pack.indices.join("-")}_result.json`;
+      const chunkKeySuffix = buildChunkKeySuffix(pack.indices);
+      const s3key = `prompts/${task.pk}_${chunkKeySuffix}.json`;
+      const resultKey = `results/${task.pk}_${chunkKeySuffix}_result.json`;
       await uploadJson({
         client: s3Client,
         bucket: promptBucket,
@@ -262,4 +264,16 @@ function clampRatio(value: number, fallback: number): number {
   if (value <= 0) return fallback;
   if (value > 1) return 1;
   return value;
+}
+
+function buildChunkKeySuffix(indices: number[]): string {
+  if (indices.length === 0) return "empty";
+  const first = indices[0];
+  const last = indices[indices.length - 1];
+  const count = indices.length;
+  const digest = createHash("sha256")
+    .update(indices.join("-"))
+    .digest("hex")
+    .slice(0, 12);
+  return `${first}-${last}-${count}-${digest}`;
 }

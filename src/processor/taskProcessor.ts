@@ -228,6 +228,7 @@ async function persistArticleIfPossible(
     const dialogsWithPlaceholders = fillMissingDialogOrders(
       Array.isArray(articlePayload.dialogs) ? articlePayload.dialogs : [],
       speakerMap,
+      { includeAllMissing: task.processingMode === "chunked" },
     );
     const dialogsWithRecovery = await recoverMissingDialogOrders({
       dialogs: dialogsWithPlaceholders,
@@ -346,10 +347,20 @@ async function generateMissingDialogsFromLlm(args: GenerateMissingDialogsArgs): 
   if (!missingOrders.length) return [];
 
   const prompt = buildDialogRecoveryPrompt(missingOrders, speakerMap, meeting);
-  const llmResult = await llmClient.generate({
-    messages: [{ role: "user", content: prompt }],
-    maxOutputTokens: Math.min(appConfig.geminiMaxOutputToken, 3000),
-  });
+  let llmResult: Awaited<ReturnType<LlmClient["generate"]>>;
+  try {
+    llmResult = await llmClient.generate({
+      messages: [{ role: "user", content: prompt }],
+      maxOutputTokens: Math.min(appConfig.geminiMaxOutputToken, 3000),
+    });
+  } catch (error) {
+    console.warn("[taskProcessor] Missing dialog recovery call failed", {
+      issueID: meeting?.issueID ?? "unknown",
+      missingOrders,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
   const parsed = tryParseJson(sanitizeJsonPayload(llmResult.text));
   const dialogCandidate = Array.isArray(parsed)
     ? parsed
@@ -573,6 +584,7 @@ function isAllowedDialogOrderGap(check: DialogOrderInspection, meeting?: TaskIte
 function fillMissingDialogOrders(
   dialogs: Article["dialogs"],
   speakerMap: SpeakerMap,
+  options: { includeAllMissing?: boolean } = {},
 ): Article["dialogs"] {
   if (!Array.isArray(dialogs)) return [];
   if (!(speakerMap instanceof Map) || speakerMap.size === 0) return dialogs;
@@ -587,11 +599,16 @@ function fillMissingDialogOrders(
   const placeholders: Article["dialogs"] = [];
   for (const order of speakerMap.keys()) {
     if (existingOrders.has(order)) continue;
-    if (order !== 0 && order !== 1) continue;
+    if (!options.includeAllMissing && order !== 0 && order !== 1) continue;
     const meta = speakerMap.get(order);
     placeholders.push({
       order,
-      summary_sections: [{ title: "説明", bullets: [{ point: "" }] }],
+      summary_sections: [
+        {
+          title: "説明",
+          bullets: [{ point: "要点抽出不可", quote: "(原文から引用不可)", detail: "補完用プレースホルダー" }],
+        },
+      ],
       original_text: meta?.originalText ?? "",
       speaker: meta?.speaker ?? "",
       speakerYomi: meta?.speakerYomi ?? undefined,
