@@ -73,6 +73,8 @@ const baseConfig: AppConfig = {
   },
   geminiApiKey: "test-key",
   geminiModel: "gemini-2.5-flash",
+  geminiFallbackModel: "gemini-3-flash-preview",
+  geminiTimeoutMs: 600000,
   geminiMaxInputToken: 64000,
   geminiMaxOutputToken: 64000,
   chunkPackingTokenBudgetRatio: 0.85,

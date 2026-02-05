@@ -72,6 +72,13 @@ export type AppConfig = {
   r2: R2Config
   geminiApiKey: string
   geminiModel: string
+  geminiFallbackModel: string
+  /**
+   * Gemini SDK request timeout in milliseconds.
+   * If failures repeat around a fixed duration (e.g., ~300s),
+   * the infrastructure egress/idle timeout is the likely cause.
+   */
+  geminiTimeoutMs: number
   geminiMaxInputToken: number
   geminiMaxOutputToken: number
   chunkPackingTokenBudgetRatio: number
@@ -144,6 +151,8 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
     },
     geminiApiKey: "dummy",
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
+    geminiFallbackModel: optionalEnv("GEMINI_FALLBACK_MODEL") || "gemini-3-flash-preview",
+    geminiTimeoutMs: optionalEnvNumber("GEMINI_TIMEOUT_MS", 600000),
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
     chunkPackingTokenBudgetRatio: optionalEnvNumber("CHUNK_PACKING_TOKEN_BUDGET_RATIO", 0.85),
@@ -210,6 +219,8 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
+    geminiFallbackModel: optionalEnv("GEMINI_FALLBACK_MODEL") || "gemini-3-flash-preview",
+    geminiTimeoutMs: optionalEnvNumber("GEMINI_TIMEOUT_MS", 600000),
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
     chunkPackingTokenBudgetRatio: optionalEnvNumber("CHUNK_PACKING_TOKEN_BUDGET_RATIO", 0.85),
@@ -276,6 +287,8 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
     },
     geminiApiKey: requireEnv("GEMINI_API_KEY"),
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-pro-preview",
+    geminiFallbackModel: optionalEnv("GEMINI_FALLBACK_MODEL") || "gemini-3-flash-preview",
+    geminiTimeoutMs: optionalEnvNumber("GEMINI_TIMEOUT_MS", 600000),
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
     chunkPackingTokenBudgetRatio: optionalEnvNumber("CHUNK_PACKING_TOKEN_BUDGET_RATIO", 0.85),
@@ -347,6 +360,8 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
     },
     geminiApiKey: "dummy",
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
+    geminiFallbackModel: optionalEnv("GEMINI_FALLBACK_MODEL") || "gemini-3-flash-preview",
+    geminiTimeoutMs: optionalEnvNumber("GEMINI_TIMEOUT_MS", 600000),
     geminiMaxInputToken: optionalEnvNumber("GEMINI_MAX_INPUT_TOKEN", 64000),
     geminiMaxOutputToken: optionalEnvNumber("GEMINI_MAX_OUTPUT_TOKEN", 64000),
     chunkPackingTokenBudgetRatio: optionalEnvNumber("CHUNK_PACKING_TOKEN_BUDGET_RATIO", 0.85),

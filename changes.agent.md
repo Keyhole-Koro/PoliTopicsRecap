@@ -552,3 +552,18 @@ Details:
 - Preserve key readability with first/last index and count while guaranteeing bounded length.
 Files changed:
 - `PoliTopicsRecap/src/processor/taskPreparation.ts`
+
+Agent: Codex
+Date/Time: 2026-02-05 10:15 JST
+Keywords: gemini, timeout, fallback, env
+Topic: Add Gemini timeout and fallback model configuration
+Details:
+- Add GEMINI_TIMEOUT_MS and GEMINI_FALLBACK_MODEL configuration to app config with defaults.
+- Apply httpOptions timeout to Gemini requests and retry once with the fallback model on failures.
+- Emit a log hint that fixed-duration timeouts likely indicate infrastructure idle timeouts.
+- Update tests to cover fallback retry and new config fields.
+Files changed:
+- `PoliTopicsRecap/src/config.ts`
+- `PoliTopicsRecap/src/llm/geminiClient.ts`
+- `PoliTopicsRecap/src/llm/geminiClient.test.ts`
+- `PoliTopicsRecap/src/tasks/retryAttempts.test.ts`

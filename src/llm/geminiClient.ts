@@ -20,6 +20,9 @@ type GenerateContentConfig = {
   topP?: number;
   topK?: number;
   stopSequences?: string[];
+  httpOptions?: {
+    timeout?: number;
+  };
 };
 
 export interface GeminiClientOptions {
@@ -32,8 +35,10 @@ export interface GeminiClientOptions {
 export class GeminiClient implements LlmClient {
   private readonly ai: GoogleGenAI;
   private readonly model: string;
+  private readonly fallbackModel?: string;
   private readonly defaultGenerationConfig?: Partial<GenerateContentConfig>;
   private readonly systemInstruction?: string;
+  private readonly timeoutMs?: number;
 
   constructor(options: GeminiClientOptions = {}) {
     const apiKey = options.apiKey ?? appConfig.geminiApiKey;
@@ -43,8 +48,10 @@ export class GeminiClient implements LlmClient {
 
     this.ai = new GoogleGenAI({ apiKey });
     this.model = options.model ?? "gemini-2.5-pro";
+    this.fallbackModel = appConfig.geminiFallbackModel;
     this.systemInstruction = options.systemInstruction;
     this.defaultGenerationConfig = options.defaultGenerationConfig;
+    this.timeoutMs = appConfig.geminiTimeoutMs;
   }
 
   async generate(request: LlmGenerateRequest): Promise<LlmGenerateResponse> {
@@ -60,23 +67,36 @@ export class GeminiClient implements LlmClient {
       this.systemInstruction,
     );
 
-    const payload = generationConfig
-      ? { model: this.model, contents, config: generationConfig }
-      : { model: this.model, contents };
+    const requestConfig = applyHttpOptions(generationConfig, this.timeoutMs);
 
     let result: { text?: string } | undefined;
     try {
-      result = await this.ai.models.generateContent(payload);
+      result = await this.ai.models.generateContent({
+        model: this.model,
+        contents,
+        ...(requestConfig ? { config: requestConfig } : {}),
+      });
     } catch (error) {
-      const err = error as { cause?: unknown };
-      console.error("[GeminiClient] generateContent failed", error);
-      if (err?.cause) {
-        console.error("[GeminiClient] cause:", err.cause);
+      logGeminiError(error, this.model, this.timeoutMs);
+      if (shouldFallback(this.fallbackModel, this.model)) {
+        const fallbackModel = this.fallbackModel as string;
+        console.warn("[GeminiClient] Retrying with fallback model", {
+          from: this.model,
+          to: fallbackModel,
+        });
+        try {
+          result = await this.ai.models.generateContent({
+            model: fallbackModel,
+            contents,
+            ...(requestConfig ? { config: requestConfig } : {}),
+          });
+        } catch (fallbackError) {
+          logGeminiError(fallbackError, fallbackModel, this.timeoutMs);
+          throw fallbackError;
+        }
+      } else {
+        throw error;
       }
-      if (err?.cause instanceof Error && err.cause.stack) {
-        console.error("[GeminiClient] cause stack:", err.cause.stack);
-      }
-      throw error;
     }
     const text = typeof result?.text === "string" ? result.text.trim() : undefined;
     if (!text) {
@@ -99,6 +119,48 @@ function transformMessageToContent(message: LlmMessage): Content {
     role: message.role,
     parts: [{ text: message.content }],
   };
+}
+
+function applyHttpOptions(
+  config: GenerateContentConfig | undefined,
+  timeoutMs?: number,
+): GenerateContentConfig | undefined {
+  if (!timeoutMs || timeoutMs <= 0) return config;
+  const base = config ?? {};
+  return {
+    ...base,
+    httpOptions: {
+      ...(base.httpOptions ?? {}),
+      timeout: timeoutMs,
+    },
+  };
+}
+
+function shouldFallback(fallbackModel: string | undefined, primaryModel: string): boolean {
+  return Boolean(fallbackModel && fallbackModel.trim() !== "" && fallbackModel !== primaryModel);
+}
+
+function isFetchFailed(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const message = (error as { message?: string }).message;
+  return typeof message === "string" && message.includes("fetch failed");
+}
+
+function logGeminiError(error: unknown, model: string, timeoutMs?: number): void {
+  const err = error as { cause?: unknown };
+  console.error("[GeminiClient] generateContent failed", error);
+  if (isFetchFailed(error)) {
+    console.error(
+      "[GeminiClient] fetch failed; if failures repeat around a fixed duration, infra egress/idle timeouts are likely",
+      { model, timeoutMs },
+    );
+  }
+  if (err?.cause) {
+    console.error("[GeminiClient] cause:", err.cause);
+  }
+  if (err?.cause instanceof Error && err.cause.stack) {
+    console.error("[GeminiClient] cause stack:", err.cause.stack);
+  }
 }
 
 function buildGenerationConfig(

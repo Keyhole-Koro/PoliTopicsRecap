@@ -10,6 +10,7 @@ jest.mock("@google/genai", () => ({
 }));
 
 import { GeminiClient } from './geminiClient';
+import { setAppEnvironment } from "../config";
 
 /*
  * requires an API key and uses the default model
@@ -38,6 +39,7 @@ describe('GeminiClient', () => {
   beforeEach(() => {
     generateContentMock.mockReset();
     googleGenAiCtorMock.mockClear();
+    setAppEnvironment("localstackTest");
   });
 
   it('requires an API key and uses the default model', () => {
@@ -75,9 +77,48 @@ describe('GeminiClient', () => {
         temperature: 0.7,
         maxOutputTokens: 1000,
         topP: 0.9,
+        httpOptions: { timeout: 600000 },
       },
     });
     expect(response.text).toBe('generated text');
+  });
+
+  it('retries with fallback model when the primary model fails', async () => {
+    generateContentMock
+      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockResolvedValueOnce({ text: " fallback ok " });
+
+    const client = new GeminiClient({
+      apiKey: "fallback-key",
+      model: "gemini-3-pro-preview",
+    });
+
+    const response = await client.generate({
+      messages: [{ role: "user", content: "Hello" }],
+    });
+
+    expect(generateContentMock).toHaveBeenCalledTimes(2);
+    expect(generateContentMock).toHaveBeenNthCalledWith(1, {
+      model: "gemini-3-pro-preview",
+      contents: [{
+        role: "user",
+        parts: [{ text: "Hello" }],
+      }],
+      config: {
+        httpOptions: { timeout: 600000 },
+      },
+    });
+    expect(generateContentMock).toHaveBeenNthCalledWith(2, {
+      model: "gemini-3-flash-preview",
+      contents: [{
+        role: "user",
+        parts: [{ text: "Hello" }],
+      }],
+      config: {
+        httpOptions: { timeout: 600000 },
+      },
+    });
+    expect(response.text).toBe("fallback ok");
   });
 
   it('throws when no messages are provided', async () => {
