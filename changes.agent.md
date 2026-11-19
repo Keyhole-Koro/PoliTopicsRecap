@@ -612,3 +612,25 @@ Files changed:
 - `PoliTopicsRecap/jp/README.md`
 - `PoliTopicsRecap/docs/fargate-architecture.md`
 - `PoliTopicsRecap/docs/jp/fargate-architecture.md`
+
+Agent: Claude Code (Claude Opus 5.5)
+Date/Time: 2026-11-20 04:32 JST
+Keywords: llm, anthropic, claude-haiku, max_tokens, remake, terraform, depends_on, docs
+Topic: Review fixes for the Claude Haiku 5.5 switch
+Details:
+- When the chunk step of a chunked task stops at `max_tokens`, the task is remade with smaller chunks (like a "prompt is too long" error) instead of failing three times and being skipped. A cut-off reduce step or single_chunk task still fails the task. Gemini never raises `LlmOutputTruncatedError`, so the rollback path is unchanged.
+- Terraform: the ECS task definition now depends on the execution-role policy for the Anthropic key parameter, so a failed grant stops the apply before the schedule moves to a revision that cannot start. Nothing was applied.
+- The sampling-parameter warning no longer names a model, and its once-per-process test loads a fresh module copy.
+- Docs: truncation handling, SDK retries (408/409/429/5xx and connection errors), the SSM command reads the key from stdin (not visible in `ps`), and the smoke test reads the key with `read -rs`.
+Files changed:
+- `PoliTopicsRecap/src/processor/taskRunner.ts`
+- `PoliTopicsRecap/src/processor/taskRunner.anthropic.test.ts`
+- `PoliTopicsRecap/src/llm/llmClient.ts`
+- `PoliTopicsRecap/src/llm/anthropicClient.ts`
+- `PoliTopicsRecap/src/llm/anthropicClient.test.ts`
+- `PoliTopicsRecap/src/llm/anthropicClient.smoke.test.ts`
+- `PoliTopicsRecap/terraform/service/fargate/main.tf`
+- `PoliTopicsRecap/terraform/README.md`
+- `PoliTopicsRecap/terraform/jp/README.md`
+- `PoliTopicsRecap/docs/fargate-architecture.md`
+- `PoliTopicsRecap/docs/jp/fargate-architecture.md`

@@ -19,9 +19,11 @@ The Fargate task gets `ANTHROPIC_API_KEY` from an SSM Parameter Store SecureStri
 
 ```bash
 # read -rs keeps the key out of shell history and off the screen (paste the key, then Enter).
-read -rs ANTHROPIC_KEY && aws ssm put-parameter --region ap-northeast-3 \
+# printf is a shell builtin and the CLI reads the value from stdin, so the key is not in the
+# process list (ps) either.
+read -rs ANTHROPIC_KEY && printf '%s' "$ANTHROPIC_KEY" | aws ssm put-parameter --region ap-northeast-3 \
   --name /politopics/stage/recap/anthropic-api-key \
-  --type SecureString --overwrite --value "$ANTHROPIC_KEY"; unset ANTHROPIC_KEY
+  --type SecureString --overwrite --value file:///dev/stdin; unset ANTHROPIC_KEY
 ```
 
 - Prod uses `/politopics/prod/recap/anthropic-api-key`. Set `anthropic_api_key_ssm_parameter_name` to use another name.

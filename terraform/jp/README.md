@@ -19,9 +19,10 @@ Fargate タスクは、SSM Parameter Store の SecureString から ECS の `secr
 
 ```bash
 # read -rs を使うと、キーがシェルの履歴にも画面にも残りません（キーを貼り付けて Enter）。
-read -rs ANTHROPIC_KEY && aws ssm put-parameter --region ap-northeast-3 \
+# printf はシェルの組み込みコマンドで、CLI は値を標準入力から読むので、プロセス一覧（ps）にも出ません。
+read -rs ANTHROPIC_KEY && printf '%s' "$ANTHROPIC_KEY" | aws ssm put-parameter --region ap-northeast-3 \
   --name /politopics/stage/recap/anthropic-api-key \
-  --type SecureString --overwrite --value "$ANTHROPIC_KEY"; unset ANTHROPIC_KEY
+  --type SecureString --overwrite --value file:///dev/stdin; unset ANTHROPIC_KEY
 ```
 
 - prod は `/politopics/prod/recap/anthropic-api-key`。別の名前にするときは `anthropic_api_key_ssm_parameter_name` を設定します。

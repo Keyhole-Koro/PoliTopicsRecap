@@ -138,7 +138,7 @@ chunking: {
 
 Recap は既定で、Anthropic API の **Claude Haiku 5.5**（`claude-haiku-5-5`）で要約を作ります。Gemini はロールバック用に残してあり、`LLM_PROVIDER=gemini`（Terraform では `llm_provider = "gemini"`）で戻せます。
 
-- **クライアント**: `src/llm/anthropicClient.ts`（`@anthropic-ai/sdk`）。`max_tokens` が大きいと SDK がストリーミングでない呼び出しを拒むため、`messages.stream(...).finalMessage()` で受けます。`ANTHROPIC_TIMEOUT_MS` は、SDK のリトライ 2 回（429・5xx・接続エラー）を含めた 1 回の呼び出し全体の上限です。
+- **クライアント**: `src/llm/anthropicClient.ts`（`@anthropic-ai/sdk`）。`max_tokens` が大きいと SDK がストリーミングでない呼び出しを拒むため、`messages.stream(...).finalMessage()` で受けます。`ANTHROPIC_TIMEOUT_MS` は、SDK のリトライ 2 回（408・409・429・5xx・接続エラー）を含めた 1 回の呼び出し全体の上限です。
 - **パラメータ**: `model`、`max_tokens`（`ANTHROPIC_MAX_OUTPUT_TOKEN`。欠けた発言の補完だけは 8000。思考も `max_tokens` に数えられるため）、`output_config.effort`（`ANTHROPIC_EFFORT`、デフォルト `medium`）。adaptive thinking がモデルの既定なので `thinking` は送りません。`temperature`/`top_p`/`top_k` とアシスタントのプレフィルは送りません（Claude Haiku 5.5 では 400 になる）。
 - **JSON 出力**: Claude にだけ、JSON オブジェクトだけを返す（前置き・コードフェンスなし）よう短い日本語の system 指示を付けます。共有プロンプトと `PROMPT_VERSION` は変えていないので、完了済みタスクは作り直されません。
 - **応答の扱い**: `text` ブロックだけを読みます（思考ブロックが先に来る）。`stop_reason: "refusal"` は拒否の分類をログに残してタスクを失敗にします（Claude Haiku 5.5 にはサーバー側のフォールバックがない）。`max_tokens` と `model_context_window_exceeded` では、途中で切れた JSON を保存せず、チャンクも完了にしません。chunked のタスクのチャンクの段階で `max_tokens` に達したとき（思考も上限に数えられる）は、チャンクを小さくしてタスクを作り直します。reduce の段階や single_chunk のタスクで切れたときは、タスクを失敗にします。API のエラーは SDK のクラスと status のまま投げ直すので、400「prompt is too long」（や 413）では今までどおりチャンクを小さくして作り直します。`ANTHROPIC_TIMEOUT_MS` で打ち切られた呼び出しはタスクの失敗になり、作り直しはしません。`ANTHROPIC_MAX_OUTPUT_TOKEN` 分のトークンを受け取りきれる長さにしておいてください。
@@ -146,7 +146,7 @@ Recap は既定で、Anthropic API の **Claude Haiku 5.5**（`claude-haiku-5-5`
 - **トークン数**: チャンク分割は、生成と同じモデルで `messages.countTokens` を呼んで数えます（Gemini とトークナイザが違う）。空のテキストは API を呼ばずに 0 です。値は推定で数トークン多めに出ることがあり、チャンクが少し小さくなるだけです。count_tokens は無料ですが、利用階層ごとのレート制限があります。
 - **タスクの `llm` の値**: `anthropic`、`gemini`、`fake` のいずれか。`anthropic` と `gemini` はどちらも今の設定のプロバイダで処理します。切り替え前に Gemini 用に準備されたタスクは Claude で処理を終えます（警告ログあり）。ロールバック時も逆向きに同じです。`task.llmModel` は、今のプロバイダのモデルのときだけ使います。`fake` はテスト用の echo クライアント、それ以外の値はスキップします。
 - **Fargate での API キー**: Terraform が SSM Parameter Store の SecureString `/politopics/<env>/recap/anthropic-api-key` を ECS の `secrets` でコンテナに `ANTHROPIC_API_KEY` として渡します。キーは Terraform の state、タスク定義、GitHub のどこにも入りません。デプロイ前にパラメータを作ってください（`terraform/jp/README.md`）。
-- **スモークテスト**（実 API、明示的に有効にしたときだけ）: `RUN_ANTHROPIC_SMOKE_TEST=true ANTHROPIC_API_KEY=... APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false ./node_modules/.bin/jest --config jest.config.ts --runInBand src/llm/anthropicClient.smoke.test.ts`
+- **スモークテスト**（実 API、明示的に有効にしたときだけ）: 先に `read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY` でキーを読み込み（コマンドにキーを直接書くと、シェルの履歴に残る）、`RUN_ANTHROPIC_SMOKE_TEST=true APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false ./node_modules/.bin/jest --config jest.config.ts --runInBand src/llm/anthropicClient.smoke.test.ts` を実行して、終わったら `unset ANTHROPIC_API_KEY` します。
 
 ## ストレージアーキテクチャ
 

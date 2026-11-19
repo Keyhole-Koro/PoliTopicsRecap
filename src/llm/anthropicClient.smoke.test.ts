@@ -9,11 +9,14 @@ import { buildSpeechInput, stripCodeFence } from "../prompts/promptInput";
 /*
  * Opt-in smoke test against the real Claude API (costs a few cents at most).
  * Runs only when RUN_ANTHROPIC_SMOKE_TEST=true and ANTHROPIC_API_KEY are both set, so the
- * dummy keys used in CI never trigger it:
+ * dummy keys used in CI never trigger it. Read the key with `read -rs` rather than typing it
+ * into the command, which would leave it in the shell history:
  *
- *   RUN_ANTHROPIC_SMOKE_TEST=true ANTHROPIC_API_KEY=... APP_ENVIRONMENT=localstackTest \
- *     ENABLE_NOTIFICATION=false ./node_modules/.bin/jest --config jest.config.ts --runInBand \
+ *   read -rs ANTHROPIC_API_KEY && export ANTHROPIC_API_KEY
+ *   RUN_ANTHROPIC_SMOKE_TEST=true APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false \
+ *     ./node_modules/.bin/jest --config jest.config.ts --runInBand \
  *     src/llm/anthropicClient.smoke.test.ts
+ *   unset ANTHROPIC_API_KEY
  *
  * Model and effort come from ANTHROPIC_MODEL / ANTHROPIC_EFFORT (defaults claude-haiku-5-5 / medium).
  *
