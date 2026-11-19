@@ -111,7 +111,14 @@ chunking: {
 | Variable                | Description                                             | Required          |
 | ----------------------- | ------------------------------------------------------- | ----------------- |
 | `APP_ENVIRONMENT`       | Environment (prod/stage/local)                          | Yes               |
-| `GEMINI_API_KEY`        | Gemini API key                                          | Yes (prod/stage)  |
+| `LLM_PROVIDER`          | `anthropic` (default) or `gemini` (rollback)            | No                |
+| `ANTHROPIC_API_KEY`     | Anthropic API key (on Fargate: injected from SSM Parameter Store) | Yes (prod/stage, when `LLM_PROVIDER=anthropic`) |
+| `ANTHROPIC_MODEL`       | Claude model (default: `claude-haiku-5-5`)              | No                |
+| `ANTHROPIC_EFFORT`      | `output_config.effort`: `low`/`medium`/`high`/`xhigh`/`max` (default: `medium`) | No |
+| `ANTHROPIC_TIMEOUT_MS`  | Timeout for one Claude call, retries included (default: 600000) | No        |
+| `ANTHROPIC_MAX_INPUT_TOKEN`  | Claude input budget per chunk (default: 64000)     | No                |
+| `ANTHROPIC_MAX_OUTPUT_TOKEN` | Claude `max_tokens` (default: 64000)               | No                |
+| `GEMINI_API_KEY`        | Gemini API key                                          | Yes (prod/stage, when `LLM_PROVIDER=gemini`) |
 | `GEMINI_MAX_INPUT_TOKEN`  | Gemini max input tokens (default: 64000 in prod/stage) | No               |
 | `GEMINI_MAX_OUTPUT_TOKEN` | Gemini max output tokens (default: 64000)               | No               |
 | `CHUNK_PACKING_TOKEN_BUDGET_RATIO` | Ratio of available input tokens used for chunk packing (default: 0.85) | No |
@@ -126,6 +133,20 @@ chunking: {
 | `R2_ARTICLE_BUCKET`     | R2 bucket for article assets                            | No (uses default) |
 | `R2_REGION`             | R2 region (default: "auto")                             | No                |
 | `R2_PUBLIC_ASSET_URL`   | R2 public URL (default: "https://asset.politopics.net") | No                |
+
+## LLM Provider
+
+Recap generates summaries with **Claude Haiku 5.5** (`claude-haiku-5-5`) through the Anthropic API by default. Gemini stays selectable for rollback (`LLM_PROVIDER=gemini`, Terraform `llm_provider = "gemini"`).
+
+- **Client**: `src/llm/anthropicClient.ts` (`@anthropic-ai/sdk`). Requests are streamed (`messages.stream(...).finalMessage()`), because the SDK refuses non-streaming calls with a large `max_tokens`. `ANTHROPIC_TIMEOUT_MS` bounds the whole call including the SDK's 2 retries (429/5xx/connection errors).
+- **Parameters**: `model`, `max_tokens` (`ANTHROPIC_MAX_OUTPUT_TOKEN`; 8000 for the missing-dialog recovery call, because thinking counts toward `max_tokens`), `output_config.effort` (`ANTHROPIC_EFFORT`, default `medium`). Adaptive thinking is the model default, so `thinking` is not sent. `temperature`/`top_p`/`top_k` and assistant prefill are never sent (Claude Haiku 5.5 rejects them).
+- **JSON output**: Claude gets a short Japanese system instruction to answer with the bare JSON object (no preface, no code fences). The shared prompts and `PROMPT_VERSION` are unchanged, so completed tasks are not requeued.
+- **Response handling**: only `text` blocks are read (thinking blocks come first). `stop_reason: "refusal"` fails the task with the refusal category in the logs (Claude Haiku 5.5 has no server-side fallback). `max_tokens` / `model_context_window_exceeded` fail the task without storing the truncated JSON or marking the chunk completed. API errors keep their SDK class and status, so a 400 "prompt is too long" (or 413) still remakes the task with smaller chunks.
+- **Logging**: message id, `stop_reason` and usage (input/output/thinking/cache tokens) for every call; status, request ID and error code for failures. The API key and prompts are never logged.
+- **Token counting**: chunk packing counts tokens with `messages.countTokens` and the generation model (the tokenizer differs from Gemini's). Empty text counts as 0 without a request. Counts are estimates that can run a few tokens high, which only makes chunks slightly smaller. Token counting is free but rate limited per usage tier.
+- **Task `llm` values**: tasks are tagged `anthropic`, `gemini` or `fake`. Both `anthropic` and `gemini` run on the active provider: tasks prepared for Gemini before the switch finish on Claude (with a warning), and the same happens in reverse on rollback. `task.llmModel` is used only when it belongs to the active provider. `fake` keeps the echo test client; unknown values are skipped.
+- **API key on Fargate**: Terraform passes `ANTHROPIC_API_KEY` to the container from the SSM Parameter Store SecureString `/politopics/<env>/recap/anthropic-api-key` through ECS `secrets`, so the key is not in Terraform state, the task definition or GitHub. Create the parameter before deploying (see `terraform/README.md`).
+- **Smoke test** (real API, opt-in): `RUN_ANTHROPIC_SMOKE_TEST=true ANTHROPIC_API_KEY=... APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false ./node_modules/.bin/jest --config jest.config.ts --runInBand src/llm/anthropicClient.smoke.test.ts`
 
 ## Storage Architecture
 
@@ -224,7 +245,7 @@ To enable public access via custom domain:
 
 ### IAM Roles
 
-- **Task Execution Role**: Pull ECR images, CloudWatch logs
+- **Task Execution Role**: Pull ECR images, CloudWatch logs, read the Anthropic API key parameter (`ssm:GetParameters` on that parameter only, when `llm_provider = "anthropic"`)
 - **Task Role**: DynamoDB, S3, SQS access
 
 ## Local Testing

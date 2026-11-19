@@ -111,7 +111,14 @@ chunking: {
 | 変数名                  | 説明                                                         | 必須                |
 | ----------------------- | ------------------------------------------------------------ | ------------------- |
 | `APP_ENVIRONMENT`       | 環境 (prod/stage/local)                                      | Yes                 |
-| `GEMINI_API_KEY`        | Gemini APIキー                                               | Yes (prod/stage)    |
+| `LLM_PROVIDER`          | `anthropic`（デフォルト）または `gemini`（ロールバック用）   | No                  |
+| `ANTHROPIC_API_KEY`     | Anthropic APIキー（Fargate では SSM Parameter Store から渡す） | Yes (prod/stage、`LLM_PROVIDER=anthropic` のとき) |
+| `ANTHROPIC_MODEL`       | Claude のモデル (デフォルト: `claude-haiku-5-5`)              | No                  |
+| `ANTHROPIC_EFFORT`      | `output_config.effort`: `low`/`medium`/`high`/`xhigh`/`max` (デフォルト: `medium`) | No |
+| `ANTHROPIC_TIMEOUT_MS`  | Claude 呼び出し 1 回のタイムアウト。リトライを含む (デフォルト: 600000) | No   |
+| `ANTHROPIC_MAX_INPUT_TOKEN`  | チャンクあたりの Claude 入力上限 (デフォルト: 64000)     | No                  |
+| `ANTHROPIC_MAX_OUTPUT_TOKEN` | Claude の `max_tokens` (デフォルト: 64000)               | No                  |
+| `GEMINI_API_KEY`        | Gemini APIキー                                               | Yes (prod/stage、`LLM_PROVIDER=gemini` のとき) |
 | `GEMINI_MAX_INPUT_TOKEN`  | Gemini入力上限 (prod/stageデフォルト: 64000)               | No                  |
 | `GEMINI_MAX_OUTPUT_TOKEN` | Gemini出力上限 (デフォルト: 64000)                          | No                  |
 | `CHUNK_PACKING_TOKEN_BUDGET_RATIO` | 利用可能入力トークンに対するチャンク分割比率 (デフォルト: 0.85) | No |
@@ -126,6 +133,20 @@ chunking: {
 | `R2_ARTICLE_BUCKET`     | R2記事アセットバケット                                       | No (デフォルト使用) |
 | `R2_REGION`             | R2リージョン (デフォルト: "auto")                            | No                  |
 | `R2_PUBLIC_ASSET_URL`   | R2パブリックURL (デフォルト: "https://asset.politopics.net") | No                  |
+
+## LLM プロバイダ
+
+Recap は既定で、Anthropic API の **Claude Haiku 5.5**（`claude-haiku-5-5`）で要約を作ります。Gemini はロールバック用に残してあり、`LLM_PROVIDER=gemini`（Terraform では `llm_provider = "gemini"`）で戻せます。
+
+- **クライアント**: `src/llm/anthropicClient.ts`（`@anthropic-ai/sdk`）。`max_tokens` が大きいと SDK がストリーミングでない呼び出しを拒むため、`messages.stream(...).finalMessage()` で受けます。`ANTHROPIC_TIMEOUT_MS` は、SDK のリトライ 2 回（429・5xx・接続エラー）を含めた 1 回の呼び出し全体の上限です。
+- **パラメータ**: `model`、`max_tokens`（`ANTHROPIC_MAX_OUTPUT_TOKEN`。欠けた発言の補完だけは 8000。思考も `max_tokens` に数えられるため）、`output_config.effort`（`ANTHROPIC_EFFORT`、デフォルト `medium`）。adaptive thinking がモデルの既定なので `thinking` は送りません。`temperature`/`top_p`/`top_k` とアシスタントのプレフィルは送りません（Claude Haiku 5.5 では 400 になる）。
+- **JSON 出力**: Claude にだけ、JSON オブジェクトだけを返す（前置き・コードフェンスなし）よう短い日本語の system 指示を付けます。共有プロンプトと `PROMPT_VERSION` は変えていないので、完了済みタスクは作り直されません。
+- **応答の扱い**: `text` ブロックだけを読みます（思考ブロックが先に来る）。`stop_reason: "refusal"` は拒否の分類をログに残してタスクを失敗にします（Claude Haiku 5.5 にはサーバー側のフォールバックがない）。`max_tokens` と `model_context_window_exceeded` は、途中で切れた JSON を保存せず、チャンクも完了にせずにタスクを失敗にします。API のエラーは SDK のクラスと status のまま投げ直すので、400「prompt is too long」（や 413）では今までどおりチャンクを小さくして作り直します。
+- **ログ**: 呼び出しごとに message id、`stop_reason`、usage（入力・出力・思考・キャッシュのトークン数）。失敗時は status、request ID、エラーコード。API キーとプロンプトはログに出しません。
+- **トークン数**: チャンク分割は、生成と同じモデルで `messages.countTokens` を呼んで数えます（Gemini とトークナイザが違う）。空のテキストは API を呼ばずに 0 です。値は推定で数トークン多めに出ることがあり、チャンクが少し小さくなるだけです。count_tokens は無料ですが、利用階層ごとのレート制限があります。
+- **タスクの `llm` の値**: `anthropic`、`gemini`、`fake` のいずれか。`anthropic` と `gemini` はどちらも今の設定のプロバイダで処理します。切り替え前に Gemini 用に準備されたタスクは Claude で処理を終えます（警告ログあり）。ロールバック時も逆向きに同じです。`task.llmModel` は、今のプロバイダのモデルのときだけ使います。`fake` はテスト用の echo クライアント、それ以外の値はスキップします。
+- **Fargate での API キー**: Terraform が SSM Parameter Store の SecureString `/politopics/<env>/recap/anthropic-api-key` を ECS の `secrets` でコンテナに `ANTHROPIC_API_KEY` として渡します。キーは Terraform の state、タスク定義、GitHub のどこにも入りません。デプロイ前にパラメータを作ってください（`terraform/jp/README.md`）。
+- **スモークテスト**（実 API、明示的に有効にしたときだけ）: `RUN_ANTHROPIC_SMOKE_TEST=true ANTHROPIC_API_KEY=... APP_ENVIRONMENT=localstackTest ENABLE_NOTIFICATION=false ./node_modules/.bin/jest --config jest.config.ts --runInBand src/llm/anthropicClient.smoke.test.ts`
 
 ## ストレージアーキテクチャ
 
@@ -224,7 +245,7 @@ R2はS3互換APIを使用します。環境ごとの設定：
 
 ### IAMロール
 
-- **タスク実行ロール**: ECRイメージプル、CloudWatchログ
+- **タスク実行ロール**: ECRイメージプル、CloudWatchログ、Anthropic API キーのパラメータの読み取り（`llm_provider = "anthropic"` のとき、そのパラメータだけに `ssm:GetParameters`）
 - **タスクロール**: DynamoDB、S3、SQSアクセス
 
 ## ローカルテスト

@@ -567,3 +567,48 @@ Files changed:
 - `PoliTopicsRecap/src/llm/geminiClient.ts`
 - `PoliTopicsRecap/src/llm/geminiClient.test.ts`
 - `PoliTopicsRecap/src/tasks/retryAttempts.test.ts`
+
+Agent: Claude Code (Claude Opus 5.5)
+Date/Time: 2026-11-20 03:05 JST
+Keywords: llm, anthropic, claude-haiku, gemini, migration, ssm, terraform
+Topic: Switch recap generation from Gemini to Claude Haiku 5.5 (Gemini kept for rollback)
+Details:
+- Add `@anthropic-ai/sdk` 1.6.0 and `AnthropicClient` (streaming, `output_config.effort`, no sampling params or prefill, text blocks only). Refusals and truncated output (`max_tokens`, `model_context_window_exceeded`) raise provider-neutral errors so truncated JSON is never stored; SDK errors are rethrown unchanged so the "prompt is too long" remake path keeps working.
+- Config: `LLM_PROVIDER` (`anthropic` default, `gemini` rollback), `ANTHROPIC_API_KEY`/`MODEL`/`EFFORT`/`TIMEOUT_MS`/`MAX_INPUT_TOKEN`/`MAX_OUTPUT_TOKEN`, and `getActiveLlmSettings()`. In stage/prod only the active provider's API key is required.
+- Token counting uses Claude `count_tokens` with the generation model when the provider is anthropic (empty text counts as 0 without a request).
+- The factory sends tasks tagged `anthropic` or `gemini` to the active provider (in-flight Gemini tasks finish on Claude). Claude gets a Japanese JSON-only system instruction; shared prompts and `PROMPT_VERSION` are unchanged. Task preparation tags tasks with the active provider/model.
+- Terraform: `llm_provider` variable (exported as `LLM_PROVIDER`), and `ANTHROPIC_API_KEY` injected from the SSM SecureString `/politopics/<env>/recap/anthropic-api-key` through ECS `secrets` with `ssm:GetParameters` on that parameter for the execution role. Nothing was applied.
+- Tests: config, AnthropicClient (fake SDK and real SDK over a fake fetch), token counter, factory, task runner wiring without LocalStack, and an opt-in real-API smoke test (`RUN_ANTHROPIC_SMOKE_TEST=true` plus `ANTHROPIC_API_KEY`). The LocalStack task test pins `LLM_PROVIDER=gemini`.
+- Docs: environment variables, the LLM Provider section, SSM parameter setup and rollback.
+Files changed:
+- `PoliTopicsRecap/package.json`
+- `PoliTopicsRecap/pnpm-lock.yaml`
+- `PoliTopicsRecap/package-lock.json`
+- `PoliTopicsRecap/src/config.ts`
+- `PoliTopicsRecap/src/config.test.ts`
+- `PoliTopicsRecap/src/llm/llmClient.ts`
+- `PoliTopicsRecap/src/llm/anthropicClient.ts`
+- `PoliTopicsRecap/src/llm/anthropicClient.test.ts`
+- `PoliTopicsRecap/src/llm/anthropicClient.smoke.test.ts`
+- `PoliTopicsRecap/src/llm/tokenCounter.ts`
+- `PoliTopicsRecap/src/llm/tokenCounter.test.ts`
+- `PoliTopicsRecap/src/processor/llmFactory.ts`
+- `PoliTopicsRecap/src/processor/llmFactory.test.ts`
+- `PoliTopicsRecap/src/processor/taskPreparation.ts`
+- `PoliTopicsRecap/src/processor/taskProcessor.ts`
+- `PoliTopicsRecap/src/processor/taskRunner.ts`
+- `PoliTopicsRecap/src/processor/taskRunner.anthropic.test.ts`
+- `PoliTopicsRecap/src/tasks/retryAttempts.test.ts`
+- `PoliTopicsRecap/src/tasks/tasks.localstack.test.ts`
+- `PoliTopicsRecap/terraform/variables.tf`
+- `PoliTopicsRecap/terraform/main.tf`
+- `PoliTopicsRecap/terraform/service/variables.tf`
+- `PoliTopicsRecap/terraform/service/main.tf`
+- `PoliTopicsRecap/terraform/service/fargate/variables.tf`
+- `PoliTopicsRecap/terraform/service/fargate/main.tf`
+- `PoliTopicsRecap/terraform/README.md`
+- `PoliTopicsRecap/terraform/jp/README.md`
+- `PoliTopicsRecap/README.md`
+- `PoliTopicsRecap/jp/README.md`
+- `PoliTopicsRecap/docs/fargate-architecture.md`
+- `PoliTopicsRecap/docs/jp/fargate-architecture.md`
