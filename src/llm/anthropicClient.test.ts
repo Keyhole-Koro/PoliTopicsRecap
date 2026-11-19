@@ -9,7 +9,7 @@ import { appConfig } from "../config";
  * [Contract] The request carries model, max_tokens=maxOutputTokens, output_config.effort, the system instruction plus system-role messages as top-level system, and stop_sequences; temperature/top_p/top_k/thinking are never sent (a one-time warning is logged instead).
  * [Reason] Claude Haiku 5.5 rejects sampling parameters with a 400 on API 2026-10-21, and effort is set explicitly.
  * [Accident] Without this, a caller passing temperature would make every request fail.
- * [Odd] Uses a fake SDK object so the exact params can be compared.
+ * [Odd] Uses a fake SDK object so the exact params can be compared, and a fresh copy of the module so the once-per-process warning is counted no matter which test ran first.
  * [History] Gemini to Claude Haiku migration (2026-11).
  *
  * returns only the text blocks, joined and trimmed
@@ -78,6 +78,19 @@ function createFakeSdk(message: Anthropic.Message | Error) {
   return { client, stream };
 }
 
+/**
+ * AnthropicClient from a fresh copy of its module. The sampling-parameter warning is logged once
+ * per process (module state), so a test that counts it must not depend on which test ran first.
+ */
+function loadIsolatedAnthropicClient(): typeof AnthropicClient {
+  let isolated: typeof AnthropicClient | undefined;
+  jest.isolateModules(() => {
+    isolated = (require("./anthropicClient") as typeof import("./anthropicClient")).AnthropicClient;
+  });
+  if (!isolated) throw new Error("anthropicClient module did not load");
+  return isolated;
+}
+
 describe("AnthropicClient", () => {
   let logSpy: jest.SpyInstance;
   let warnSpy: jest.SpyInstance;
@@ -95,7 +108,8 @@ describe("AnthropicClient", () => {
 
   it("sends model, max_tokens, effort, system and stop_sequences, and never sampling params", async () => {
     const { client, stream } = createFakeSdk(buildMessage());
-    const llm = new AnthropicClient({
+    const IsolatedAnthropicClient = loadIsolatedAnthropicClient();
+    const llm = new IsolatedAnthropicClient({
       client,
       model: "claude-haiku-5-5",
       effort: "high",

@@ -206,7 +206,7 @@ function warnIfSamplingParams(request: LlmGenerateRequest): void {
   if (request.temperature === undefined && request.topP === undefined && request.topK === undefined) return;
   warnedAboutSamplingParams = true;
   console.warn(
-    "[AnthropicClient] temperature/topP/topK are not supported by Claude Haiku 5.5 and are ignored",
+    "[AnthropicClient] temperature/topP/topK are not sent to Claude (the API rejects them) and are ignored",
   );
 }
 
