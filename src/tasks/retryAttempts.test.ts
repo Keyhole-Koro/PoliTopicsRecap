@@ -76,7 +76,8 @@ const baseConfig: AppConfig = {
   anthropicModel: "claude-haiku-5-5",
   anthropicEffort: "medium",
   anthropicTimeoutMs: 600000,
-  anthropicMaxInputToken: 64000,
+  // Differs from geminiMaxInputToken so the tests prove the active (anthropic) budget is used.
+  anthropicMaxInputToken: 60000,
   anthropicMaxOutputToken: 64000,
   geminiApiKey: "test-key",
   geminiModel: "gemini-2.5-flash",
@@ -210,7 +211,7 @@ describe("retryAttempts", () => {
       expect.objectContaining({
         task: ingestedTask,
         status: "pending",
-        maxInputToken: baseConfig.geminiMaxInputToken,
+        maxInputToken: baseConfig.anthropicMaxInputToken,
       }),
     );
     expect(handleDirectTaskMock).toHaveBeenCalledTimes(1);
@@ -237,7 +238,7 @@ describe("retryAttempts", () => {
       expect.objectContaining({
         task: mismatchedTask,
         status: "remake",
-        maxInputToken: baseConfig.geminiMaxInputToken,
+        maxInputToken: baseConfig.anthropicMaxInputToken,
       }),
     );
     expect(handleDirectTaskMock).toHaveBeenCalledTimes(1);

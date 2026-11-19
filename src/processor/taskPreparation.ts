@@ -2,7 +2,7 @@ import type { S3Client } from "@aws-sdk/client-s3";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { createHash } from "crypto";
 
-import { appConfig } from "../config";
+import { appConfig, getActiveLlmSettings } from "../config";
 import { uploadJson, parseS3Uri, fetchJsonObject } from "@utils/s3";
 import { countTokens } from "@llm/tokenCounter";
 import { buildOrderLenByTokens, packIndexSets } from "@utils/packing";
@@ -41,7 +41,8 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
   const reducePromptTemplate = reduce_prompt("");
   const singleChunkPromptTemplate = single_chunk_prompt("");
 
-  const maxInputToken = args.maxInputToken ?? appConfig.geminiMaxInputToken;
+  const llmSettings = getActiveLlmSettings(appConfig);
+  const maxInputToken = args.maxInputToken ?? llmSettings.maxInputToken;
   const promptTokenCost = await getPromptTokenCost(chunkPromptTemplate);
   const availableTokens = maxInputToken - promptTokenCost;
   if (availableTokens <= 0) {
@@ -186,14 +187,15 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
   }
 
   const now = new Date().toISOString();
-  const llmModel = appConfig.geminiModel;
+  const llm = llmSettings.provider;
+  const llmModel = llmSettings.model;
   const retryAttempts = status === "remake"
     ? 0
     : (args.retryAttempts ?? task.retryAttempts ?? 0);
   const next: TaskItem = {
     ...task,
     status,
-    llm: "gemini",
+    llm,
     llmModel,
     retryAttempts,
     updatedAt: now,
@@ -207,7 +209,7 @@ export async function prepareTaskFromRaw(args: PreparationArgs): Promise<TaskIte
 
   await updateTaskForPrompt(docClient, repoConfig, task.pk, {
     status,
-    llm: "gemini",
+    llm,
     llmModel,
     retryAttempts,
     updatedAt: now,

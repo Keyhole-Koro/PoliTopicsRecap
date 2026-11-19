@@ -1,6 +1,6 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { type AppConfig } from "../config";
+import { getActiveLlmSettings, type AppConfig } from "../config";
 import { createLlmClient } from "./llmFactory";
 import { notifyTaskError, notifyTaskWarning } from "./notifications";
 import {
@@ -85,7 +85,7 @@ export async function requeueCompletedTasksWithMajorMismatch(
         continue;
       }
       try {
-        const maxInputToken = computeMaxInputTokenForTask(task, ctx.config.geminiMaxInputToken);
+        const maxInputToken = computeMaxInputTokenForTask(task, getActiveLlmSettings(ctx.config).maxInputToken);
         await prepareTaskFromRaw({
           task,
           s3Client: ctx.s3Client,
@@ -122,7 +122,7 @@ export async function processTask(
 
   if (workingTask.status === "ingested") {
     try {
-      const maxInputToken = computeMaxInputTokenForTask(workingTask, ctx.config.geminiMaxInputToken);
+      const maxInputToken = computeMaxInputTokenForTask(workingTask, getActiveLlmSettings(ctx.config).maxInputToken);
       workingTask = await prepareTaskFromRaw({
         task: workingTask,
         s3Client: ctx.s3Client,
@@ -142,7 +142,7 @@ export async function processTask(
   } else if (isMajorMismatch(PROMPT_VERSION, workingTask.prompt_version)) {
     if (workingTask.raw_url) {
       try {
-        const maxInputToken = computeMaxInputTokenForTask(workingTask, ctx.config.geminiMaxInputToken);
+        const maxInputToken = computeMaxInputTokenForTask(workingTask, getActiveLlmSettings(ctx.config).maxInputToken);
         workingTask = await prepareTaskFromRaw({
           task: workingTask,
           s3Client: ctx.s3Client,
@@ -173,7 +173,7 @@ export async function processTask(
     return { task: workingTask, status: "skipped" };
   }
 
-  const llmClient = createLlmClient(workingTask, ctx.config.geminiApiKey);
+  const llmClient = createLlmClient(workingTask, ctx.config);
   if (!llmClient) {
     console.error(
       `[TaskRunner] Unsupported LLM provider for task ${workingTask.pk}: ${workingTask.llm}`,
@@ -266,7 +266,7 @@ async function tryRemakeWithSmallerChunks(
   if (!task.raw_url) return null;
   if (!isTokenLimitError(error)) return null;
 
-  const currentMax = resolveBaseMaxInputToken(task, ctx.config.geminiMaxInputToken);
+  const currentMax = resolveBaseMaxInputToken(task, getActiveLlmSettings(ctx.config).maxInputToken);
   const reductionAttempts = (task.retryAttempts ?? 0) + 1;
   const nextMax = applyRetryReduction(currentMax, reductionAttempts);
   if (!nextMax) {
