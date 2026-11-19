@@ -58,7 +58,7 @@ jest.mock("./notifications", () => ({
 import Anthropic from "@anthropic-ai/sdk";
 import { appConfig } from "../config";
 import { PROMPT_VERSION } from "../prompts/prompts";
-import type { TaskItem } from "../tasks/types";
+import type { ChunkItem, TaskItem } from "../tasks/types";
 import { CLAUDE_JSON_SYSTEM_INSTRUCTION } from "./llmFactory";
 import { processTask, type TaskRunnerContext } from "./taskRunner";
 
@@ -77,11 +77,18 @@ import { processTask, type TaskRunnerContext } from "./taskRunner";
  * [Odd] Uses the SDK's real BadRequestError class.
  * [History] Gemini to Claude Haiku migration (2026-11).
  *
- * fails without storing anything when Claude's output is cut off
- * [Contract] stop_reason max_tokens fails the task (retryAttempts bumped, error notified) without uploading the partial JSON, marking the chunk ready, or remaking the task.
- * [Reason] Truncated JSON must never be stored or marked as a finished chunk.
- * [Accident] Without this, a cut-off chunk result would break the reduce step later.
- * [Odd] Covers both single_chunk and chunked tasks.
+ * remakes a chunked task with smaller chunks when a chunk's output is cut off
+ * [Contract] When the chunk step of a chunked task stops at max_tokens, the partial JSON is not uploaded and the chunk is not marked ready; the task is re-prepared as "remake" with maxInputToken*0.7 and retryAttempts is not bumped.
+ * [Reason] Chunks are packed by input tokens, but the chunk output grows with the number of speeches (one dialog each) and Claude counts thinking toward max_tokens, so smaller chunks are the way out.
+ * [Accident] Without this, such a chunk would fail three times on the same input and the meeting would be skipped for good (with Gemini the cut-off chunk was stored and the article was published with placeholder dialogs).
+ * [Odd] The two-speech meeting is remade as single_chunk; only the remake itself is checked.
+ * [History] Review fix in the Gemini to Claude Haiku migration (2026-11).
+ *
+ * fails without storing or remaking when the reduce step or a single_chunk task is cut off
+ * [Contract] stop_reason max_tokens in a single_chunk task or in the reduce step of a chunked task fails the task (retryAttempts bumped) without uploading the partial JSON, persisting an article, marking a chunk ready or remaking the task.
+ * [Reason] Truncated JSON must never be stored, and smaller chunks would not shrink these outputs.
+ * [Accident] Without this, a cut-off result could be stored as the article, or the task could be remade without any chance of helping.
+ * [Odd] Covers single_chunk and the reduce step in one test.
  * [History] Gemini to Claude Haiku migration (2026-11).
  */
 
@@ -298,34 +305,74 @@ describe("taskRunner with the default Anthropic provider", () => {
     );
   });
 
-  it("fails without storing anything when Claude's output is cut off", async () => {
+  it("remakes a chunked task with smaller chunks when a chunk's output is cut off", async () => {
+    respondWith(claudeMessage({ text: '{"dialogs":[', stopReason: "max_tokens" }));
+    const task = buildTask({
+      llm: "anthropic",
+      llmModel: "claude-haiku-5-5",
+      processingMode: "chunked",
+      prompt_url: `s3://prompts/prompts/reduce/${TASK_ID}.json`,
+      chunks: [buildChunk(0, "pending")],
+    });
+
+    const result = await processTask(ctx, task);
+
+    expect(result.status).toBe("skipped");
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    expect(uploadObjectMock).not.toHaveBeenCalled();
+    expect(markChunkReadyMock).not.toHaveBeenCalled();
+    expect(storeDataMock).not.toHaveBeenCalled();
+    expect(bumpRetryAttemptsMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[TaskRunner] Chunk output hit max_tokens. Remaking task with smaller chunks",
+      expect.objectContaining({ taskId: TASK_ID, currentMaxInputToken: 64000, nextMaxInputToken: 44800 }),
+    );
+    expect(updateTaskForPromptMock).toHaveBeenCalledTimes(1);
+    expect(updateTaskForPromptMock).toHaveBeenCalledWith(
+      ctx.docClient,
+      ctx.repoConfig,
+      TASK_ID,
+      expect.objectContaining({
+        status: "remake",
+        llm: "anthropic",
+        llmModel: appConfig.anthropicModel,
+        maxInputToken: 44800,
+      }),
+    );
+  });
+
+  it("fails without storing or remaking when the reduce step or a single_chunk task is cut off", async () => {
     respondWith(claudeMessage({ text: '{"dialogs":[', stopReason: "max_tokens" }));
 
     const single = await processTask(ctx, buildTask());
     expect(single.status).toBe("failed");
 
-    const chunked = await processTask(
+    const reduce = await processTask(
       ctx,
       buildTask({
         processingMode: "chunked",
-        chunks: [
-          {
-            id: "CHUNK#0",
-            prompt_key: `prompts/${TASK_ID}_0.json`,
-            prompt_url: `s3://prompts/prompts/${TASK_ID}_0.json`,
-            result_url: `s3://prompts/results/${TASK_ID}_0_result.json`,
-            status: "pending",
-          },
-        ],
+        prompt_url: `s3://prompts/prompts/reduce/${TASK_ID}.json`,
+        chunks: [buildChunk(0, "completed")],
       }),
     );
-    expect(chunked.status).toBe("failed");
+    expect(reduce.status).toBe("failed");
 
     expect(streamMock).toHaveBeenCalledTimes(2);
     expect(uploadObjectMock).not.toHaveBeenCalled();
     expect(markChunkReadyMock).not.toHaveBeenCalled();
     expect(storeDataMock).not.toHaveBeenCalled();
+    expect(markTaskSucceededMock).not.toHaveBeenCalled();
     expect(updateTaskForPromptMock).not.toHaveBeenCalled();
     expect(bumpRetryAttemptsMock).toHaveBeenCalledTimes(2);
   });
 });
+
+function buildChunk(index: number, status: ChunkItem["status"]): ChunkItem {
+  return {
+    id: `CHUNK#${index}`,
+    prompt_key: `prompts/${TASK_ID}_${index}.json`,
+    prompt_url: `s3://prompts/prompts/${TASK_ID}_${index}.json`,
+    result_url: `s3://prompts/results/${TASK_ID}_${index}_result.json`,
+    status,
+  };
+}

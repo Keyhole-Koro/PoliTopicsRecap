@@ -22,7 +22,7 @@ import { appConfig } from "../config";
  * throws on refusal, truncated output and empty text
  * [Contract] stop_reason refusal throws LlmRefusalError with the category; max_tokens and model_context_window_exceeded throw LlmOutputTruncatedError; an empty answer throws.
  * [Reason] Truncated JSON must never be stored as a result, and refusals need their category in the logs.
- * [Accident] Without this, a cut-off chunk result could be marked completed and break the reduce step.
+ * [Accident] Without this, a cut-off chunk result would be stored and marked completed, and the article would be published with placeholder dialogs for its speeches.
  * [Odd] None.
  * [History] Gemini to Claude Haiku migration (2026-11).
  *

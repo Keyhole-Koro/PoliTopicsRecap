@@ -1,6 +1,7 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import type { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { getActiveLlmSettings, type AppConfig } from "../config";
+import { LlmOutputTruncatedError } from "../llm/llmClient";
 import { createLlmClient } from "./llmFactory";
 import { notifyTaskError, notifyTaskWarning } from "./notifications";
 import {
@@ -264,7 +265,8 @@ async function tryRemakeWithSmallerChunks(
   error: unknown,
 ): Promise<TaskItem | null> {
   if (!task.raw_url) return null;
-  if (!isTokenLimitError(error)) return null;
+  const chunkOutputTruncated = isChunkOutputTruncated(task, error);
+  if (!chunkOutputTruncated && !isTokenLimitError(error)) return null;
 
   const currentMax = resolveBaseMaxInputToken(task, getActiveLlmSettings(ctx.config).maxInputToken);
   const reductionAttempts = (task.retryAttempts ?? 0) + 1;
@@ -278,7 +280,8 @@ async function tryRemakeWithSmallerChunks(
     return null;
   }
 
-  console.warn("[TaskRunner] Token limit detected. Remaking task with smaller chunks", {
+  const reason = chunkOutputTruncated ? "Chunk output hit max_tokens" : "Token limit detected";
+  console.warn(`[TaskRunner] ${reason}. Remaking task with smaller chunks`, {
     taskId: task.pk,
     currentMaxInputToken: currentMax,
     nextMaxInputToken: nextMax,
@@ -386,6 +389,21 @@ function computeMaxInputTokenForTask(task: TaskItem, fallback: number): number {
   const attempts = task.retryAttempts ?? 0;
   const reduced = applyRetryReduction(base, attempts);
   return reduced ?? base;
+}
+
+/**
+ * True when the chunk step of a chunked task stopped at max_tokens. The chunk prompt asks for
+ * one dialog per speech, so a chunk with many speeches can outgrow the output cap (Claude also
+ * counts adaptive thinking toward max_tokens); smaller chunks mean fewer dialogs per call.
+ * A cut-off reduce step is not remade, because smaller chunks do not shrink its output, and a
+ * cut-off single_chunk task keeps failing as it did with Gemini.
+ */
+function isChunkOutputTruncated(task: TaskItem, error: unknown): boolean {
+  if (!(error instanceof LlmOutputTruncatedError) || error.stopReason !== "max_tokens") {
+    return false;
+  }
+  if (task.processingMode !== "chunked") return false;
+  return (task.chunks ?? []).some((chunk) => chunk.status !== "completed");
 }
 
 function isTokenLimitError(error: unknown): boolean {

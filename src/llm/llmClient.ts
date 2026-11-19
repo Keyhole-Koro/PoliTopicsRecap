@@ -59,8 +59,10 @@ export class LlmRefusalError extends Error {
  * "model_context_window_exceeded"). The partial text is discarded so truncated JSON is never
  * stored as a result.
  *
- * The message deliberately says "output tokens": the task runner treats errors that mention
- * "output tokens" as output-side limits, so they do not trigger a remake with smaller chunks.
+ * The task runner checks this class: when the chunk step of a chunked task stops at
+ * "max_tokens", it remakes the task with smaller chunks; any other truncation fails the task.
+ * The message says "output tokens" so the runner's text-based check for input-side token
+ * limits never matches it.
  */
 export class LlmOutputTruncatedError extends Error {
   readonly provider: string;
