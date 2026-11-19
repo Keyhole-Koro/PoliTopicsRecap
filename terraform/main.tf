@@ -22,6 +22,9 @@ module "service" {
   fargate_schedule_expression = var.fargate_schedule_expression
   fargate_schedule_timezone   = var.fargate_schedule_timezone
 
+  llm_provider                         = var.llm_provider
+  anthropic_api_key_ssm_parameter_name = var.anthropic_api_key_ssm_parameter_name
+
   gemini_api_key        = var.gemini_api_key
   discord_webhook_error = var.discord_webhook_error
   discord_webhook_warn  = var.discord_webhook_warn

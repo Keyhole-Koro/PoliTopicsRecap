@@ -110,6 +110,18 @@ variable "fargate_schedule_timezone" {
   default     = "Asia/Tokyo"
 }
 
+variable "llm_provider" {
+  type        = string
+  description = "LLM provider used by the recap batch (anthropic or gemini)"
+  default     = "anthropic"
+}
+
+variable "anthropic_api_key_ssm_parameter_name" {
+  type        = string
+  description = "SSM SecureString parameter name for the Anthropic API key (empty = /politopics/<environment>/recap/anthropic-api-key)"
+  default     = ""
+}
+
 variable "gemini_api_key" {
   type        = string
   description = "Gemini API key"

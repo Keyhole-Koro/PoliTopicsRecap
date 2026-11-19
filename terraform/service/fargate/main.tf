@@ -8,6 +8,7 @@ locals {
   base_env = {
     APP_ENVIRONMENT       = var.environment
     AWS_REGION            = var.aws_region
+    LLM_PROVIDER          = var.llm_provider
     GEMINI_API_KEY        = var.gemini_api_key
     DISCORD_WEBHOOK_ERROR = var.discord_webhook_error
     DISCORD_WEBHOOK_WARN  = var.discord_webhook_warn
@@ -35,6 +36,32 @@ locals {
     }
     if value != null && tostring(value) != ""
   ]
+
+  # The Anthropic API key is read by ECS from SSM Parameter Store (SecureString) at task start,
+  # so it never appears in Terraform state, the task definition or GitHub. Only needed when
+  # Claude is the active provider, so a rollback to Gemini does not depend on the parameter.
+  anthropic_secret_enabled = var.enabled && var.llm_provider == "anthropic"
+  anthropic_api_key_parameter_name = coalesce(
+    var.anthropic_api_key_ssm_parameter_name,
+    "/politopics/${var.environment}/recap/anthropic-api-key",
+  )
+  # Parameter ARNs drop the leading "/" of hierarchical names.
+  anthropic_api_key_parameter_arn = local.anthropic_secret_enabled ? "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current[0].account_id}:parameter/${trimprefix(local.anthropic_api_key_parameter_name, "/")}" : ""
+
+  # Added to the container definition only when enabled, so the Gemini (rollback) and
+  # disabled definitions keep their previous shape.
+  container_secrets = local.anthropic_secret_enabled ? {
+    secrets = [
+      {
+        name      = "ANTHROPIC_API_KEY"
+        valueFrom = local.anthropic_api_key_parameter_arn
+      }
+    ]
+  } : {}
+}
+
+data "aws_caller_identity" "current" {
+  count = local.anthropic_secret_enabled ? 1 : 0
 }
 
 data "aws_vpc" "default" {
@@ -91,6 +118,25 @@ resource "aws_iam_role_policy_attachment" "execution" {
 
   role       = aws_iam_role.execution[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# Lets ECS read the Anthropic API key parameter when starting the task. A SecureString encrypted
+# with the default aws/ssm key needs no extra kms:Decrypt permission.
+resource "aws_iam_role_policy" "execution_anthropic_api_key" {
+  count = local.anthropic_secret_enabled ? 1 : 0
+
+  name = "${local.name_prefix}-anthropic-api-key"
+  role = aws_iam_role.execution[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameters"]
+        Resource = [local.anthropic_api_key_parameter_arn]
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role" "task" {
@@ -183,20 +229,23 @@ resource "aws_ecs_task_definition" "this" {
   task_role_arn            = aws_iam_role.task[0].arn
 
   container_definitions = jsonencode([
-    {
-      name        = local.container_name
-      image       = "${aws_ecr_repository.this[0].repository_url}:${var.container_image_tag}"
-      essential   = true
-      environment = local.env_vars
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.this[0].name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "recap"
+    merge(
+      {
+        name        = local.container_name
+        image       = "${aws_ecr_repository.this[0].repository_url}:${var.container_image_tag}"
+        essential   = true
+        environment = local.env_vars
+        logConfiguration = {
+          logDriver = "awslogs"
+          options = {
+            awslogs-group         = aws_cloudwatch_log_group.this[0].name
+            awslogs-region        = var.aws_region
+            awslogs-stream-prefix = "recap"
+          }
         }
-      }
-    }
+      },
+      local.container_secrets,
+    )
   ])
 
   tags = var.tags

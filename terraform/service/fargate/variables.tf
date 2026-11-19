@@ -99,6 +99,23 @@ variable "schedule_timezone" {
   default     = "Asia/Tokyo"
 }
 
+variable "llm_provider" {
+  type        = string
+  description = "LLM provider used by the recap batch (anthropic or gemini), exported as LLM_PROVIDER"
+  default     = "anthropic"
+
+  validation {
+    condition     = contains(["anthropic", "gemini"], var.llm_provider)
+    error_message = "llm_provider must be \"anthropic\" or \"gemini\"."
+  }
+}
+
+variable "anthropic_api_key_ssm_parameter_name" {
+  type        = string
+  description = "SSM SecureString parameter name for the Anthropic API key (empty = /politopics/<environment>/recap/anthropic-api-key)"
+  default     = ""
+}
+
 variable "gemini_api_key" {
   type        = string
   description = "Gemini API key"
