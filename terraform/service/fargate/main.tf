@@ -249,6 +249,11 @@ resource "aws_ecs_task_definition" "this" {
   ])
 
   tags = var.tags
+
+  # Register a revision that reads the Anthropic key only after the execution role may read it,
+  # so a failed grant stops the apply before the schedule is pointed at a revision that cannot
+  # start.
+  depends_on = [aws_iam_role_policy.execution_anthropic_api_key]
 }
 
 locals {
