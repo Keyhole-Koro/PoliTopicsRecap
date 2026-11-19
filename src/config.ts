@@ -55,6 +55,16 @@ export type NotificationSettings = {
   executionEnv?: string
 }
 
+/** LLM provider used for generation and token counting. */
+export type LlmProvider = "anthropic" | "gemini"
+
+/** Claude `output_config.effort` levels accepted by Claude Haiku 5.5. */
+export type AnthropicEffort = "low" | "medium" | "high" | "xhigh" | "max"
+
+export const LLM_PROVIDERS: readonly LlmProvider[] = ["anthropic", "gemini"]
+export const ANTHROPIC_EFFORTS: readonly AnthropicEffort[] = ["low", "medium", "high", "xhigh", "max"]
+export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-5-5"
+
 export type AppConfig = {
   environment: AppEnvironment
   aws: {
@@ -70,6 +80,21 @@ export type AppConfig = {
   articleTableName: string
   articleAssetBucketName: string
   r2: R2Config
+  /**
+   * Active LLM provider (LLM_PROVIDER, default "anthropic").
+   * Tasks tagged "anthropic" or "gemini" are both processed with this provider.
+   */
+  llmProvider: LlmProvider
+  /** Required in stage/prod only when llmProvider is "anthropic". */
+  anthropicApiKey: string
+  anthropicModel: string
+  /** Sent as output_config.effort on every Claude request. */
+  anthropicEffort: AnthropicEffort
+  /** Per-request timeout for Claude calls (the SDK streams, so long generations are fine). */
+  anthropicTimeoutMs: number
+  anthropicMaxInputToken: number
+  anthropicMaxOutputToken: number
+  /** Required in stage/prod only when llmProvider is "gemini". Kept for rollback. */
   geminiApiKey: string
   geminiModel: string
   geminiFallbackModel: string
@@ -149,6 +174,9 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
         credentials: { accessKeyId: "test", secretAccessKey: "test" },
       },
     },
+    llmProvider: resolveLlmProvider(),
+    anthropicApiKey: "dummy",
+    ...buildAnthropicSettings(),
     geminiApiKey: "dummy",
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
     geminiFallbackModel: optionalEnv("GEMINI_FALLBACK_MODEL") || "gemini-3-flash-preview",
@@ -183,6 +211,7 @@ function buildLocalConfig(): Omit<AppConfig, "environment"> {
 }
 
 function buildStageConfig(): Omit<AppConfig, "environment"> {
+  const llmProvider = resolveLlmProvider();
   const r2Endpoint = requireEnv("R2_WRITE_ENDPOINT_URL");
   const r2PublicBase = requireEnv("R2_PUBLIC_ASSET_URL");
   return {
@@ -217,7 +246,10 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
         forcePathStyle: true,
       },
     },
-    geminiApiKey: requireEnv("GEMINI_API_KEY"),
+    llmProvider,
+    anthropicApiKey: providerApiKey("ANTHROPIC_API_KEY", llmProvider === "anthropic"),
+    ...buildAnthropicSettings(),
+    geminiApiKey: providerApiKey("GEMINI_API_KEY", llmProvider === "gemini"),
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
     geminiFallbackModel: optionalEnv("GEMINI_FALLBACK_MODEL") || "gemini-3-flash-preview",
     geminiTimeoutMs: optionalEnvNumber("GEMINI_TIMEOUT_MS", 600000),
@@ -251,6 +283,7 @@ function buildStageConfig(): Omit<AppConfig, "environment"> {
 }
 
 function buildProdConfig(): Omit<AppConfig, "environment"> {
+  const llmProvider = resolveLlmProvider();
   const r2Endpoint = requireEnv("R2_WRITE_ENDPOINT_URL");
   const r2PublicBase = "https://asset.politopics.net";
   return {
@@ -285,7 +318,10 @@ function buildProdConfig(): Omit<AppConfig, "environment"> {
         forcePathStyle: true,
       },
     },
-    geminiApiKey: requireEnv("GEMINI_API_KEY"),
+    llmProvider,
+    anthropicApiKey: providerApiKey("ANTHROPIC_API_KEY", llmProvider === "anthropic"),
+    ...buildAnthropicSettings(),
+    geminiApiKey: providerApiKey("GEMINI_API_KEY", llmProvider === "gemini"),
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
     geminiFallbackModel: optionalEnv("GEMINI_FALLBACK_MODEL") || "gemini-3-flash-preview",
     geminiTimeoutMs: optionalEnvNumber("GEMINI_TIMEOUT_MS", 600000),
@@ -358,6 +394,9 @@ function buildTestConfig(): Omit<AppConfig, "environment"> {
         forcePathStyle: true,
       },
     },
+    llmProvider: resolveLlmProvider(),
+    anthropicApiKey: "dummy",
+    ...buildAnthropicSettings(),
     geminiApiKey: "dummy",
     geminiModel: optionalEnv("GEMINI_MODEL") || "gemini-3-flash-preview",
     geminiFallbackModel: optionalEnv("GEMINI_FALLBACK_MODEL") || "gemini-3-flash-preview",
@@ -420,6 +459,59 @@ function requireEnv(name: string, allowMissing = false): string {
 }
 
 
+function resolveLlmProvider(): LlmProvider {
+  const value = optionalEnv("LLM_PROVIDER");
+  if (value === undefined) return "anthropic";
+  const normalized = value.toLowerCase();
+  const match = LLM_PROVIDERS.find((provider) => provider === normalized);
+  if (!match) {
+    throw new Error(
+      `Environment variable LLM_PROVIDER must be one of ${LLM_PROVIDERS.join(", ")} (received: ${value})`,
+    );
+  }
+  return match;
+}
+
+function resolveAnthropicEffort(): AnthropicEffort {
+  const value = optionalEnv("ANTHROPIC_EFFORT");
+  if (value === undefined) return "medium";
+  const normalized = value.toLowerCase();
+  const match = ANTHROPIC_EFFORTS.find((effort) => effort === normalized);
+  if (!match) {
+    throw new Error(
+      `Environment variable ANTHROPIC_EFFORT must be one of ${ANTHROPIC_EFFORTS.join(", ")} (received: ${value})`,
+    );
+  }
+  return match;
+}
+
+type AnthropicSettings = Pick<
+  AppConfig,
+  | "anthropicModel"
+  | "anthropicEffort"
+  | "anthropicTimeoutMs"
+  | "anthropicMaxInputToken"
+  | "anthropicMaxOutputToken"
+>;
+
+function buildAnthropicSettings(): AnthropicSettings {
+  return {
+    anthropicModel: optionalEnv("ANTHROPIC_MODEL") || DEFAULT_ANTHROPIC_MODEL,
+    anthropicEffort: resolveAnthropicEffort(),
+    anthropicTimeoutMs: optionalEnvNumber("ANTHROPIC_TIMEOUT_MS", 600000),
+    anthropicMaxInputToken: optionalEnvNumber("ANTHROPIC_MAX_INPUT_TOKEN", 64000),
+    anthropicMaxOutputToken: optionalEnvNumber("ANTHROPIC_MAX_OUTPUT_TOKEN", 64000),
+  };
+}
+
+/**
+ * API key of one provider in stage/prod: required for the active provider only, so the
+ * inactive provider's key can be removed (or revoked) without breaking startup.
+ */
+function providerApiKey(name: string, required: boolean): string {
+  return required ? requireEnv(name) : optionalEnv(name) ?? "";
+}
+
 function resolveEnvironment(): AppEnvironment {
   if (!process.env.APP_ENVIRONMENT) {
     throw new Error("Environment variable APP_ENVIRONMENT is required");
@@ -436,6 +528,44 @@ function resolveEnvironment(): AppEnvironment {
 // ============================================================================
 // Utilities
 // ============================================================================
+
+export type ActiveLlmSettings = {
+  provider: LlmProvider
+  model: string
+  maxInputToken: number
+  maxOutputToken: number
+  /** Output cap for the small missing-dialog recovery call. */
+  recoveryMaxOutputToken: number
+}
+
+/**
+ * Output cap for the missing-dialog recovery call. Claude counts adaptive thinking toward
+ * max_tokens, so it gets more headroom than Gemini (which keeps its previous 3000).
+ */
+const RECOVERY_MAX_OUTPUT_TOKEN: Record<LlmProvider, number> = {
+  anthropic: 8000,
+  gemini: 3000,
+};
+
+/** Model and token budgets of the active provider (config.llmProvider). */
+export function getActiveLlmSettings(config: AppConfig): ActiveLlmSettings {
+  if (config.llmProvider === "gemini") {
+    return {
+      provider: "gemini",
+      model: config.geminiModel,
+      maxInputToken: config.geminiMaxInputToken,
+      maxOutputToken: config.geminiMaxOutputToken,
+      recoveryMaxOutputToken: Math.min(config.geminiMaxOutputToken, RECOVERY_MAX_OUTPUT_TOKEN.gemini),
+    };
+  }
+  return {
+    provider: "anthropic",
+    model: config.anthropicModel,
+    maxInputToken: config.anthropicMaxInputToken,
+    maxOutputToken: config.anthropicMaxOutputToken,
+    recoveryMaxOutputToken: Math.min(config.anthropicMaxOutputToken, RECOVERY_MAX_OUTPUT_TOKEN.anthropic),
+  };
+}
 
 export type Config = AppConfig;
 
