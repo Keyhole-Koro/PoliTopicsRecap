@@ -12,7 +12,7 @@ import type { ArticleAssetStorage } from "../dynamoDB/storeData";
 import storeData from "../dynamoDB/storeData";
 import type Article from "../dynamoDB/article";
 import { fetchObjectText, parseS3Uri, uploadObject } from "@utils/s3";
-import { appConfig } from "../config";
+import { appConfig, getActiveLlmSettings } from "../config";
 import { buildReduceInput, buildSpeechInput, stripCodeFence } from "../prompts/promptInput";
 import {
   attachSpeakerMetadata,
@@ -54,7 +54,7 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
 
     const llmResult = await llmClient.generate({
       messages: [{ role: "user", content: promptText }],
-      maxOutputTokens: appConfig.geminiMaxOutputToken,
+      maxOutputTokens: getActiveLlmSettings(appConfig).maxOutputToken,
     });
     console.log(`[TaskProcessor] LLM response for ${task.pk} (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
 
@@ -107,7 +107,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
       
       const llmResult = await llmClient.generate({
         messages: [{ role: "user", content: promptText }],
-        maxOutputTokens: appConfig.geminiMaxOutputToken,
+        maxOutputTokens: getActiveLlmSettings(appConfig).maxOutputToken,
       });
       console.log(`[TaskProcessor] Chunk LLM response (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
 
@@ -136,7 +136,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
 
     const reduceResult = await llmClient.generate({
       messages: [{ role: "user", content: reducePrompt }],
-      maxOutputTokens: appConfig.geminiMaxOutputToken,
+      maxOutputTokens: getActiveLlmSettings(appConfig).maxOutputToken,
     });
     console.log(`[TaskProcessor] Reduce LLM response (${reduceResult.text.length} chars). Preview: ${reduceResult.text.slice(0, 100)}...`);
 
@@ -351,7 +351,7 @@ async function generateMissingDialogsFromLlm(args: GenerateMissingDialogsArgs): 
   try {
     llmResult = await llmClient.generate({
       messages: [{ role: "user", content: prompt }],
-      maxOutputTokens: Math.min(appConfig.geminiMaxOutputToken, 3000),
+      maxOutputTokens: getActiveLlmSettings(appConfig).recoveryMaxOutputToken,
     });
   } catch (error) {
     console.warn("[taskProcessor] Missing dialog recovery call failed", {

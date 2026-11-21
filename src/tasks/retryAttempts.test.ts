@@ -71,6 +71,14 @@ const baseConfig: AppConfig = {
     publicUrlBase: "http://localhost:4566/assets",
     clientConfig: { region: "ap-northeast-3" },
   },
+  llmProvider: "anthropic",
+  anthropicApiKey: "test-key",
+  anthropicModel: "claude-haiku-5-5",
+  anthropicEffort: "medium",
+  anthropicTimeoutMs: 600000,
+  // Differs from geminiMaxInputToken so the tests prove the active (anthropic) budget is used.
+  anthropicMaxInputToken: 60000,
+  anthropicMaxOutputToken: 64000,
   geminiApiKey: "test-key",
   geminiModel: "gemini-2.5-flash",
   geminiFallbackModel: "gemini-3-flash-preview",
@@ -203,7 +211,7 @@ describe("retryAttempts", () => {
       expect.objectContaining({
         task: ingestedTask,
         status: "pending",
-        maxInputToken: baseConfig.geminiMaxInputToken,
+        maxInputToken: baseConfig.anthropicMaxInputToken,
       }),
     );
     expect(handleDirectTaskMock).toHaveBeenCalledTimes(1);
@@ -230,7 +238,7 @@ describe("retryAttempts", () => {
       expect.objectContaining({
         task: mismatchedTask,
         status: "remake",
-        maxInputToken: baseConfig.geminiMaxInputToken,
+        maxInputToken: baseConfig.anthropicMaxInputToken,
       }),
     );
     expect(handleDirectTaskMock).toHaveBeenCalledTimes(1);

@@ -32,8 +32,8 @@ flowchart LR
     S2 --> TaskTable
     S3 --> LlmBucket & TaskTable
     S4 --> LlmBucket
-    S5 --> GeminiAPI["External<br>GeminiAPI<br>(LLM Summarization)"] & RecapBatch
-    GeminiAPI --> S5
+    S5 --> ClaudeAPI["External<br>Claude API (Anthropic)<br>(LLM Summarization)"] & RecapBatch
+    ClaudeAPI --> S5
     S6 --> AssetBucket & ArticleTable & LlmBucket
     S7 --> TaskTable
 
@@ -51,6 +51,7 @@ Highlights
 - Prompts/results are read from S3; article assets (`asset.json`) are written to R2 with public/signed URLs.
 - DynamoDB stores metadata and thin indexes for headlines/suggestions.
 - Discord webhooks: error/warn/batch.
+- LLM: Claude Haiku 5.5 (`claude-haiku-5-5`) through the Anthropic API by default; `LLM_PROVIDER=gemini` switches back to Gemini. See [LLM Provider](./docs/fargate-architecture.md#llm-provider).
 
 ## Commands (pnpm)
 - Install: `pnpm install`
@@ -62,8 +63,9 @@ Highlights
 
 ## Environment
 - `APP_ENVIRONMENT` (`local`|`stage`|`prod`|`ghaTest`|`localstackTest`)
-- `GEMINI_API_KEY`
-- `GEMINI_MAX_INPUT_TOKEN`, `GEMINI_MAX_OUTPUT_TOKEN`
+- `LLM_PROVIDER` (`anthropic`|`gemini`, default `anthropic`)
+- Claude: `ANTHROPIC_API_KEY` (required in stage/prod when `LLM_PROVIDER=anthropic`; on Fargate it comes from SSM Parameter Store, see `terraform/README.md`), `ANTHROPIC_MODEL` (default `claude-haiku-5-5`), `ANTHROPIC_EFFORT` (`low`|`medium`|`high`|`xhigh`|`max`, default `medium`), `ANTHROPIC_TIMEOUT_MS` (default `600000`), `ANTHROPIC_MAX_INPUT_TOKEN`, `ANTHROPIC_MAX_OUTPUT_TOKEN` (default `64000`)
+- Gemini (rollback, used when `LLM_PROVIDER=gemini`): `GEMINI_API_KEY` (required in stage/prod only then), `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL`, `GEMINI_TIMEOUT_MS`, `GEMINI_MAX_INPUT_TOKEN`, `GEMINI_MAX_OUTPUT_TOKEN`
 - `CHUNK_PACKING_TOKEN_BUDGET_RATIO` (default `0.85`)
 - `SINGLE_CHUNK_MAX_SPEECHES` (default `40`)
 - `SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO` (default `0.5`)

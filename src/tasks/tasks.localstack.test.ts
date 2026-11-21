@@ -14,6 +14,11 @@ import {
   PutCommand,
 } from "@aws-sdk/lib-dynamodb";
 
+// This suite exercises the Gemini path with @google/genai mocks, so pin the provider before
+// ../config is required below (the default provider is anthropic). The Claude path is covered
+// without LocalStack in src/processor/taskRunner.anthropic.test.ts.
+process.env.LLM_PROVIDER = "gemini";
+
 jest.mock("@google/genai");
 
 const { GoogleGenAI: googleGenAiCtorMock } = jest.requireMock("@google/genai") as {

@@ -32,8 +32,8 @@ flowchart LR
     S2 --> TaskTable
     S3 --> LlmBucket & TaskTable
     S4 --> LlmBucket
-    S5 --> GeminiAPI["外部<br>GeminiAPI<br>(LLM 要約)"] & RecapBatch
-    GeminiAPI --> S5
+    S5 --> ClaudeAPI["外部<br>Claude API (Anthropic)<br>(LLM 要約)"] & RecapBatch
+    ClaudeAPI --> S5
     S6 --> AssetBucket & ArticleTable & LlmBucket
     S7 --> TaskTable
 
@@ -51,6 +51,7 @@ flowchart LR
 - プロンプト/結果は S3、記事アセット (`asset.json`) は R2 に保存し、公開/署名付き URL を返す。
 - メタデータと薄いインデックスは DynamoDB に保存し、ヘッドラインやサジェストを 1 クエリで取得。
 - Discord Webhook を error/warn/batch に利用。
+- LLM は既定で Anthropic API の Claude Haiku 5.5（`claude-haiku-5-5`）。`LLM_PROVIDER=gemini` で Gemini に戻せる。詳しくは [LLM プロバイダ](../docs/jp/fargate-architecture.md#llm-プロバイダ)。
 
 ## コマンド (pnpm)
 - インストール: `pnpm install`
@@ -62,8 +63,9 @@ flowchart LR
 
 ## 環境変数
 - `APP_ENVIRONMENT` (`local`|`stage`|`prod`|`ghaTest`|`localstackTest`)
-- `GEMINI_API_KEY`
-- `GEMINI_MAX_INPUT_TOKEN`, `GEMINI_MAX_OUTPUT_TOKEN`
+- `LLM_PROVIDER` (`anthropic`|`gemini`、デフォルト `anthropic`)
+- Claude: `ANTHROPIC_API_KEY`（stage/prod で `LLM_PROVIDER=anthropic` のとき必須。Fargate では SSM Parameter Store から渡す。`terraform/jp/README.md` を参照）、`ANTHROPIC_MODEL`（デフォルト `claude-haiku-5-5`）、`ANTHROPIC_EFFORT`（`low`|`medium`|`high`|`xhigh`|`max`、デフォルト `medium`）、`ANTHROPIC_TIMEOUT_MS`（デフォルト `600000`）、`ANTHROPIC_MAX_INPUT_TOKEN`、`ANTHROPIC_MAX_OUTPUT_TOKEN`（デフォルト `64000`）
+- Gemini（ロールバック用。`LLM_PROVIDER=gemini` のときだけ使う）: `GEMINI_API_KEY`（stage/prod ではこのときだけ必須）、`GEMINI_MODEL`、`GEMINI_FALLBACK_MODEL`、`GEMINI_TIMEOUT_MS`、`GEMINI_MAX_INPUT_TOKEN`、`GEMINI_MAX_OUTPUT_TOKEN`
 - `CHUNK_PACKING_TOKEN_BUDGET_RATIO` (デフォルト `0.85`)
 - `SINGLE_CHUNK_MAX_SPEECHES` (デフォルト `40`)
 - `SINGLE_CHUNK_MAX_TOKEN_USAGE_RATIO` (デフォルト `0.5`)

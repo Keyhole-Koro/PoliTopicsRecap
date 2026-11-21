@@ -136,6 +136,23 @@ variable "fargate_schedule_timezone" {
   default     = "Asia/Tokyo"
 }
 
+variable "llm_provider" {
+  description = "LLM provider used by the recap batch: anthropic (Claude Haiku, default) or gemini (rollback). Exported as LLM_PROVIDER."
+  type        = string
+  default     = "anthropic"
+
+  validation {
+    condition     = contains(["anthropic", "gemini"], var.llm_provider)
+    error_message = "llm_provider must be \"anthropic\" or \"gemini\"."
+  }
+}
+
+variable "anthropic_api_key_ssm_parameter_name" {
+  description = "SSM Parameter Store SecureString holding the Anthropic API key, injected into the task as ANTHROPIC_API_KEY when llm_provider is anthropic. Empty means /politopics/<environment>/recap/anthropic-api-key. The key value never passes through Terraform."
+  type        = string
+  default     = ""
+}
+
 variable "gemini_api_key" {
   description = "Gemini API key"
   type        = string
