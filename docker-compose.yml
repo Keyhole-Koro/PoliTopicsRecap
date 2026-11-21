@@ -61,7 +61,9 @@ services:
       - default
 
   localstack:
-    image: localstack/localstack:latest
+    # Pinned: localstack:latest (2026.10.8 on 2026-11-21) exits at start without a
+    # LOCALSTACK_AUTH_TOKEN. 4.13.1 is the version main's CI last passed with (2026-02-11).
+    image: localstack/localstack:4.13.1
     ports:
       - "4566:4566"
     environment:
