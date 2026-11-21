@@ -108,6 +108,7 @@ export class AnthropicClient implements LlmClient {
       effort: this.effort,
       systemInstruction: this.systemInstruction,
       stopSequences: request.stopSequences,
+      responseSchema: request.responseSchema,
     });
 
     // The SDK's own timeout only covers the wait for response headers; this signal bounds the
@@ -159,6 +160,7 @@ type BuildMessageParamsArgs = {
   effort: AnthropicEffort;
   systemInstruction?: string;
   stopSequences?: string[];
+  responseSchema?: Record<string, unknown>;
 };
 
 function buildMessageParams(args: BuildMessageParamsArgs): Anthropic.MessageStreamParams {
@@ -187,7 +189,10 @@ function buildMessageParams(args: BuildMessageParamsArgs): Anthropic.MessageStre
     model: args.model,
     max_tokens: args.maxTokens,
     messages: conversation,
-    output_config: { effort: args.effort },
+    // With a schema, structured outputs constrain the answer to that JSON shape.
+    output_config: args.responseSchema
+      ? { effort: args.effort, format: { type: "json_schema", schema: args.responseSchema } }
+      : { effort: args.effort },
     ...(system ? { system } : {}),
     ...(args.stopSequences && args.stopSequences.length > 0 ? { stop_sequences: args.stopSequences } : {}),
   };

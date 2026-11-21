@@ -15,6 +15,12 @@ export interface LlmGenerationOptions {
 
 export interface LlmGenerateRequest extends LlmGenerationOptions {
   messages: LlmMessage[];
+  /**
+   * JSON schema the response must follow (see llm/outputSchemas.ts). AnthropicClient sends it
+   * as output_config.format, so Claude can only return an object of this shape. The other
+   * clients ignore it and rely on the output format written in the prompt.
+   */
+  responseSchema?: Record<string, unknown>;
 }
 
 export interface LlmGenerateResponse {

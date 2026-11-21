@@ -59,6 +59,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { appConfig } from "../config";
 import { PROMPT_VERSION } from "../prompts/prompts";
 import type { ChunkItem, TaskItem } from "../tasks/types";
+import { SINGLE_CHUNK_OUTPUT_SCHEMA } from "@llm/outputSchemas";
 import { CLAUDE_JSON_SYSTEM_INSTRUCTION } from "./llmFactory";
 import { processTask, type TaskRunnerContext } from "./taskRunner";
 
@@ -69,6 +70,12 @@ import { processTask, type TaskRunnerContext } from "./taskRunner";
  * [Accident] Without this, in-flight tasks would keep calling Gemini, or the wiring from config to the SDK call could drift unnoticed.
  * [Odd] @anthropic-ai/sdk, S3 helpers, the task repository, storeData and notifications are mocked; no LocalStack or network.
  * [History] Gemini to Claude Haiku migration (2026-11).
+ *
+ * saves the article when the answer comes in chunk and reduce sections
+ * [Contract] A single_chunk answer shaped { prompt_version, id, mode, chunk, reduce } is persisted from its reduce fields with the chunk's dialogs, the task succeeds, and a warning names the shape.
+ * [Reason] Structured outputs prevent the shape for Claude, but a result from Gemini or from before the schemas can still have it.
+ * [Accident] Without this, such an answer failed with "Reduced payload is missing summary" three times and stopped the stage batch (2026-11-21).
+ * [History] Structured outputs for Claude (2026-11).
  *
  * remakes the task with smaller chunks when Claude says the prompt is too long
  * [Contract] A 400 "prompt is too long" from the SDK is recognised as a token-limit error: the task is re-prepared with maxInputToken*0.7, counted with Claude count_tokens and tagged llm=anthropic with the Claude model.
@@ -249,7 +256,10 @@ describe("taskRunner with the default Anthropic provider", () => {
       model: appConfig.anthropicModel,
       max_tokens: appConfig.anthropicMaxOutputToken,
       messages: [{ role: "user", content: "Summarize the speeches." }],
-      output_config: { effort: appConfig.anthropicEffort },
+      output_config: {
+        effort: appConfig.anthropicEffort,
+        format: { type: "json_schema", schema: SINGLE_CHUNK_OUTPUT_SCHEMA },
+      },
       system: CLAUDE_JSON_SYSTEM_INSTRUCTION,
     });
     expect(options.signal).toBeInstanceOf(AbortSignal);
@@ -267,6 +277,31 @@ describe("taskRunner with the default Anthropic provider", () => {
     expect(storedArticle.dialogs.map((dialog: { speaker: string }) => dialog.speaker)).toEqual(["架空太郎", "架空花子"]);
     expect(markTaskSucceededMock).toHaveBeenCalledTimes(1);
     expect(bumpRetryAttemptsMock).not.toHaveBeenCalled();
+  });
+
+  it("saves the article when the answer comes in chunk and reduce sections", async () => {
+    const { dialogs, ...meetingFields } = JSON.parse(ARTICLE_JSON);
+    const sectioned = JSON.stringify({
+      prompt_version: PROMPT_VERSION,
+      id: TASK_ID,
+      mode: "single_chunk",
+      chunk: { dialogs },
+      reduce: meetingFields,
+    });
+    respondWith(claudeMessage({ text: sectioned, stopReason: "end_turn" }));
+
+    const result = await processTask(ctx, buildTask());
+
+    expect(result.status).toBe("succeeded");
+    expect(storeDataMock).toHaveBeenCalledTimes(1);
+    const storedArticle = storeDataMock.mock.calls[0][1];
+    expect(storedArticle).toMatchObject({ id: TASK_ID, title: "テスト記事", summary: "## 決定事項\n- テスト" });
+    expect(storedArticle.dialogs.map((dialog: { speaker: string }) => dialog.speaker)).toEqual(["架空太郎", "架空花子"]);
+    expect(markTaskSucceededMock).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[TaskProcessor] Article payload came in sections; using its reduce section",
+      { taskId: TASK_ID },
+    );
   });
 
   it("remakes the task with smaller chunks when Claude says the prompt is too long", async () => {
