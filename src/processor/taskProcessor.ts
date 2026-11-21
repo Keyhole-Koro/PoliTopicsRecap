@@ -8,6 +8,13 @@ import {
 } from "../tasks/taskRepository";
 import type { TaskItem } from "../tasks/types";
 import type { LlmClient } from "@llm/llmClient";
+import {
+  CHUNK_OUTPUT_SCHEMA,
+  DIALOG_RECOVERY_OUTPUT_SCHEMA,
+  REDUCE_OUTPUT_SCHEMA,
+  SINGLE_CHUNK_OUTPUT_SCHEMA,
+} from "@llm/outputSchemas";
+import { flattenSectionedPayload } from "./payloadShape";
 import type { ArticleAssetStorage } from "../dynamoDB/storeData";
 import storeData from "../dynamoDB/storeData";
 import type Article from "../dynamoDB/article";
@@ -55,6 +62,7 @@ export async function handleDirectTask(args: TaskProcessorArgs): Promise<void> {
     const llmResult = await llmClient.generate({
       messages: [{ role: "user", content: promptText }],
       maxOutputTokens: getActiveLlmSettings(appConfig).maxOutputToken,
+      responseSchema: SINGLE_CHUNK_OUTPUT_SCHEMA,
     });
     console.log(`[TaskProcessor] LLM response for ${task.pk} (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
 
@@ -108,6 +116,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
       const llmResult = await llmClient.generate({
         messages: [{ role: "user", content: promptText }],
         maxOutputTokens: getActiveLlmSettings(appConfig).maxOutputToken,
+        responseSchema: CHUNK_OUTPUT_SCHEMA,
       });
       console.log(`[TaskProcessor] Chunk LLM response (${llmResult.text.length} chars). Preview: ${llmResult.text.slice(0, 100)}...`);
 
@@ -137,6 +146,7 @@ export async function handleChunkedTask(args: TaskProcessorArgs): Promise<void> 
     const reduceResult = await llmClient.generate({
       messages: [{ role: "user", content: reducePrompt }],
       maxOutputTokens: getActiveLlmSettings(appConfig).maxOutputToken,
+      responseSchema: REDUCE_OUTPUT_SCHEMA,
     });
     console.log(`[TaskProcessor] Reduce LLM response (${reduceResult.text.length} chars). Preview: ${reduceResult.text.slice(0, 100)}...`);
 
@@ -214,10 +224,15 @@ async function persistArticleIfPossible(
   try {
     const jsonText = sanitizeJsonPayload(payloadText);
     type ArticlePayload = Article & { prompt_version?: string };
-    const rawArticle = JSON.parse(jsonText) as ArticlePayload;
-    if (typeof rawArticle !== "object" || rawArticle === null) {
+    const parsed = JSON.parse(jsonText) as unknown;
+    if (typeof parsed !== "object" || parsed === null) {
       throw new Error("Reduced payload is not an object");
     }
+    const flattened = flattenSectionedPayload(parsed as Record<string, unknown>, { takeChunkLists: true });
+    if (flattened.flattened) {
+      console.warn("[TaskProcessor] Article payload came in sections; using its reduce section", { taskId: task.pk });
+    }
+    const rawArticle = flattened.record as unknown as ArticlePayload;
     if (!rawArticle.summary) {
       throw new Error("Reduced payload is missing summary");
     }
@@ -352,6 +367,7 @@ async function generateMissingDialogsFromLlm(args: GenerateMissingDialogsArgs): 
     llmResult = await llmClient.generate({
       messages: [{ role: "user", content: prompt }],
       maxOutputTokens: getActiveLlmSettings(appConfig).recoveryMaxOutputToken,
+      responseSchema: DIALOG_RECOVERY_OUTPUT_SCHEMA,
     });
   } catch (error) {
     console.warn("[taskProcessor] Missing dialog recovery call failed", {
@@ -733,21 +749,27 @@ async function enrichReducePayloadWithChunkDialogs(args: {
     return args.reducePayloadText;
   }
 
-  const reduceRecord = parsedReduce as Record<string, unknown>;
+  // Dialogs of a sectioned answer are not taken: they come from the saved chunk results below.
+  const flattened = flattenSectionedPayload(parsedReduce as Record<string, unknown>, { takeChunkLists: false });
+  if (flattened.flattened) {
+    console.warn("[TaskProcessor] Reduce payload came in sections; using its reduce section", { taskId: args.task.pk });
+  }
+  const reduceRecord = flattened.record;
+  const payloadText = flattened.flattened ? JSON.stringify(reduceRecord) : args.reducePayloadText;
   if (Array.isArray(reduceRecord.dialogs) && reduceRecord.dialogs.length > 0) {
-    return args.reducePayloadText;
+    return payloadText;
   }
 
   const chunkUrls = await resolveChunkResultUrls(args.s3Client, args.task, args.promptUrl);
   if (chunkUrls.length === 0) {
     console.warn("[TaskProcessor] Unable to enrich reduce payload: no chunk result URLs", { taskId: args.task.pk });
-    return args.reducePayloadText;
+    return payloadText;
   }
 
   const mergedDialogs = await collectDialogsFromChunkResults(args.s3Client, chunkUrls, args.task.pk);
   if (mergedDialogs.length === 0) {
     console.warn("[TaskProcessor] Unable to enrich reduce payload: chunk dialogs were empty", { taskId: args.task.pk });
-    return args.reducePayloadText;
+    return payloadText;
   }
 
   const enriched = {

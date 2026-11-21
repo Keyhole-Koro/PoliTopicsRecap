@@ -12,6 +12,11 @@ import { appConfig } from "../config";
  * [Odd] Uses a fake SDK object so the exact params can be compared, and a fresh copy of the module so the once-per-process warning is counted no matter which test ran first.
  * [History] Gemini to Claude Haiku migration (2026-11).
  *
+ * sends a response schema as output_config.format
+ * [Contract] With request.responseSchema the request carries output_config { effort, format: { type: "json_schema", schema } }; without one it carries only effort.
+ * [Reason] Structured outputs make Claude return exactly the JSON shape each recap step parses.
+ * [Accident] Without this, Claude answered a reduce request in a sectioned single_chunk shape on stage (2026-11-21); the article could not be saved and the batch stopped after three failures.
+ *
  * returns only the text blocks, joined and trimmed
  * [Contract] Thinking blocks are skipped; text blocks are concatenated without separators and trimmed.
  * [Reason] Adaptive thinking puts thinking blocks before the answer; the JSON answer must be read by block type.
@@ -158,6 +163,24 @@ describe("AnthropicClient", () => {
     // Warned once, not per call.
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(String(warnSpy.mock.calls[0][0])).toContain("temperature/topP/topK");
+  });
+
+  it("sends a response schema as output_config.format", async () => {
+    const { client, stream } = createFakeSdk(buildMessage());
+    const llm = new AnthropicClient({ client });
+    const schema = {
+      type: "object",
+      properties: { title: { type: "string" } },
+      required: ["title"],
+      additionalProperties: false,
+    };
+
+    await llm.generate({ messages: [{ role: "user", content: "Hi" }], responseSchema: schema });
+
+    expect(stream.mock.calls[0][0].output_config).toEqual({
+      effort: appConfig.anthropicEffort,
+      format: { type: "json_schema", schema },
+    });
   });
 
   it("uses the config defaults when options and maxOutputTokens are omitted", async () => {

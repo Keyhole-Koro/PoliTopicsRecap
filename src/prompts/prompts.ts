@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "6.2";
+export const PROMPT_VERSION = "6.3";
 
 export const instruction_common = `【目的】
 国会議事録をAIで要約し、一般の読者にもわかりやすく説明すること。専門用語や制度に不慣れな人でも「何が決まり、何が議論され、次に何が起こるか」が直感的に掴める要約データを作成してください。
@@ -6,7 +6,7 @@ export const instruction_common = `【目的】
 タスクは3モード:
 - chunk: 会議全体の一部（発言群）を処理し、reduce統合を見越した middle_summary を中心に出力。soft_language_summary と summary は必須。
 - reduce: 全 chunk 出力（特に middle_summary と participants）を統合し、会議全体の summary / soft_language_summary に加え、title / category / description / date / participants / key_points を生成。
-- single_chunk: 会議全体が1chunkで収まる場合に chunk / reduce の両出力を同時に提供。chunkセクションは chunkモード同等、reduceセクションは reduceモード同等の厳密さで記述する。
+- single_chunk: 会議全体が1chunkで収まる場合に、chunk と reduce の両方の項目を1つの平らな JSON で出力する（chunk / reduce の節や mode には分けない）。chunk粒度の項目は chunkモード同等、会議粒度の項目は reduceモード同等の厳密さで記述する。
 
 厳守:
 - middle_summary は「1トピック=1要点」。重複回避、結論/対立/未決/宿題/担当/期限/金額を明示できる範囲で。
@@ -56,6 +56,7 @@ export const instruction_reduce = `【reduceモードの出力指針】
 - 全chunkの middle_summary を統合し、重複排除・矛盾解消・網羅性確保。
 - participants は chunk由来の重複/別表記を正規化し、一人につき要旨を統合。役職や所属は可能なら統合、曖昧なら空欄可。
 - 出力は title / category / description / date / summary / soft_language_summary / participants / key_points。
+- chunk が1つだけでも、出力は reduce のフォーマットにする（single_chunk の形にしない）。
 - description は一般読者が「なぜ重要か」「自分にどう関係するか」を直感的に掴める内容にする（1〜2文＋必要なら箇条書き）。
 - summary 構成（推奨）: 決定事項 / 主要論点と立場 / 未決・宿題 / 次に起こること（担当・期限） / 重要数値。
 - key_points: 記事のTL;DR（要約）として、議論の核心・結論・影響を3点程度の箇条書きで簡潔にまとめる。
