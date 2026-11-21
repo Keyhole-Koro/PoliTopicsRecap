@@ -32,6 +32,7 @@ read -rs ANTHROPIC_KEY && printf '%s' "$ANTHROPIC_KEY" | aws ssm put-parameter -
 ## LLM プロバイダとロールバック
 
 - `llm_provider`（デフォルト `"anthropic"`、または `"gemini"`）は、コンテナに `LLM_PROVIDER` として渡されます。
+- `tfvars/prod.tfvars` には `llm_provider = "gemini"` を書いてあります。そのため、stage で Claude の実行を確かめるまで、prod は Gemini のままです。prod を切り替えるときは、先に prod のパラメータを作ってから、その行を消します。
 - Gemini に戻すときは、`tfvars/<env>.tfvars` に `llm_provider = "gemini"` を書く（または `export TF_VAR_llm_provider=gemini`）して、もう一度デプロイします。このとき `TF_VAR_gemini_api_key` が必要です（デプロイのワークフローはすでに渡しています）。Gemini を使っている間は Anthropic のパラメータはいりません。
 
 ## Stage
