@@ -33,7 +33,6 @@ read -rs ANTHROPIC_KEY && printf '%s' "$ANTHROPIC_KEY" | aws ssm put-parameter -
 ## LLM provider and rollback
 
 - `llm_provider` (`"anthropic"` by default, or `"gemini"`) is exported to the container as `LLM_PROVIDER`.
-- `tfvars/prod.tfvars` sets `llm_provider = "gemini"`, so prod keeps using Gemini until a stage run on Claude has been checked. To switch prod, create the prod parameter first, then delete that line.
 - To roll back to Gemini, set `llm_provider = "gemini"` in `tfvars/<env>.tfvars` (or `export TF_VAR_llm_provider=gemini`) and deploy again. `TF_VAR_gemini_api_key` must be set then (the deploy workflow already passes it). The Anthropic parameter is not needed while on Gemini.
 
 ## Stage
